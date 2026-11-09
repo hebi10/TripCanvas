@@ -55,6 +55,7 @@ fun TripWorkspaceScreen(
     itineraryRepository: ItineraryRepository? = null,
     onSchedule: () -> Unit = {},
     onPlaces: () -> Unit = {},
+    onMap: () -> Unit = {},
     checklistRepository: ChecklistRepository? = null,
     expenseRepository: ExpenseRepository? = null,
     onChecklist: () -> Unit = {},
@@ -112,7 +113,7 @@ fun TripWorkspaceScreen(
         }
     ) {
         when {
-            isPreview -> WorkspaceContent(trip = null, isPreview = true, scheduleCount = 0, onSchedule = onSchedule, onPlaces = onPlaces,
+            isPreview -> WorkspaceContent(trip = null, isPreview = true, scheduleCount = 0, onSchedule = onSchedule, onPlaces = onPlaces, onMap = onMap,
                 checklist = emptyList(), expenses = emptyList(),
                 onChecklist = onChecklist, onExpenses = onExpenses)
             state == WorkspaceState.Loading -> TripLoadingState("여행 정보를 불러오는 중")
@@ -125,7 +126,7 @@ fun TripWorkspaceScreen(
                 title = "여행을 찾을 수 없습니다",
                 description = "삭제되었거나 존재하지 않는 여행입니다."
             )
-            else -> WorkspaceContent(trip = loaded, isPreview = false, scheduleCount = scheduleCount, onSchedule = onSchedule, onPlaces = onPlaces,
+            else -> WorkspaceContent(trip = loaded, isPreview = false, scheduleCount = scheduleCount, onSchedule = onSchedule, onPlaces = onPlaces, onMap = onMap,
                 checklist = checklist, expenses = expenses,
                 onChecklist = onChecklist, onExpenses = onExpenses)
         }
@@ -147,6 +148,7 @@ private fun WorkspaceContent(
     scheduleCount: Int,
     onSchedule: () -> Unit,
     onPlaces: () -> Unit,
+    onMap: () -> Unit,
     checklist: List<com.hebi.tripcanvas.data.local.ChecklistItemEntity>,
     expenses: List<com.hebi.tripcanvas.data.local.ExpenseEntity>,
     onChecklist: () -> Unit,
@@ -180,6 +182,10 @@ private fun WorkspaceContent(
     TripAdaptiveContainer(modifier = Modifier.fillMaxWidth()) { width ->
         if (width == TripWindowWidth.Compact) {
             Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.md)) {
+                WorkspacePanel(
+                    "지도", "저장한 장소와 날짜별 일정 핀",
+                    if (isPreview) null else onMap, "지도 열기"
+                )
                 WorkspacePanel("일정", if (isPreview) "날짜별 일정 미리보기" else "등록된 일정 " + scheduleCount + "개", if (isPreview) null else onSchedule, "일정 열기")
                 WorkspacePanel(
                     "경비",
@@ -205,6 +211,10 @@ private fun WorkspaceContent(
                 horizontalArrangement = Arrangement.spacedBy(TripSpacing.md)
             ) {
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TripSpacing.md)) {
+                    WorkspacePanel(
+                        "지도", "저장한 장소와 날짜별 일정 핀",
+                        if (isPreview) null else onMap, "지도 열기"
+                    )
                     WorkspacePanel("일정", if (isPreview) "날짜별 일정 미리보기" else "등록된 일정 " + scheduleCount + "개", if (isPreview) null else onSchedule, "일정 열기")
                     WorkspacePanel(
                     "준비물",
