@@ -99,8 +99,17 @@ class TripFinanceRepository(
             convertedMinor(context, trip.currencyCode, rate)
         ) { "환산 결과가 유효하지 않습니다." }
         val amounts = allocateShares(totalMinor, mode, shareInputs, trip.currencyCode)
+        val inputsById = shareInputs.toMap()
         val rows = amounts.map { amount ->
-            ExpenseShareEntity(expenseId, amount.participantId, amount.amountMinor, trip.currencyCode)
+            ExpenseShareEntity(
+                expenseId = expenseId,
+                participantId = amount.participantId,
+                amountMinor = amount.amountMinor,
+                baseCurrencyCode = trip.currencyCode,
+                splitMode = mode.name,
+                enteredValue = if (mode == SplitMode.EQUAL) ""
+                    else requireNotNull(inputsById[amount.participantId]).trim()
+            )
         }
         finance.replaceExpenseFinance(
             tripId, expenseId, payerParticipantId, trip.currencyCode,

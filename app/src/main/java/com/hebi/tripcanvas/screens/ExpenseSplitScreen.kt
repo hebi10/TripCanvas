@@ -79,10 +79,14 @@ fun ExpenseSplitScreen(
             payerId = current.payerParticipantId.orEmpty()
             chosen = prior.map { it.participantId }
             if (prior.isNotEmpty()) {
-                mode = SplitMode.AMOUNT
+                mode = SplitMode.entries.firstOrNull {
+                    it.name == prior.first().splitMode
+                } ?: SplitMode.AMOUNT
                 val digits = validCurrency(prior.first().baseCurrencyCode)?.defaultFractionDigits ?: 0
                 values = prior.associate {
-                    it.participantId to BigDecimal.valueOf(it.amountMinor, digits).toPlainString()
+                    it.participantId to it.enteredValue.ifEmpty {
+                        BigDecimal.valueOf(it.amountMinor, digits).toPlainString()
+                    }
                 }
             }
             hydrated = true

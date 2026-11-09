@@ -110,6 +110,7 @@ object TripBackupCodec {
             .put("shares", array(snapshot.shares) {
                 JSONObject().put("expenseId", it.expenseId).put("participantId", it.participantId)
                     .put("amountMinor", it.amountMinor).put("baseCurrencyCode", it.baseCurrencyCode)
+                    .put("splitMode", it.splitMode).put("enteredValue", it.enteredValue)
             })
             .put("settlements", array(snapshot.settlements) {
                 JSONObject().put("tripId", it.tripId).put("fingerprint", it.fingerprint)
@@ -217,7 +218,9 @@ object TripBackupCodec {
                     expenseId = it.getString("expenseId"),
                     participantId = it.getString("participantId"),
                     amountMinor = it.getLong("amountMinor"),
-                    baseCurrencyCode = it.getString("baseCurrencyCode")
+                    baseCurrencyCode = it.getString("baseCurrencyCode"),
+                    splitMode = it.optString("splitMode", "AMOUNT"),
+                    enteredValue = it.optString("enteredValue", "")
                 )
             },
             settlements = parseExtension(json, "settlements") {
@@ -328,13 +331,18 @@ object TripBackupCodec {
             }
             require(participant.tripId == expense.tripId &&
                 share.baseCurrencyCode == trips.getValue(expense.tripId).currencyCode &&
-                share.amountMinor >= 0L) { "Invalid share" }
+                share.amountMinor >= 0L &&
+                share.splitMode in setOf("EQUAL", "AMOUNT", "PERCENT") &&
+                share.enteredValue.length <= 32) { "Invalid share" }
         }
         snapshot.shares.groupBy { it.expenseId }.forEach { (id, rows) ->
             val expense = requireNotNull(expenses[id])
             val base = trips.getValue(expense.tripId).currencyCode
             val total = requireNotNull(convertedMinor(expense, base, expense.rateToBaseDecimal)) {
                 "Unconverted expense share"
+            }
+            require(rows.map { it.splitMode }.distinct().size == 1) {
+                "Mixed split modes for one expense"
             }
             val actual = rows.fold(0L) { totalRows, row -> Math.addExact(totalRows, row.amountMinor) }
             require(actual == total && expense.payerParticipantId != null) {

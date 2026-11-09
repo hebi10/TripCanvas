@@ -27,5 +27,7 @@ data class ExpenseShareEntity(
     val expenseId: String,
     val participantId: String,
     val amountMinor: Long,
-    val baseCurrencyCode: String
+    val baseCurrencyCode: String,
+    val splitMode: String = "AMOUNT",
+    val enteredValue: String = ""
 )

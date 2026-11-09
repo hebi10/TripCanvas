@@ -50,6 +50,7 @@ class TripFinanceBookingIntegrationTest {
             assertEquals("사용자 입력", row.rateSource)
             val split = db.financeDao().observeExpenseShares(id).first()
             assertEquals(listOf(6600L, 6600L), split.map { it.amountMinor }.sorted())
+            assertTrue(split.all { it.splitMode == "EQUAL" && it.enteredValue.isEmpty() })
             val participants = db.financeDao().getParticipants("trip")
             val summary = calculateSettlement("KRW", participants, listOf(row), split)
             assertTrue(summary.readyToConfirm)
