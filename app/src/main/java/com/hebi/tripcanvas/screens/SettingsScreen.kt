@@ -28,7 +28,8 @@ fun SettingsScreen(
     onThemeModeChange: (TripThemeMode) -> Unit,
     onBack: () -> Unit,
     onOpenWorkspacePreview: () -> Unit,
-    onOpenDesignSystemPreview: () -> Unit
+    onOpenDesignSystemPreview: () -> Unit,
+    onOpenBackup: () -> Unit
 ) {
     val p = TripDesign.palette
     TripPageFrame(
@@ -81,7 +82,17 @@ fun SettingsScreen(
         TripDivider()
         TripSectionHeading(
             title = "데이터 관리",
-            supportingText = "로컬 백업 및 복원 기능은 2-C 단계에서 제공합니다."
+            supportingText = "여행·장소·일정·경비·예산·준비물을 파일로 백업하고 복원할 수 있습니다."
+        )
+        TripSecondaryButton(
+            label = "로컬 백업·복원",
+            onClick = onOpenBackup,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Text(
+            "백업 파일은 암호화되지 않으므로 안전한 위치에 보관해야 합니다.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = p.textSecondary
         )
         TripDivider()
         TripSectionHeading(
