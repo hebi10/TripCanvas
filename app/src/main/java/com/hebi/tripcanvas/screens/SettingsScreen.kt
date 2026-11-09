@@ -68,11 +68,11 @@ fun SettingsScreen(
         TripDivider()
         TripSectionHeading(
             title = "여행 기본값",
-            supportingText = "기본 통화와 시간대는 여행 생성 기능에서 연결합니다."
+            supportingText = "여행 생성 시 기기 시간대와 기본 통화를 제안하며, 여행별로 수정할 수 있습니다."
         )
         TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
             Text(
-                text = "기본 통화 · 여행 시간대 설정은 2-A에서 제공됩니다.",
+                text = "새 여행 화면에서 여행별 통화와 현지 시간대를 변경할 수 있습니다.",
                 modifier = Modifier.padding(TripSpacing.md),
                 style = MaterialTheme.typography.bodyMedium,
                 color = p.textSecondary
