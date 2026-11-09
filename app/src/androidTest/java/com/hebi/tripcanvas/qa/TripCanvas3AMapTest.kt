@@ -79,7 +79,7 @@ class TripCanvas3AMapTest {
                 SystemClock.sleep(3000)
                 capture("03-map-all-light")
                 click("2026-11-11")
-                awaitText("확정")
+                awaitText("확정 · 일정 1개")
                 capture("04-map-date-filter")
                 click("장소 상세")
                 awaitText("공급자: Photon/OSM")
