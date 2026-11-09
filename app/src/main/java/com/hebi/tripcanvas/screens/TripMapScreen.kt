@@ -1,6 +1,10 @@
 package com.hebi.tripcanvas.screens
 
 import android.os.Bundle
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -41,6 +45,7 @@ import com.hebi.tripcanvas.designsystem.tokens.TripSpacing
 import com.hebi.tripcanvas.ui.TripPageFrame
 import org.maplibre.android.MapLibre
 import org.maplibre.android.annotations.MarkerOptions
+import org.maplibre.android.annotations.IconFactory
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
@@ -238,11 +243,16 @@ private fun TripMapCanvas(
     )
     LaunchedEffect(map, pins, selectedId) {
         val ready = map ?: return@LaunchedEffect
+        val iconFactory = IconFactory.getInstance(context)
+        val markerIcons = listOf("확정", "후보", "저장").associateWith {
+            iconFactory.fromBitmap(tripPinBitmap(it))
+        }
         ready.clear()
         pins.forEach { item ->
             ready.addMarker(
                 MarkerOptions()
                     .position(LatLng(item.place.latitude!!, item.place.longitude!!))
+                    .icon(requireNotNull(markerIcons[item.label]))
                     .title("[" + item.label + "] " + item.place.name)
                     .snippet(item.place.id)
             )
@@ -261,4 +271,19 @@ private fun TripMapCanvas(
             )
         }
     }
+}
+
+private fun tripPinBitmap(status: String): Bitmap {
+    val bitmap = Bitmap.createBitmap(72, 88, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    paint.color = when (status) {
+        "확정" -> Color.rgb(44, 112, 73)
+        "후보" -> Color.rgb(153, 107, 36)
+        else -> Color.rgb(45, 45, 45)
+    }
+    canvas.drawCircle(36f, 34f, 22f, paint)
+    paint.color = Color.WHITE
+    canvas.drawCircle(36f, 34f, 10f, paint)
+    return bitmap
 }
