@@ -16,6 +16,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.hebi.tripcanvas.data.ChecklistRepository
+import com.hebi.tripcanvas.data.ExpenseRepository
 import com.hebi.tripcanvas.data.ItineraryRepository
 import com.hebi.tripcanvas.data.TripRepository
 import com.hebi.tripcanvas.data.local.TripEntity
@@ -30,6 +32,8 @@ import com.hebi.tripcanvas.designsystem.responsive.TripAdaptiveContainer
 import com.hebi.tripcanvas.designsystem.responsive.TripWindowWidth
 import com.hebi.tripcanvas.designsystem.theme.TripDesign
 import com.hebi.tripcanvas.designsystem.tokens.TripSpacing
+import com.hebi.tripcanvas.domain.calculateExpenseTotals
+import com.hebi.tripcanvas.domain.displayMoney
 import com.hebi.tripcanvas.domain.phase
 import com.hebi.tripcanvas.ui.TripPageFrame
 import kotlinx.coroutines.flow.catch
@@ -50,7 +54,11 @@ fun TripWorkspaceScreen(
     onEdit: () -> Unit = {},
     itineraryRepository: ItineraryRepository? = null,
     onSchedule: () -> Unit = {},
-    onPlaces: () -> Unit = {}
+    onPlaces: () -> Unit = {},
+    checklistRepository: ChecklistRepository? = null,
+    expenseRepository: ExpenseRepository? = null,
+    onChecklist: () -> Unit = {},
+    onExpenses: () -> Unit = {}
 ) {
     var refresh by remember { mutableIntStateOf(0) }
     val flow = remember(repository, tripId, refresh) {
@@ -76,6 +84,22 @@ fun TripWorkspaceScreen(
         }
     }
     val scheduleCount by countFlow.collectAsState(initial = 0)
+    val checklistFlow = remember(checklistRepository, tripId) {
+        if (checklistRepository != null && tripId != null) {
+            checklistRepository.observe(tripId)
+        } else {
+            kotlinx.coroutines.flow.flowOf(emptyList())
+        }
+    }
+    val checklist by checklistFlow.collectAsState(initial = emptyList())
+    val expenseFlow = remember(expenseRepository, tripId) {
+        if (expenseRepository != null && tripId != null) {
+            expenseRepository.observe(tripId)
+        } else {
+            kotlinx.coroutines.flow.flowOf(emptyList())
+        }
+    }
+    val expenses by expenseFlow.collectAsState(initial = emptyList())
 
     TripPageFrame(
         title = loaded?.title ?: "여행 작업 공간",
@@ -88,7 +112,9 @@ fun TripWorkspaceScreen(
         }
     ) {
         when {
-            isPreview -> WorkspaceContent(trip = null, isPreview = true, scheduleCount = 0, onSchedule = onSchedule, onPlaces = onPlaces)
+            isPreview -> WorkspaceContent(trip = null, isPreview = true, scheduleCount = 0, onSchedule = onSchedule, onPlaces = onPlaces,
+                checklist = emptyList(), expenses = emptyList(),
+                onChecklist = onChecklist, onExpenses = onExpenses)
             state == WorkspaceState.Loading -> TripLoadingState("여행 정보를 불러오는 중")
             state == WorkspaceState.Failed -> TripErrorState(
                 title = "여행 정보를 불러오지 못했습니다",
@@ -99,7 +125,9 @@ fun TripWorkspaceScreen(
                 title = "여행을 찾을 수 없습니다",
                 description = "삭제되었거나 존재하지 않는 여행입니다."
             )
-            else -> WorkspaceContent(trip = loaded, isPreview = false, scheduleCount = scheduleCount, onSchedule = onSchedule, onPlaces = onPlaces)
+            else -> WorkspaceContent(trip = loaded, isPreview = false, scheduleCount = scheduleCount, onSchedule = onSchedule, onPlaces = onPlaces,
+                checklist = checklist, expenses = expenses,
+                onChecklist = onChecklist, onExpenses = onExpenses)
         }
     }
     if (loaded != null && showDelete && repository != null) {
@@ -118,7 +146,11 @@ private fun WorkspaceContent(
     isPreview: Boolean,
     scheduleCount: Int,
     onSchedule: () -> Unit,
-    onPlaces: () -> Unit
+    onPlaces: () -> Unit,
+    checklist: List<com.hebi.tripcanvas.data.local.ChecklistItemEntity>,
+    expenses: List<com.hebi.tripcanvas.data.local.ExpenseEntity>,
+    onChecklist: () -> Unit,
+    onExpenses: () -> Unit
 ) {
     val p = TripDesign.palette
     TripStatusTag(label = if (isPreview) "화면 미리보기" else requireNotNull(trip).phase().label)
@@ -149,8 +181,23 @@ private fun WorkspaceContent(
         if (width == TripWindowWidth.Compact) {
             Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.md)) {
                 WorkspacePanel("일정", if (isPreview) "날짜별 일정 미리보기" else "등록된 일정 " + scheduleCount + "개", if (isPreview) null else onSchedule, "일정 열기")
-                WorkspacePanel("경비", "지출과 예산 · 2-C에서 연결")
-                WorkspacePanel("준비물", "체크리스트 · 2-C에서 연결")
+                WorkspacePanel(
+                    "경비",
+                    if (trip == null) "경비 미리보기" else
+                        "기본 통화 지출 " + displayMoney(
+                            calculateExpenseTotals(expenses, trip.currencyCode).baseSpent.toPlainString(),
+                            trip.currencyCode
+                        ) + " · " + expenses.size + "건",
+                    if (isPreview) null else onExpenses,
+                    "경비 열기"
+                )
+                WorkspacePanel(
+                    "준비물",
+                    if (trip == null) "준비물 미리보기" else
+                        "준비 완료 " + checklist.count { it.checked } + " / " + checklist.size,
+                    if (isPreview) null else onChecklist,
+                    "준비물 열기"
+                )
             }
         } else {
             Row(
@@ -159,10 +206,25 @@ private fun WorkspaceContent(
             ) {
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TripSpacing.md)) {
                     WorkspacePanel("일정", if (isPreview) "날짜별 일정 미리보기" else "등록된 일정 " + scheduleCount + "개", if (isPreview) null else onSchedule, "일정 열기")
-                    WorkspacePanel("준비물", "체크리스트 · 2-C에서 연결")
+                    WorkspacePanel(
+                    "준비물",
+                    if (trip == null) "준비물 미리보기" else
+                        "준비 완료 " + checklist.count { it.checked } + " / " + checklist.size,
+                    if (isPreview) null else onChecklist,
+                    "준비물 열기"
+                )
                 }
                 Column(modifier = Modifier.weight(1f)) {
-                    WorkspacePanel("경비", "지출과 예산 · 2-C에서 연결")
+                    WorkspacePanel(
+                    "경비",
+                    if (trip == null) "경비 미리보기" else
+                        "기본 통화 지출 " + displayMoney(
+                            calculateExpenseTotals(expenses, trip.currencyCode).baseSpent.toPlainString(),
+                            trip.currencyCode
+                        ) + " · " + expenses.size + "건",
+                    if (isPreview) null else onExpenses,
+                    "경비 열기"
+                )
                 }
             }
         }
@@ -175,7 +237,7 @@ private fun WorkspaceContent(
         )
     }
     Text(
-        "경비·준비물은 2-C 단계에서 연결됩니다.",
+        "일정·경비·준비물은 이 여행의 로컬 데이터로 관리됩니다.",
         style = MaterialTheme.typography.bodyMedium,
         color = p.textSecondary
     )
