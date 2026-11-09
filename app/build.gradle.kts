@@ -54,6 +54,8 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.room.runtime)
+    implementation("org.maplibre.gl:android-sdk-opengl:13.7.1")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
     ksp(libs.androidx.room.compiler)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
