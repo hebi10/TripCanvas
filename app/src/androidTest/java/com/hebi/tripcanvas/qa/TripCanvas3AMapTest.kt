@@ -124,6 +124,13 @@ class TripCanvas3AMapTest {
             )
             if (device.wait(Until.hasObject(By.text(text)), 1500)) return
         }
+        repeat(6) {
+            device.swipe(
+                device.displayWidth / 2, device.displayHeight / 3,
+                device.displayWidth / 2, device.displayHeight * 3 / 4, 25
+            )
+            if (device.wait(Until.hasObject(By.text(text)), 1500)) return
+        }
         val dir = evidenceDir()
         device.takeScreenshot(File(dir, "99-failure.png"))
         device.dumpWindowHierarchy(File(dir, "99-hierarchy.xml"))
