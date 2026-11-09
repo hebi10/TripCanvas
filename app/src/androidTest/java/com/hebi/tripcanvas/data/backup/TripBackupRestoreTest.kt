@@ -88,6 +88,39 @@ class TripBackupRestoreTest {
         }
     }
 
+    @Test
+    fun previousVersionOneBackupStillRestoresWithoutSourceMetadata() {
+        val original = sample()
+        val json = JSONObject(TripBackupCodec.encode(original))
+            .put("version", 1)
+        val oldPlace = json.getJSONArray("places").getJSONObject(0)
+        oldPlace.remove("provider")
+        oldPlace.remove("providerPlaceId")
+        oldPlace.remove("sourceFetchedAtMillis")
+
+        val restored = TripBackupCodec.decode(json.toString())
+        assertEquals(original, restored)
+    }
+
+    @Test
+    fun versionTwoBackupRetainsExternalProviderIdentity() {
+        val original = sample()
+        val sourced = original.copy(
+            places = listOf(
+                original.places.single().copy(
+                    provider = "Photon/OSM",
+                    providerPlaceId = "N:1234",
+                    sourceFetchedAtMillis = 1000L
+                )
+            )
+        )
+        assertEquals(sourced, TripBackupCodec.decode(TripBackupCodec.encode(sourced)))
+        val broken = sourced.copy(
+            places = sourced.places.map { it.copy(providerPlaceId = null) }
+        )
+        assertTrue(runCatching { TripBackupCodec.validate(broken) }.isFailure)
+    }
+
     private fun sample(): TripBackupSnapshot {
         return TripBackupSnapshot(
             trips = listOf(trip("trip")),
