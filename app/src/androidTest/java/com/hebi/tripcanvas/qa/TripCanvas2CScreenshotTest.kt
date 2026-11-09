@@ -108,8 +108,7 @@ class TripCanvas2CScreenshotTest {
             awaitText("경비 열기")
             capture("02-workspace-light")
 
-            click("준비물 열기")
-            awaitText("준비 완료 1 / 3")
+            openScreen("준비물 열기", "준비 완료 1 / 3")
             capture("03-checklist-light")
             click("미완료")
             capture("04-checklist-incomplete-filter")
@@ -127,16 +126,15 @@ class TripCanvas2CScreenshotTest {
             device.pressBack()
             awaitText("준비물 열기")
 
-            click("경비 열기")
-            awaitText("예산 설정·변경")
+            openScreen("경비 열기", "예산 설정·변경")
             capture("07-expenses-light")
             click("예산 설정·변경")
             awaitText("총예산 · KRW")
             capture("08-budget-edit-dialog")
             click("취소")
-            click("지출 추가")
+            device.wait(Until.gone(By.text("총예산 · KRW")), 3000)
+            openScreen("지출 추가", "지출 정보")
             capture("09a-expense-navigation-result")
-            awaitText("지출 정보")
             capture("09-expense-create-form")
             click("지출 저장")
             capture("10-expense-validation")
@@ -203,6 +201,10 @@ class TripCanvas2CScreenshotTest {
             swipeUp()
             if (device.wait(Until.hasObject(By.text(text)), 1200)) return
         }
+        repeat(6) {
+            swipeDown()
+            if (device.wait(Until.hasObject(By.text(text)), 1200)) return
+        }
         val diagnosticDir = File(context.getExternalFilesDir(null), "qa")
         diagnosticDir.mkdirs()
         device.takeScreenshot(File(diagnosticDir, "99-failed-screen.png"))
@@ -213,18 +215,36 @@ class TripCanvas2CScreenshotTest {
         fail("Android 화면에서 다음 문구를 찾지 못했습니다: $text")
     }
 
+    private fun openScreen(button: String, expectedTitle: String) {
+        repeat(3) {
+            click(button)
+            if (device.wait(Until.hasObject(By.text(expectedTitle)), 4500)) return
+            Thread.sleep(300)
+        }
+        awaitText(expectedTitle)
+    }
+
     private fun click(text: String) {
         awaitText(text)
+        device.waitForIdle()
+        Thread.sleep(500)
         val node: UiObject2 = device.findObject(By.text(text))
             ?: throw AssertionError("클릭 대상 없음: $text")
         node.click()
         device.waitForIdle()
+        Thread.sleep(400)
     }
 
     private fun swipeUp() {
         val width = device.displayWidth
         val height = device.displayHeight
         device.swipe(width / 2, height * 3 / 4, width / 2, height / 3, 25)
+    }
+
+    private fun swipeDown() {
+        val width = device.displayWidth
+        val height = device.displayHeight
+        device.swipe(width / 2, height / 3, width / 2, height * 3 / 4, 25)
     }
 
     private fun capture(name: String) {
