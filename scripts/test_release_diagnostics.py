@@ -1,12 +1,14 @@
 from pathlib import Path
 import os
 import shutil
+import tarfile
 import subprocess
 import tempfile
 import unittest
 
 SCRIPT = Path(__file__).resolve().parents[1] / '.github/scripts/run-android-instrumentation.sh'
 SCREEN_SCRIPT = SCRIPT.with_name('run-2c-screen-qa.sh')
+SCREENSHOT_COLLECTOR = SCRIPT.with_name('collect-android-screenshots.sh')
 
 
 class InstrumentationDiagnosticsTests(unittest.TestCase):
@@ -33,6 +35,8 @@ class InstrumentationDiagnosticsTests(unittest.TestCase):
                 scripts = root / '.github/scripts'
                 scripts.mkdir(parents=True)
                 shutil.copy2(SCRIPT, scripts / SCRIPT.name)
+                if SCREENSHOT_COLLECTOR.exists():
+                    shutil.copy2(SCREENSHOT_COLLECTOR, scripts / SCREENSHOT_COLLECTOR.name)
                 command = ['bash', str(SCREEN_SCRIPT), '1080x2400', '420']
             else:
                 command = ['bash', str(SCRIPT)]
@@ -68,3 +72,29 @@ class InstrumentationDiagnosticsTests(unittest.TestCase):
         self.assertIn('testInstrumentationRunnerArguments.class=com.hebi.tripcanvas.qa.TripCanvas2CScreenshotTest', log)
         self.assertIn('logcat', adb)
         self.assertIn('databases files/datastore', adb)
+
+    def test_screenshot_archive_uses_app_identity_and_preserves_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'qa3a'
+            source.mkdir()
+            (source / '03-map.png').write_bytes(b'actual fixture image bytes')
+            archive = root / 'source.tar'
+            with tarfile.open(archive, 'w') as output:
+                output.add(source, arcname='qa3a')
+            binaries = root / 'bin'
+            binaries.mkdir()
+            adb = binaries / 'adb'
+            adb.write_text(
+                '#!/usr/bin/env bash\nprintf "%s\\n" "$*" >> "$FAKE_ADB_LOG"\n'
+                'if [[ "$1" = exec-out ]]; then cat "$FAKE_SCREENSHOT_TAR"; fi\n'
+            )
+            adb.chmod(0o755)
+            env = dict(os.environ, PATH=str(binaries) + os.pathsep + os.environ['PATH'],
+                       FAKE_ADB_LOG=str(root / 'adb.txt'), FAKE_SCREENSHOT_TAR=str(archive))
+            result = subprocess.run(['bash', str(SCREENSHOT_COLLECTOR), 'qa3a', 'evidence'],
+                                    cwd=root, env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual((root / 'evidence/screenshots/qa3a/03-map.png').read_bytes(),
+                             b'actual fixture image bytes')
+            self.assertIn('exec-out run-as com.hebi.tripcanvas tar', (root / 'adb.txt').read_text())

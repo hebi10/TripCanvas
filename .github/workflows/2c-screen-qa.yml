@@ -7,6 +7,7 @@ on:
       - '.github/workflows/android-ci.yml'
       - '.github/scripts/run-2c-screen-qa.sh'
       - '.github/scripts/run-android-instrumentation.sh'
+      - '.github/scripts/collect-android-screenshots.sh'
       - 'app/src/androidTest/**'
       - 'app/build.gradle.kts'
       - 'app/src/main/**'

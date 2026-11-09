@@ -2,14 +2,15 @@
 set -euo pipefail
 
 evidence_dir="${ANDROID_QA_OUTPUT_DIR:-qa-output/instrumentation}"
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 mkdir -p "$evidence_dir/screenshots"
 
 collect_evidence() {
   local test_status=$?
   trap - EXIT
   set +e
-  adb pull /sdcard/Android/data/com.hebi.tripcanvas/files/qa/ "$evidence_dir/screenshots/" > "$evidence_dir/adb-pull.txt" 2>&1
-  adb pull /sdcard/Android/data/com.hebi.tripcanvas/files/qa3a/ "$evidence_dir/screenshots/" > "$evidence_dir/adb-pull-3a.txt" 2>&1
+  bash "$script_dir/collect-android-screenshots.sh" qa "$evidence_dir"
+  bash "$script_dir/collect-android-screenshots.sh" qa3a "$evidence_dir"
   adb exec-out run-as com.hebi.tripcanvas tar -cf - databases files/datastore > "$evidence_dir/app-data.tar" 2> "$evidence_dir/app-data-errors.txt"
   adb exec-out screencap -p > "$evidence_dir/final-screen.png" 2> "$evidence_dir/final-screen-errors.txt"
   adb shell uiautomator dump /sdcard/tripcanvas-final-hierarchy.xml > "$evidence_dir/final-hierarchy-dump.txt" 2>&1

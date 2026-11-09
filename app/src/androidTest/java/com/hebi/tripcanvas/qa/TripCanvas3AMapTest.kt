@@ -90,8 +90,15 @@ class TripCanvas3AMapTest {
                         ?: throw AssertionError("MapLibre view missing from 3-A map screen")
                     val bounds = Rect()
                     assertTrue("MapLibre map is not visible", mapView.getGlobalVisibleRect(bounds))
-                    tapX = bounds.centerX()
-                    tapY = bounds.centerY()
+                    val location = IntArray(2)
+                    mapView.getLocationOnScreen(location)
+                    tapX = location[0] + mapView.width / 2
+                    tapY = location[1] + mapView.height / 2
+                    assertTrue("MapLibre pin center is not visible", bounds.contains(tapX, tapY))
+                    File(evidenceDir(), "03a-pin-tap-geometry.txt").writeText(
+                        "Visible map: $bounds\nTap: $tapX,$tapY\n" +
+                            "Full map: ${location[0]},${location[1]} ${mapView.width}x${mapView.height}\n"
+                    )
                 }
                 device.click(tapX, tapY)
                 awaitText("공급자: Photon/OSM")
