@@ -13,3 +13,5 @@ captures/
 *.keystore
 *.hprof
 .DS_Store
+__pycache__/
+output/

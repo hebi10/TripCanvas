@@ -1,0 +1,28 @@
+name: Play exact-source checks
+
+on:
+  workflow_call:
+    inputs:
+      source_sha:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  publisher-checks:
+    name: Exact-source release automation checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify signing source Publisher artifact and native guards
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_release*.py'
+          python3 -m unittest discover -s scripts/play/tests -p 'test_*.py'

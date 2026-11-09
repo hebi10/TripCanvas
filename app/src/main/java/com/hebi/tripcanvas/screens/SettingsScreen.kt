@@ -1,5 +1,9 @@
 package com.hebi.tripcanvas.screens
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -9,6 +13,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import com.hebi.tripcanvas.designsystem.components.TripChoiceChip
 import com.hebi.tripcanvas.designsystem.components.TripDivider
 import com.hebi.tripcanvas.designsystem.components.TripErrorState
@@ -32,6 +37,7 @@ fun SettingsScreen(
     onOpenBackup: () -> Unit
 ) {
     val p = TripDesign.palette
+    val context = LocalContext.current
     TripPageFrame(
         title = "설정",
         onBack = onBack
@@ -93,6 +99,17 @@ fun SettingsScreen(
             "백업 파일은 암호화되지 않으므로 안전한 위치에 보관해야 합니다.",
             style = MaterialTheme.typography.bodyMedium,
             color = p.textSecondary
+        )
+        TripSecondaryButton(
+            label = "개인정보처리방침",
+            onClick = {
+                try {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://hebi10.github.io/TripCanvas/privacy-policy.html")))
+                } catch (_: ActivityNotFoundException) {
+                    Toast.makeText(context, "방침을 열 수 있는 브라우저가 없습니다.", Toast.LENGTH_SHORT).show()
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
         )
         TripDivider()
         TripSectionHeading(
