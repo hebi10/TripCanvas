@@ -60,7 +60,7 @@ fun validateExpense(input: ExpenseInput): ExpenseValidation {
             amountDecimal = requireNotNull(money).amountDecimal,
             currencyCode = money.currencyCode,
             occurredAtLocal = LocalDateTime.of(requireNotNull(date), requireNotNull(time))
-                .toString().let { if (it.length == 16) it else it + ":00" },
+                .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")),
             category = input.category.name,
             note = input.note.trim(),
             placeId = input.placeId.trim().ifBlank { null }
