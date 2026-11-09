@@ -23,6 +23,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.hebi.tripcanvas.data.ItineraryRepository
+import com.hebi.tripcanvas.data.PlaceRepository
 import com.hebi.tripcanvas.data.TripRepository
 import com.hebi.tripcanvas.data.local.TripDatabase
 import com.hebi.tripcanvas.data.TripUserPreferences
@@ -35,6 +37,10 @@ import com.hebi.tripcanvas.designsystem.theme.TripThemeMode
 import com.hebi.tripcanvas.designsystem.theme.isTripDarkMode
 import com.hebi.tripcanvas.navigation.TripDestinations
 import com.hebi.tripcanvas.screens.HomeScreen
+import com.hebi.tripcanvas.screens.PlaceFormScreen
+import com.hebi.tripcanvas.screens.PlaceListScreen
+import com.hebi.tripcanvas.screens.ScheduleFormScreen
+import com.hebi.tripcanvas.screens.TripDayScreen
 import com.hebi.tripcanvas.screens.TripFormScreen
 import com.hebi.tripcanvas.screens.SettingsScreen
 import com.hebi.tripcanvas.screens.TripWorkspaceScreen
@@ -55,7 +61,16 @@ private sealed interface SettingsLoadState {
 fun TripApp(onThemeResolved: (Boolean) -> Unit) {
     val context = LocalContext.current.applicationContext
     val repository = remember(context) { tripPreferencesRepository(context) }
-    val tripRepository = remember(context) { TripRepository(TripDatabase.get(context).tripDao()) }
+    val tripDatabase = remember(context) { TripDatabase.get(context) }
+    val tripRepository = remember(tripDatabase) { TripRepository(tripDatabase.tripDao()) }
+    val placeRepository = remember(tripDatabase) {
+        PlaceRepository(tripDatabase.placeDao(), tripDatabase.tripDao())
+    }
+    val itineraryRepository = remember(tripDatabase) {
+        ItineraryRepository(
+            tripDatabase.itineraryDao(), tripDatabase.tripDao(), tripDatabase.placeDao()
+        )
+    }
     val scope = rememberCoroutineScope()
     var retryCount by remember { mutableIntStateOf(0) }
     val settingsFlow = remember(repository, retryCount) {
@@ -237,7 +252,166 @@ fun TripApp(onThemeResolved: (Boolean) -> Unit) {
                                     if (tripId != null) {
                                         navController.navigate(TripDestinations.editTrip(tripId))
                                     }
+                                },
+                                itineraryRepository = itineraryRepository,
+                                onSchedule = {
+                                    if (tripId != null) {
+                                        navController.navigate(TripDestinations.day(tripId))
+                                    }
+                                },
+                                onPlaces = {
+                                    if (tripId != null) {
+                                        navController.navigate(TripDestinations.places(tripId))
+                                    }
                                 }
+                            )
+                        }
+                        composable(
+                            route = TripDestinations.DayRoute,
+                            arguments = listOf(navArgument("tripId") { type = NavType.StringType })
+                        ) { entry ->
+                            val tripId = requireNotNull(entry.arguments?.getString("tripId"))
+                            TripDayScreen(
+                                tripRepository = tripRepository,
+                                itineraryRepository = itineraryRepository,
+                                placeRepository = placeRepository,
+                                tripId = tripId,
+                                onBack = { navController.popBackStack() },
+                                onAdd = { date ->
+                                    navController.navigate(TripDestinations.newSchedule(tripId, date))
+                                },
+                                onEdit = { id ->
+                                    navController.navigate(TripDestinations.editSchedule(tripId, id))
+                                },
+                                onPlaces = { navController.navigate(TripDestinations.places(tripId)) }
+                            )
+                        }
+                        composable(
+                            route = TripDestinations.NewScheduleRoute,
+                            arguments = listOf(
+                                navArgument("tripId") { type = NavType.StringType },
+                                navArgument("date") { type = NavType.StringType }
+                            )
+                        ) { entry ->
+                            val tripId = requireNotNull(entry.arguments?.getString("tripId"))
+                            val date = requireNotNull(entry.arguments?.getString("date"))
+                            val selectedPlace by entry.savedStateHandle
+                                .getStateFlow("selectedPlaceId", "").collectAsState()
+                            ScheduleFormScreen(
+                                tripRepository = tripRepository,
+                                itineraryRepository = itineraryRepository,
+                                placeRepository = placeRepository,
+                                tripId = tripId,
+                                itemId = null,
+                                initialDate = date,
+                                selectedPlaceId = selectedPlace,
+                                onBack = { navController.popBackStack() },
+                                onSaved = { navController.popBackStack() },
+                                onPickPlace = {
+                                    navController.navigate(TripDestinations.pickPlace(tripId))
+                                }
+                            )
+                        }
+                        composable(
+                            route = TripDestinations.EditScheduleRoute,
+                            arguments = listOf(
+                                navArgument("tripId") { type = NavType.StringType },
+                                navArgument("itemId") { type = NavType.StringType }
+                            )
+                        ) { entry ->
+                            val tripId = requireNotNull(entry.arguments?.getString("tripId"))
+                            val itemId = requireNotNull(entry.arguments?.getString("itemId"))
+                            val selectedPlace by entry.savedStateHandle
+                                .getStateFlow("selectedPlaceId", "").collectAsState()
+                            ScheduleFormScreen(
+                                tripRepository = tripRepository,
+                                itineraryRepository = itineraryRepository,
+                                placeRepository = placeRepository,
+                                tripId = tripId,
+                                itemId = itemId,
+                                initialDate = "",
+                                selectedPlaceId = selectedPlace,
+                                onBack = { navController.popBackStack() },
+                                onSaved = { navController.popBackStack() },
+                                onPickPlace = {
+                                    navController.navigate(TripDestinations.pickPlace(tripId))
+                                }
+                            )
+                        }
+                        composable(
+                            route = TripDestinations.PlacesRoute,
+                            arguments = listOf(navArgument("tripId") { type = NavType.StringType })
+                        ) { entry ->
+                            val tripId = requireNotNull(entry.arguments?.getString("tripId"))
+                            PlaceListScreen(
+                                repository = placeRepository,
+                                tripId = tripId,
+                                selectionMode = false,
+                                onSelect = {},
+                                onCreate = { navController.navigate(TripDestinations.newPlace(tripId)) },
+                                onEdit = { id ->
+                                    navController.navigate(TripDestinations.editPlace(tripId, id))
+                                },
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+                        composable(
+                            route = TripDestinations.PickPlaceRoute,
+                            arguments = listOf(navArgument("tripId") { type = NavType.StringType })
+                        ) { entry ->
+                            val tripId = requireNotNull(entry.arguments?.getString("tripId"))
+                            val newId by entry.savedStateHandle
+                                .getStateFlow("newPlaceId", "").collectAsState()
+                            val selectPlace: (String) -> Unit = { placeId ->
+                                navController.previousBackStackEntry?.savedStateHandle
+                                    ?.set("selectedPlaceId", placeId)
+                                navController.popBackStack()
+                            }
+                            PlaceListScreen(
+                                repository = placeRepository,
+                                tripId = tripId,
+                                selectionMode = true,
+                                onSelect = selectPlace,
+                                onCreate = { navController.navigate(TripDestinations.newPlace(tripId)) },
+                                onEdit = { id ->
+                                    navController.navigate(TripDestinations.editPlace(tripId, id))
+                                },
+                                onBack = { navController.popBackStack() },
+                                newlyCreatedPlaceId = newId
+                            )
+                        }
+                        composable(
+                            route = TripDestinations.NewPlaceRoute,
+                            arguments = listOf(navArgument("tripId") { type = NavType.StringType })
+                        ) { entry ->
+                            val tripId = requireNotNull(entry.arguments?.getString("tripId"))
+                            PlaceFormScreen(
+                                repository = placeRepository,
+                                tripId = tripId,
+                                placeId = null,
+                                onBack = { navController.popBackStack() },
+                                onSaved = { id ->
+                                    navController.previousBackStackEntry?.savedStateHandle
+                                        ?.set("newPlaceId", id)
+                                    navController.popBackStack()
+                                }
+                            )
+                        }
+                        composable(
+                            route = TripDestinations.EditPlaceRoute,
+                            arguments = listOf(
+                                navArgument("tripId") { type = NavType.StringType },
+                                navArgument("placeId") { type = NavType.StringType }
+                            )
+                        ) { entry ->
+                            val tripId = requireNotNull(entry.arguments?.getString("tripId"))
+                            val placeId = requireNotNull(entry.arguments?.getString("placeId"))
+                            PlaceFormScreen(
+                                repository = placeRepository,
+                                tripId = tripId,
+                                placeId = placeId,
+                                onBack = { navController.popBackStack() },
+                                onSaved = { navController.popBackStack() }
                             )
                         }
                     }

@@ -60,6 +60,19 @@ class TripRepositoryTest {
         assertTrue(runCatching { repository.delete(removed) }.isFailure)
     }
 
+    @Test fun preventsTripPeriodShrinkWhenSchedulesWouldBeOutside() = runBlocking {
+        val dao = FakeTripDao()
+        val repository = TripRepository(dao, clock)
+        val id = repository.create(input)
+        dao.affectedDates = listOf("2026-11-12", "2026-11-14", "2026-11-14")
+        val result = runCatching {
+            repository.update(id, input.copy(startDate = "2026-11-13", endDate = "2026-11-13"))
+        }
+        assertTrue(result.exceptionOrNull() is TripPeriodConflictException)
+        assertEquals(3, (result.exceptionOrNull() as TripPeriodConflictException).affectedDates.size)
+        assertEquals(input.startDate, repository.observeTrip(id).first()!!.startDate)
+    }
+
     @Test fun rejectsInvalidDataWithoutInserting() = runBlocking {
         val repository = TripRepository(FakeTripDao(), clock)
         assertTrue(runCatching { repository.create(input.copy(title = " ")) }.isFailure)
@@ -68,6 +81,7 @@ class TripRepositoryTest {
 }
 
 private class FakeTripDao : TripDao {
+    var affectedDates: List<String> = emptyList()
     private val trips = MutableStateFlow<List<TripEntity>>(emptyList())
 
     override fun observeAll(): Flow<List<TripEntity>> = trips
@@ -77,6 +91,9 @@ private class FakeTripDao : TripDao {
 
     override suspend fun findById(tripId: String): TripEntity? =
         trips.value.firstOrNull { it.id == tripId }
+
+    override suspend fun outOfRangeDates(tripId: String, startDate: String, endDate: String): List<String> =
+        affectedDates.filter { it < startDate || it > endDate }
 
     override suspend fun insert(trip: TripEntity) {
         require(trips.value.none { it.id == trip.id })

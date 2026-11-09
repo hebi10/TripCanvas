@@ -23,6 +23,7 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.hebi.tripcanvas.data.TripPeriodConflictException
 import com.hebi.tripcanvas.data.TripRepository
 import com.hebi.tripcanvas.data.local.TripEntity
 import com.hebi.tripcanvas.designsystem.components.TripChoiceChip
@@ -82,6 +83,7 @@ fun TripFormScreen(
     var hydrated by rememberSaveable(tripId) { mutableStateOf(tripId == null) }
     var errors by remember { mutableStateOf<Map<TripField, String>>(emptyMap()) }
     var saveFailed by remember { mutableStateOf(false) }
+    var periodWarning by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     var showDiscard by remember { mutableStateOf(false) }
     var retry by remember { mutableIntStateOf(0) }
@@ -143,8 +145,15 @@ fun TripFormScreen(
                         input = it
                         errors = emptyMap()
                         saveFailed = false
+                        periodWarning = null
                     }
                 )
+                if (periodWarning != null) {
+                    TripErrorState(
+                        title = "여행 기간을 변경할 수 없습니다",
+                        description = requireNotNull(periodWarning)
+                    )
+                }
                 if (saveFailed) {
                     TripErrorState(
                         title = "저장하지 못했습니다",
@@ -174,6 +183,13 @@ fun TripFormScreen(
                                         onSaved(savedId)
                                     } catch (error: CancellationException) {
                                         throw error
+                                    } catch (error: TripPeriodConflictException) {
+                                        val dates = error.affectedDates.distinct()
+                                        periodWarning = "기간 밖 일정 " + error.affectedDates.size +
+                                            "개 (" + dates.take(8).joinToString(", ") +
+                                            if (dates.size > 8) " 외 " + (dates.size - 8) + "개 날짜). " +
+                                                "일정을 기간 안으로 이동하거나 삭제한 뒤 다시 저장해 주세요."
+                                            else "). 일정을 기간 안으로 이동하거나 삭제한 뒤 다시 저장해 주세요."
                                     } catch (error: Exception) {
                                         saveFailed = true
                                     } finally {
@@ -304,7 +320,7 @@ private fun TripFormFields(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TripDateField(
+fun TripDateField(
     label: String,
     date: String,
     error: String?,
