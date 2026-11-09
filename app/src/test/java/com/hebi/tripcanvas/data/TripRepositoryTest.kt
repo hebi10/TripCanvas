@@ -9,6 +9,7 @@ import java.time.ZoneOffset
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -72,7 +73,7 @@ private class FakeTripDao : TripDao {
     override fun observeAll(): Flow<List<TripEntity>> = trips
 
     override fun observeById(tripId: String): Flow<TripEntity?> =
-        kotlinx.coroutines.flow.map(trips) { items -> items.firstOrNull { it.id == tripId } }
+        trips.map { items -> items.firstOrNull { it.id == tripId } }
 
     override suspend fun findById(tripId: String): TripEntity? =
         trips.value.firstOrNull { it.id == tripId }
