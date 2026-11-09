@@ -7,9 +7,9 @@ case "$suite" in qa|qa3a) ;; *) exit 2 ;; esac
 
 mkdir -p "$evidence_dir/screenshots"
 remote_files=/sdcard/Android/data/com.hebi.tripcanvas/files
-adb shell run-as com.hebi.tripcanvas ls -la "$remote_files/$suite/" > "$evidence_dir/$suite-device-files.txt" 2>&1 || true
+adb shell ls -la "$remote_files/$suite/" > "$evidence_dir/$suite-device-files.txt" 2>&1 || true
 
-if adb exec-out run-as com.hebi.tripcanvas tar -C "$remote_files" -cf - "$suite" \
+if adb exec-out tar -C "$remote_files" -cf - "$suite" \
     > "$evidence_dir/$suite-screenshots.tar" 2> "$evidence_dir/$suite-archive-errors.txt" \
     && tar -tf "$evidence_dir/$suite-screenshots.tar" > "$evidence_dir/$suite-archive-files.txt" 2>&1; then
   tar -xf "$evidence_dir/$suite-screenshots.tar" -C "$evidence_dir/screenshots/"

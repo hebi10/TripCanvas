@@ -73,7 +73,7 @@ class InstrumentationDiagnosticsTests(unittest.TestCase):
         self.assertIn('logcat', adb)
         self.assertIn('databases files/datastore', adb)
 
-    def test_screenshot_archive_uses_app_identity_and_preserves_files(self):
+    def test_screenshot_archive_uses_external_storage_shell_and_preserves_files(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             source = root / 'qa3a'
@@ -97,4 +97,5 @@ class InstrumentationDiagnosticsTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual((root / 'evidence/screenshots/qa3a/03-map.png').read_bytes(),
                              b'actual fixture image bytes')
-            self.assertIn('exec-out run-as com.hebi.tripcanvas tar', (root / 'adb.txt').read_text())
+            self.assertIn('exec-out tar -C /sdcard/Android/data/com.hebi.tripcanvas/files -cf - qa3a',
+                          (root / 'adb.txt').read_text())
