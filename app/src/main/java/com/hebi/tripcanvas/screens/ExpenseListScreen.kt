@@ -60,7 +60,10 @@ fun ExpenseListScreen(
     places: PlaceRepository,
     onBack: () -> Unit,
     onNew: () -> Unit,
-    onEdit: (String) -> Unit
+    onEdit: (String) -> Unit,
+    onSplit: (String) -> Unit = {},
+    onSettlement: () -> Unit = {},
+    onParticipants: () -> Unit = {}
 ) {
     val p = TripDesign.palette
     val scope = rememberCoroutineScope()
@@ -104,6 +107,12 @@ fun ExpenseListScreen(
     }
 
     TripPageFrame(title = "예산·경비", onBack = onBack) {
+        TripSecondaryButton(
+            label = "동행자 정산", onClick = onSettlement, modifier = Modifier.fillMaxWidth()
+        )
+        TripSecondaryButton(
+            label = "동행자 관리", onClick = onParticipants, modifier = Modifier.fillMaxWidth()
+        )
         val current = trip
         if (current == null) {
             TripLoadingState("여행 정보를 불러오는 중")
@@ -185,7 +194,7 @@ fun ExpenseListScreen(
                     }
                     TripSectionHeading(
                         title = "지출 " + result.expenses.size + "건",
-                        supportingText = "날짜별 내역 · 환율과 공동 정산은 추후 단계에서 제공합니다."
+                        supportingText = "날짜별 내역 · 환율 스냅샷과 분담 상태는 지출별로 관리합니다."
                     )
                     if (result.expenses.isEmpty()) {
                         TripEmptyState(
@@ -225,7 +234,21 @@ fun ExpenseListScreen(
                                             if (item.note.isNotEmpty()) {
                                                 Text(item.note, color = p.textSecondary)
                                             }
+                                            if (item.rateToBaseDecimal != null) {
+                                                Text(
+                                                    "환율 " + item.rateToBaseDecimal +
+                                                        " · " + item.rateDate.orEmpty() +
+                                                        " · " + item.rateSource.orEmpty(),
+                                                    color = p.textSecondary
+                                                )
+                                            } else if (item.currencyCode != current.currencyCode) {
+                                                Text("환산 필요", color = p.textSecondary)
+                                            }
                                             FlowRow(horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
+                                                TripSecondaryButton(
+                                                    label = "환율·분담",
+                                                    onClick = { onSplit(item.id) }
+                                                )
                                                 TripSecondaryButton(
                                                     label = "편집",
                                                     onClick = { onEdit(item.id) }
