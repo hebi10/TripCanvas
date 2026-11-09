@@ -17,6 +17,12 @@ interface TripDao {
     @Query("SELECT * FROM trips WHERE id = :tripId LIMIT 1")
     suspend fun findById(tripId: String): TripEntity?
 
+    @Query(
+        "SELECT date FROM itinerary_items WHERE tripId = :tripId " +
+            "AND (date < :startDate OR date > :endDate) ORDER BY date"
+    )
+    suspend fun outOfRangeDates(tripId: String, startDate: String, endDate: String): List<String>
+
     @Insert
     suspend fun insert(trip: TripEntity)
 
