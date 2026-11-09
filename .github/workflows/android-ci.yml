@@ -88,5 +88,14 @@ jobs:
           api-level: 35
           target: google_apis
           arch: x86_64
-          script: ./gradlew :app:connectedDebugAndroidTest --stacktrace -Pandroid.testInstrumentationRunnerArguments.class=com.hebi.tripcanvas.data.backup.TripBackupRestoreTest,com.hebi.tripcanvas.data.local.TripDatabaseMigrationTest,com.hebi.tripcanvas.data.local.TripDatabaseV2MigrationTest,com.hebi.tripcanvas.data.local.TripDatabaseV3MigrationTest,com.hebi.tripcanvas.data.search.PhotonPlaceSearchTest,com.hebi.tripcanvas.data.local.TripDatabaseV4MigrationTest,com.hebi.tripcanvas.data.local.TripFinanceBookingIntegrationTest
+          script: bash .github/scripts/run-android-instrumentation.sh
+
+      - name: Preserve actual Android diagnostics and original test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tripcanvas-main-android-diagnostics-${{ github.run_id }}
+          path: qa-output/instrumentation/
+          retention-days: 14
+          if-no-files-found: warn
 

@@ -3,6 +3,7 @@ name: TripCanvas 3-A Map Screen QA
 on:
   pull_request:
     paths:
+      - '.github/scripts/collect-android-screenshots.sh'
       - '.github/workflows/3a-map-qa.yml'
       - '.github/scripts/run-3a-map-qa.sh'
       - 'app/src/main/**'
