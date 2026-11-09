@@ -23,6 +23,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.hebi.tripcanvas.data.TripRepository
+import com.hebi.tripcanvas.data.local.TripDatabase
 import com.hebi.tripcanvas.data.TripUserPreferences
 import com.hebi.tripcanvas.data.tripPreferencesRepository
 import com.hebi.tripcanvas.designsystem.components.TripErrorState
@@ -33,6 +35,7 @@ import com.hebi.tripcanvas.designsystem.theme.TripThemeMode
 import com.hebi.tripcanvas.designsystem.theme.isTripDarkMode
 import com.hebi.tripcanvas.navigation.TripDestinations
 import com.hebi.tripcanvas.screens.HomeScreen
+import com.hebi.tripcanvas.screens.TripFormScreen
 import com.hebi.tripcanvas.screens.SettingsScreen
 import com.hebi.tripcanvas.screens.TripWorkspaceScreen
 import com.hebi.tripcanvas.screens.WelcomeScreen
@@ -52,6 +55,7 @@ private sealed interface SettingsLoadState {
 fun TripApp(onThemeResolved: (Boolean) -> Unit) {
     val context = LocalContext.current.applicationContext
     val repository = remember(context) { tripPreferencesRepository(context) }
+    val tripRepository = remember(context) { TripRepository(TripDatabase.get(context).tripDao()) }
     val scope = rememberCoroutineScope()
     var retryCount by remember { mutableIntStateOf(0) }
     val settingsFlow = remember(repository, retryCount) {
@@ -155,8 +159,14 @@ fun TripApp(onThemeResolved: (Boolean) -> Unit) {
                         }
                         composable(TripDestinations.Home) {
                             HomeScreen(
-                                onOpenSettings = {
-                                    navController.navigate(TripDestinations.Settings)
+                                repository = tripRepository,
+                                onOpenSettings = { navController.navigate(TripDestinations.Settings) },
+                                onCreateTrip = { navController.navigate(TripDestinations.CreateTrip) },
+                                onOpenTrip = { id ->
+                                    navController.navigate(TripDestinations.workspace(id))
+                                },
+                                onEditTrip = { id ->
+                                    navController.navigate(TripDestinations.editTrip(id))
                                 }
                             )
                         }
@@ -173,6 +183,29 @@ fun TripApp(onThemeResolved: (Boolean) -> Unit) {
                                 onOpenDesignSystemPreview = {
                                     navController.navigate(TripDestinations.DesignSystemPreview)
                                 }
+                            )
+                        }
+                        composable(TripDestinations.CreateTrip) {
+                            TripFormScreen(
+                                repository = tripRepository,
+                                tripId = null,
+                                onBack = { navController.popBackStack() },
+                                onSaved = { id ->
+                                    navController.navigate(TripDestinations.workspace(id)) {
+                                        popUpTo(TripDestinations.CreateTrip) { inclusive = true }
+                                    }
+                                }
+                            )
+                        }
+                        composable(
+                            route = TripDestinations.EditTripRoute,
+                            arguments = listOf(navArgument("tripId") { type = NavType.StringType })
+                        ) { entry ->
+                            TripFormScreen(
+                                repository = tripRepository,
+                                tripId = entry.arguments?.getString("tripId"),
+                                onBack = { navController.popBackStack() },
+                                onSaved = { navController.popBackStack() }
                             )
                         }
                         composable(TripDestinations.WorkspacePreview) {
@@ -193,10 +226,18 @@ fun TripApp(onThemeResolved: (Boolean) -> Unit) {
                             arguments = listOf(navArgument("tripId") {
                                 type = NavType.StringType
                             })
-                        ) {
+                        ) { entry ->
+                            val tripId = entry.arguments?.getString("tripId")
                             TripWorkspaceScreen(
                                 onBack = { navController.popBackStack() },
-                                isPreview = false
+                                isPreview = false,
+                                repository = tripRepository,
+                                tripId = tripId,
+                                onEdit = {
+                                    if (tripId != null) {
+                                        navController.navigate(TripDestinations.editTrip(tripId))
+                                    }
+                                }
                             )
                         }
                     }
