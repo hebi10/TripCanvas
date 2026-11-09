@@ -25,6 +25,8 @@ def elf_load_alignments(raw):
         raise AlignmentError('Malformed native ELF library')
     endian = '<' if raw[5] == 1 else '>'
     is64 = raw[4] == 2
+    # Android's 16 KB ELF requirement applies to 64-bit ABIs; 32-bit ABIs use 4 KB.
+    minimum_alignment = PAGE if is64 else 4096
     phoff = struct.unpack_from(endian + ('Q' if is64 else 'I'), raw, 32 if is64 else 28)[0]
     phentsize, phnum = struct.unpack_from(endian + 'HH', raw, 54 if is64 else 42)
     fmt = endian + ('IIQQQQQQ' if is64 else 'IIIIIIII')
@@ -36,8 +38,8 @@ def elf_load_alignments(raw):
         if header[0] != 1:
             continue
         offset, address, alignment = (header[2], header[3], header[7]) if is64 else (header[1], header[2], header[7])
-        if alignment < PAGE or alignment & (alignment - 1) or (address - offset) % alignment:
-            raise AlignmentError('Native ELF PT_LOAD is not aligned to at least 16 KB')
+        if alignment < minimum_alignment or alignment & (alignment - 1) or (address - offset) % alignment:
+            raise AlignmentError(f'Native ELF PT_LOAD is not aligned to at least {minimum_alignment // 1024} KB')
         values.append(alignment)
     if not values:
         raise AlignmentError('Native ELF has no PT_LOAD segments')
@@ -115,3 +117,4 @@ def main():
 
 if __name__ == '__main__':
     sys.exit(main())
+
