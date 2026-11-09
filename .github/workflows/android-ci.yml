@@ -88,5 +88,5 @@ jobs:
           api-level: 35
           target: google_apis
           arch: x86_64
-          script: ./gradlew :app:connectedDebugAndroidTest --stacktrace -Pandroid.testInstrumentationRunnerArguments.class=com.hebi.tripcanvas.data.backup.TripBackupRestoreTest,com.hebi.tripcanvas.data.local.TripDatabaseMigrationTest,com.hebi.tripcanvas.data.local.TripDatabaseV2MigrationTest,com.hebi.tripcanvas.data.local.TripDatabaseV3MigrationTest,com.hebi.tripcanvas.data.search.PhotonPlaceSearchTest
+          script: ./gradlew :app:connectedDebugAndroidTest --stacktrace -Pandroid.testInstrumentationRunnerArguments.class=com.hebi.tripcanvas.data.backup.TripBackupRestoreTest,com.hebi.tripcanvas.data.local.TripDatabaseMigrationTest,com.hebi.tripcanvas.data.local.TripDatabaseV2MigrationTest,com.hebi.tripcanvas.data.local.TripDatabaseV3MigrationTest,com.hebi.tripcanvas.data.search.PhotonPlaceSearchTest,com.hebi.tripcanvas.data.local.TripDatabaseV4MigrationTest,com.hebi.tripcanvas.data.local.TripFinanceBookingIntegrationTest
 
