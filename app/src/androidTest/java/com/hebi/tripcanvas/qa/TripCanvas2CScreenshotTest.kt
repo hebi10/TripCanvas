@@ -1,0 +1,297 @@
+package com.hebi.tripcanvas.qa
+
+import android.content.Context
+import androidx.test.core.app.ActivityScenario
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.uiautomator.By
+import androidx.test.uiautomator.UiDevice
+import androidx.test.uiautomator.UiObject2
+import androidx.test.uiautomator.Until
+import com.hebi.tripcanvas.MainActivity
+import com.hebi.tripcanvas.data.tripPreferencesRepository
+import com.hebi.tripcanvas.data.local.ChecklistItemEntity
+import com.hebi.tripcanvas.data.local.ExpenseEntity
+import com.hebi.tripcanvas.data.local.ItineraryItemEntity
+import com.hebi.tripcanvas.data.local.PlaceEntity
+import com.hebi.tripcanvas.data.local.TripBackupSnapshot
+import com.hebi.tripcanvas.data.local.TripBudgetEntity
+import com.hebi.tripcanvas.data.local.TripDatabase
+import com.hebi.tripcanvas.data.local.TripEntity
+import com.hebi.tripcanvas.designsystem.theme.TripThemeMode
+import java.io.File
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+
+/**
+ * Android emulator UI proof: runs the actual MainActivity, traverses the user's
+ * screens, tests checklist CRUD and expense validation, and writes raw PNGs.
+ * Does not use mocked Compose screens or generated marketing art.
+ */
+@RunWith(AndroidJUnit4::class)
+class TripCanvas2CScreenshotTest {
+    private val instrumentation = InstrumentationRegistry.getInstrumentation()
+    private val context: Context = instrumentation.targetContext
+    private val device: UiDevice = UiDevice.getInstance(instrumentation)
+    private val database: TripDatabase by lazy { TripDatabase.get(context) }
+
+    @Before
+    fun prepareFixture() {
+        device.executeShellCommand("settings put system font_scale 1.0")
+        runBlocking {
+            tripPreferencesRepository(context).completeOnboarding()
+            tripPreferencesRepository(context).saveThemeMode(TripThemeMode.Light)
+            database.backupDao().replaceAll(
+                TripBackupSnapshot(
+                    trips = listOf(
+                        TripEntity(
+                            "qa-trip", "QA 제주 여행", "2026-11-20", "2026-11-22",
+                            "대한민국", "제주", "Asia/Seoul", "KRW",
+                            "2박 3일 여행", "실제 Android 화면 검수용 샘플",
+                            1L, 1L
+                        )
+                    ),
+                    places = listOf(
+                        PlaceEntity(
+                            "qa-place", "qa-trip", "제주국제공항", "제주시 공항로 2",
+                            "첫 방문 장소", 33.5104, 126.4914, 1L, 1L
+                        )
+                    ),
+                    itineraries = listOf(
+                        ItineraryItemEntity(
+                            "qa-schedule", "qa-trip", "2026-11-20", "공항 도착",
+                            "10:00", "10:30", "qa-place", "렌터카 수령",
+                            true, true, 0, 1L, 1L
+                        )
+                    ),
+                    expenses = listOf(
+                        ExpenseEntity(
+                            "qa-expense-krw", "qa-trip", "12500", "KRW",
+                            "2026-11-20T12:30:00", "FOOD", "점심 식사",
+                            "qa-place", 1L, 1L
+                        ),
+                        ExpenseEntity(
+                            "qa-expense-usd", "qa-trip", "12.50", "USD",
+                            "2026-11-20T14:30:00", "OTHER", "해외 결제",
+                            null, 1L, 1L
+                        )
+                    ),
+                    budgets = listOf(TripBudgetEntity("qa-trip", "300000", "KRW", 1L)),
+                    checklist = listOf(
+                        ChecklistItemEntity("qa-check-1", "qa-trip", "여권", true, 0, 1L, 1L),
+                        ChecklistItemEntity("qa-check-2", "qa-trip", "충전기", false, 1, 1L, 1L),
+                        ChecklistItemEntity("qa-check-3", "qa-trip", "상비약", false, 2, 1L, 1L)
+                    )
+                )
+            )
+        }
+    }
+
+    @After
+    fun resetDisplay() {
+        device.executeShellCommand("settings put system font_scale 1.0")
+    }
+
+    @Test
+    fun captureRealMainActivityAndExerciseMvp() {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            awaitText("QA 제주 여행")
+            capture("01-home-light")
+            click("QA 제주 여행")
+            awaitText("경비 열기")
+            capture("02-workspace-light")
+
+            openScreen("준비물 열기", "준비 완료 1 / 3")
+            awaitText("여권")
+            capture("03-checklist-light")
+            click("미완료")
+            capture("04-checklist-incomplete-filter")
+            click("전체")
+            click("준비물 추가")
+            awaitText("준비물 이름 *")
+            capture("05-checklist-add-dialog")
+            val textField = device.wait(
+                Until.findObject(By.clazz("android.widget.EditText")), 4000
+            ) ?: throw AssertionError("준비물 입력 필드 접근성 노드를 찾지 못했습니다.")
+            textField.setText("멀티탭")
+            click("저장")
+            assertTrue(waitForChecklistCount(4))
+            capture("06-checklist-added")
+            device.pressBack()
+            awaitText("준비물 열기")
+
+            openScreen("경비 열기", "예산 설정·변경")
+            capture("07-expenses-light")
+            click("예산 설정·변경")
+            awaitText("총예산 · KRW")
+            capture("08-budget-edit-dialog")
+            click("취소")
+            device.wait(Until.gone(By.text("총예산 · KRW")), 3000)
+            openScreen("지출 추가", "지출 정보")
+            capture("09-expense-create-form")
+            swipeUp()
+            awaitText("지출 저장")
+            capture("09a-expense-form-bottom")
+            click("지출 저장")
+            awaitText("0보다 큰 금액을 통화별 소수 자릿수에 맞게 입력해 주세요.")
+            capture("10-expense-validation")
+            assertEquals(2, runBlocking {
+                database.expenseDao().observeForTrip("qa-trip").first().size
+            })
+            device.pressBack()
+            awaitText("예산·경비")
+            device.pressBack()
+            awaitText("경비 열기")
+            device.pressBack()
+            awaitText("TripCanvas")
+
+            click("설정")
+            awaitText("로컬 백업·복원")
+            capture("11-settings-light")
+            click("로컬 백업·복원")
+            awaitText("백업 파일 내보내기")
+            capture("12-backup-restore-light")
+            click("백업 파일 내보내기")
+            val pickerOpened = (0 until 25).any {
+                if (device.currentPackageName != "com.hebi.tripcanvas") true
+                else { Thread.sleep(300); false }
+            }
+            assertTrue("Android document picker did not become foreground", pickerOpened)
+            capture("13-android-file-save-picker")
+            device.pressBack()
+            awaitText("백업·복원")
+            awaitText("파일 저장을 취소했습니다.")
+            capture("14-backup-cancelled")
+            device.pressBack()
+            awaitText("설정")
+            device.pressBack()
+            awaitText("TripCanvas")
+
+            runBlocking {
+                tripPreferencesRepository(context).saveThemeMode(TripThemeMode.Dark)
+            }
+            device.waitForIdle()
+            awaitText("내 여행")
+            capture("15-home-dark")
+
+            click("QA 제주 여행")
+            awaitText("경비 열기")
+            capture("16-workspace-dark")
+            openScreen("준비물 열기", "준비 완료 1 / 4")
+            awaitText("멀티탭")
+            capture("17-checklist-dark")
+            device.pressBack()
+            awaitText("경비 열기")
+            openScreen("경비 열기", "예산 설정·변경")
+            capture("18-expenses-dark")
+            device.pressBack()
+            awaitText("경비 열기")
+            device.pressBack()
+            awaitText("TripCanvas")
+            click("설정")
+            awaitText("로컬 백업·복원")
+            click("로컬 백업·복원")
+            awaitText("백업 파일 내보내기")
+            capture("19-backup-dark")
+            device.pressBack()
+            awaitText("설정")
+            device.pressBack()
+            awaitText("TripCanvas")
+
+            device.executeShellCommand("settings put system font_scale 1.6")
+            Thread.sleep(2000)
+            scenario.recreate()
+            awaitText("내 여행")
+            Thread.sleep(1200)
+            capture("20-home-dark-font160")
+            click("QA 제주 여행")
+            awaitText("경비 열기")
+            capture("21-workspace-dark-font160")
+            openScreen("준비물 열기", "준비 완료 1 / 4")
+            awaitText("여권")
+            capture("22-checklist-dark-font160")
+            device.pressBack()
+            awaitText("경비 열기")
+            openScreen("경비 열기", "예산 설정·변경")
+            capture("23-expenses-dark-font160")
+        }
+    }
+
+    private fun waitForChecklistCount(expected: Int): Boolean {
+        repeat(20) {
+            val size = runBlocking {
+                database.checklistDao().observeForTrip("qa-trip").first().size
+            }
+            if (size == expected) return true
+            Thread.sleep(250)
+        }
+        return false
+    }
+
+    private fun awaitText(text: String) {
+        if (device.wait(Until.hasObject(By.text(text)), 5000)) return
+        repeat(6) {
+            swipeUp()
+            if (device.wait(Until.hasObject(By.text(text)), 1200)) return
+        }
+        repeat(6) {
+            swipeDown()
+            if (device.wait(Until.hasObject(By.text(text)), 1200)) return
+        }
+        val diagnosticDir = File(context.getExternalFilesDir(null), "qa")
+        diagnosticDir.mkdirs()
+        device.takeScreenshot(File(diagnosticDir, "99-failed-screen.png"))
+        runCatching {
+            device.dumpWindowHierarchy(File(diagnosticDir, "99-failed-hierarchy.xml"))
+        }
+        File(diagnosticDir, "99-failed-reason.txt").writeText("Missing text: $text\\nPackage: ${device.currentPackageName}\\n")
+        fail("Android 화면에서 다음 문구를 찾지 못했습니다: $text")
+    }
+
+    private fun openScreen(button: String, expectedTitle: String) {
+        repeat(3) {
+            click(button)
+            if (device.wait(Until.hasObject(By.text(expectedTitle)), 4500)) return
+            Thread.sleep(300)
+        }
+        awaitText(expectedTitle)
+    }
+
+    private fun click(text: String) {
+        awaitText(text)
+        device.waitForIdle()
+        Thread.sleep(500)
+        val node: UiObject2 = device.findObject(By.text(text))
+            ?: throw AssertionError("클릭 대상 없음: $text")
+        node.click()
+        device.waitForIdle()
+        Thread.sleep(400)
+    }
+
+    private fun swipeUp() {
+        val width = device.displayWidth
+        val height = device.displayHeight
+        device.swipe(width / 2, height * 3 / 4, width / 2, height / 3, 25)
+    }
+
+    private fun swipeDown() {
+        val width = device.displayWidth
+        val height = device.displayHeight
+        device.swipe(width / 2, height / 3, width / 2, height * 3 / 4, 25)
+    }
+
+    private fun capture(name: String) {
+        device.waitForIdle()
+        Thread.sleep(350)
+        val dir = File(context.getExternalFilesDir(null), "qa")
+        assertTrue("QA screenshot dir creation failed", dir.exists() || dir.mkdirs())
+        assertTrue("Screenshot failed: $name", device.takeScreenshot(File(dir, "$name.png")))
+    }
+}
