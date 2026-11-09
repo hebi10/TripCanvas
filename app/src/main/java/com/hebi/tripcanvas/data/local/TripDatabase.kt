@@ -143,7 +143,7 @@ abstract class TripDatabase : RoomDatabase() {
                         splitMode TEXT NOT NULL, enteredValue TEXT NOT NULL,
                         PRIMARY KEY(expenseId,participantId),
                         FOREIGN KEY(expenseId) REFERENCES expenses(id) ON UPDATE NO ACTION ON DELETE CASCADE,
-                        FOREIGN KEY(participantId) REFERENCES trip_participants(id) ON UPDATE NO ACTION ON DELETE RESTRICT
+                        FOREIGN KEY(participantId) REFERENCES trip_participants(id) ON UPDATE NO ACTION ON DELETE NO ACTION
                     )""".trimIndent()
                 )
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_expense_shares_expenseId ON expense_shares(expenseId)")

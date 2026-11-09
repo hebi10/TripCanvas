@@ -120,6 +120,10 @@ class TripFinanceBookingIntegrationTest {
             db.backupDao().replaceAll(decoded)
             assertEquals(1, db.bookingDao().observe("trip").first().size)
             assertTrue(db.bookingDao().observeAttachments(booking).first().isEmpty())
+            assertEquals(2, db.financeDao().observeTripShares("trip").first().size)
+            assertEquals(1, db.tripDao().deleteById("trip"))
+            assertTrue(db.financeDao().observeTripShares("trip").first().isEmpty())
+            assertTrue(db.backupDao().allTrips().isEmpty())
         } finally { db.close() }
     }
 

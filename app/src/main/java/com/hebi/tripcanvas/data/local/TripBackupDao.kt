@@ -37,6 +37,9 @@ interface TripBackupDao {
     @Query("SELECT * FROM bookings ORDER BY id")
     suspend fun allBookings(): List<BookingEntity>
 
+    @Query("DELETE FROM expense_shares")
+    suspend fun deleteAllShares()
+
     @Query("DELETE FROM trips")
     suspend fun deleteAllTrips()
 
@@ -67,6 +70,7 @@ interface TripBackupDao {
 
     @Transaction
     suspend fun replaceAll(snapshot: TripBackupSnapshot) {
+        deleteAllShares()
         deleteAllTrips()
         insertTrips(snapshot.trips)
         insertPlaces(snapshot.places)

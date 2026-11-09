@@ -18,7 +18,7 @@ import androidx.room.Index
             entity = TripParticipantEntity::class,
             parentColumns = ["id"],
             childColumns = ["participantId"],
-            onDelete = ForeignKey.RESTRICT
+            onDelete = ForeignKey.NO_ACTION
         )
     ],
     indices = [Index("expenseId"), Index("participantId")]
