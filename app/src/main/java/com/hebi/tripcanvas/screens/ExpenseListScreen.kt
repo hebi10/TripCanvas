@@ -1,0 +1,331 @@
+package com.hebi.tripcanvas.screens
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.RectangleShape
+import com.hebi.tripcanvas.data.ExpenseRepository
+import com.hebi.tripcanvas.data.PlaceRepository
+import com.hebi.tripcanvas.data.TripRepository
+import com.hebi.tripcanvas.data.local.ExpenseEntity
+import com.hebi.tripcanvas.data.local.TripBudgetEntity
+import com.hebi.tripcanvas.designsystem.components.TripConfirmDialog
+import com.hebi.tripcanvas.designsystem.components.TripEmptyState
+import com.hebi.tripcanvas.designsystem.components.TripErrorState
+import com.hebi.tripcanvas.designsystem.components.TripLoadingState
+import com.hebi.tripcanvas.designsystem.components.TripPrimaryButton
+import com.hebi.tripcanvas.designsystem.components.TripSecondaryButton
+import com.hebi.tripcanvas.designsystem.components.TripSectionHeading
+import com.hebi.tripcanvas.designsystem.components.TripSurfacePanel
+import com.hebi.tripcanvas.designsystem.components.TripTextField
+import com.hebi.tripcanvas.designsystem.theme.TripDesign
+import com.hebi.tripcanvas.designsystem.tokens.TripSpacing
+import com.hebi.tripcanvas.domain.ExpenseCategory
+import com.hebi.tripcanvas.domain.calculateExpenseTotals
+import com.hebi.tripcanvas.domain.displayMoney
+import com.hebi.tripcanvas.domain.validateMoney
+import com.hebi.tripcanvas.ui.TripPageFrame
+import java.math.BigDecimal
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
+
+private sealed interface ExpenseListState {
+    data object Loading : ExpenseListState
+    data object Failed : ExpenseListState
+    data class Ready(val expenses: List<ExpenseEntity>) : ExpenseListState
+}
+
+@Composable
+fun ExpenseListScreen(
+    tripId: String,
+    trips: TripRepository,
+    repository: ExpenseRepository,
+    places: PlaceRepository,
+    onBack: () -> Unit,
+    onNew: () -> Unit,
+    onEdit: (String) -> Unit
+) {
+    val p = TripDesign.palette
+    val scope = rememberCoroutineScope()
+    var refresh by remember { mutableIntStateOf(0) }
+    var working by remember { mutableStateOf(false) }
+    var actionError by remember { mutableStateOf<String?>(null) }
+    var deleteTarget by remember { mutableStateOf<ExpenseEntity?>(null) }
+    var showBudgetEditor by remember { mutableStateOf(false) }
+    var budgetInput by remember { mutableStateOf("") }
+    var budgetError by remember { mutableStateOf<String?>(null) }
+
+    val trip by remember(trips, tripId) { trips.observeTrip(tripId) }
+        .collectAsState(initial = null)
+    val flow = remember(repository, tripId, refresh) {
+        repository.observe(tripId)
+            .map<List<ExpenseEntity>, ExpenseListState> { ExpenseListState.Ready(it) }
+            .catch { emit(ExpenseListState.Failed) }
+    }
+    val state by flow.collectAsState(initial = ExpenseListState.Loading)
+    val budget by remember(repository, tripId) { repository.observeBudget(tripId) }
+        .collectAsState(initial = null)
+    val savedPlaces by remember(places, tripId) { places.observePlaces(tripId) }
+        .collectAsState(initial = emptyList())
+    val placeNames = savedPlaces.associate { it.id to it.name }
+
+    fun submit(action: suspend () -> Unit) {
+        if (working) return
+        working = true
+        actionError = null
+        scope.launch {
+            try {
+                action()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                actionError = "변경 내용을 저장하지 못했습니다. 다시 시도해 주세요."
+            } finally {
+                working = false
+            }
+        }
+    }
+
+    TripPageFrame(title = "예산·경비", onBack = onBack) {
+        val current = trip
+        if (current == null) {
+            TripLoadingState("여행 정보를 불러오는 중")
+        } else {
+            TripSectionHeading(
+                title = current.title,
+                supportingText = "기본 통화 " + current.currencyCode + " · 여행별 지출 내역"
+            )
+            when (val result = state) {
+                ExpenseListState.Loading -> TripLoadingState("지출 내역을 불러오는 중")
+                ExpenseListState.Failed -> TripErrorState(
+                    title = "지출 내역을 불러오지 못했습니다",
+                    description = "기기 저장소를 확인해 주세요.",
+                    onRetry = { refresh++ }
+                )
+                is ExpenseListState.Ready -> {
+                    val totals = calculateExpenseTotals(result.expenses, current.currencyCode)
+                    TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
+                        Column(
+                            modifier = Modifier.padding(TripSpacing.md),
+                            verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)
+                        ) {
+                            TripSectionHeading(
+                                title = "기본 통화 지출",
+                                supportingText = displayMoney(
+                                    totals.baseSpent.toPlainString(), current.currencyCode
+                                )
+                            )
+                            val activeBudget = budget?.takeIf { it.currencyCode == current.currencyCode }
+                            if (activeBudget == null) {
+                                Text(
+                                    if (budget == null) "예산 미설정"
+                                    else "기존 예산 " + displayMoney(
+                                        budget!!.amountDecimal, budget!!.currencyCode
+                                    ) + " · 현재 기본 통화와 달라 비교하지 않습니다.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = p.textSecondary
+                                )
+                            } else {
+                                val remaining =
+                                    BigDecimal(activeBudget.amountDecimal).subtract(totals.baseSpent)
+                                Text(
+                                    "예산 " + displayMoney(
+                                        activeBudget.amountDecimal, current.currencyCode
+                                    ),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = p.textPrimary
+                                )
+                                Text(
+                                    "잔여 " + displayMoney(
+                                        remaining.abs().toPlainString(), current.currencyCode
+                                    ) + if (remaining.signum() < 0) " 초과" else " 남음",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = if (remaining.signum() < 0) p.warning else p.textSecondary
+                                )
+                            }
+                            TripSecondaryButton(
+                                label = "예산 설정·변경",
+                                onClick = {
+                                    budgetInput = budget?.amountDecimal.orEmpty()
+                                    budgetError = null
+                                    showBudgetEditor = true
+                                }
+                            )
+                        }
+                    }
+                    if (totals.unconvertedByCurrency.isNotEmpty()) {
+                        TripSectionHeading(
+                            title = "환산 필요",
+                            supportingText = "환율이 없는 다른 통화는 기본 통화 합계·예산에서 제외합니다."
+                        )
+                        totals.unconvertedByCurrency.forEach { (code, amount) ->
+                            Text(
+                                displayMoney(amount.toPlainString(), code),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = p.textSecondary
+                            )
+                        }
+                    }
+                    TripSectionHeading(
+                        title = "지출 " + result.expenses.size + "건",
+                        supportingText = "날짜별 내역 · 환율과 공동 정산은 추후 단계에서 제공합니다."
+                    )
+                    if (result.expenses.isEmpty()) {
+                        TripEmptyState(
+                            title = "기록한 지출이 없습니다",
+                            description = "첫 지출을 추가해 보세요.",
+                            actionLabel = "지출 추가",
+                            onAction = onNew
+                        )
+                    } else {
+                        result.expenses.groupBy { it.occurredAtLocal.substringBefore("T") }
+                            .forEach { (date, rows) ->
+                                Text(
+                                    date,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = p.textPrimary
+                                )
+                                rows.forEach { item ->
+                                    TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
+                                        Column(
+                                            modifier = Modifier.padding(TripSpacing.md),
+                                            verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
+                                        ) {
+                                            Text(
+                                                displayMoney(item.amountDecimal, item.currencyCode),
+                                                style = MaterialTheme.typography.titleMedium,
+                                                color = p.textPrimary
+                                            )
+                                            Text(
+                                                ExpenseCategory.valueOf(item.category).label +
+                                                    " · " + item.occurredAtLocal.substringAfter("T").take(5),
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = p.textSecondary
+                                            )
+                                            item.placeId?.let(placeNames::get)?.let { place ->
+                                                Text(place, color = p.textSecondary)
+                                            }
+                                            if (item.note.isNotEmpty()) {
+                                                Text(item.note, color = p.textSecondary)
+                                            }
+                                            FlowRow(horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
+                                                TripSecondaryButton(
+                                                    label = "편집",
+                                                    onClick = { onEdit(item.id) }
+                                                )
+                                                TripSecondaryButton(
+                                                    label = "삭제",
+                                                    onClick = { deleteTarget = item }
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                    }
+                }
+            }
+            if (actionError != null) {
+                TripErrorState(
+                    title = "경비 저장 오류",
+                    description = requireNotNull(actionError),
+                    onRetry = { actionError = null }
+                )
+            }
+            TripPrimaryButton(
+                label = "지출 추가",
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onNew
+            )
+        }
+    }
+
+    if (showBudgetEditor && trip != null) {
+        val current = requireNotNull(trip)
+        AlertDialog(
+            onDismissRequest = { if (!working) showBudgetEditor = false },
+            title = { Text("총예산 · " + current.currencyCode) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
+                    TripTextField(
+                        value = budgetInput,
+                        onValueChange = { budgetInput = it; budgetError = null },
+                        label = "총예산",
+                        supportingText = budgetError ?: "기본 통화의 양수 금액",
+                        isError = budgetError != null
+                    )
+                    Text(
+                        "예산이 다른 통화로 저장되어 있어도 기존 값을 자동 환산하지 않습니다.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = p.textSecondary
+                    )
+                    if (budget != null) {
+                        TripSecondaryButton(
+                            label = "예산 해제",
+                            enabled = !working,
+                            onClick = {
+                                submit {
+                                    repository.clearBudget(tripId)
+                                    showBudgetEditor = false
+                                }
+                            }
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = !working, onClick = {
+                    if (validateMoney(budgetInput, current.currencyCode) == null) {
+                        budgetError = "0보다 큰 금액을 정확한 소수 자릿수로 입력해 주세요."
+                    } else {
+                        submit {
+                            repository.setBudget(tripId, budgetInput, current.currencyCode)
+                            showBudgetEditor = false
+                        }
+                    }
+                }) { Text(if (working) "저장 중" else "저장", color = p.primaryAction) }
+            },
+            dismissButton = {
+                TextButton(enabled = !working, onClick = { showBudgetEditor = false }) {
+                    Text("취소", color = p.textSecondary)
+                }
+            },
+            shape = RectangleShape,
+            containerColor = p.surface
+        )
+    }
+
+    deleteTarget?.let { item ->
+        TripConfirmDialog(
+            title = "지출 삭제",
+            message = displayMoney(item.amountDecimal, item.currencyCode) +
+                " 지출을 삭제하시겠습니까? 삭제 후에는 복원할 백업이 없다면 되돌릴 수 없습니다.",
+            confirmLabel = "지출 삭제",
+            destructive = true,
+            onConfirm = {
+                submit {
+                    repository.delete(tripId, item.id)
+                    deleteTarget = null
+                }
+            },
+            onDismiss = { if (!working) deleteTarget = null }
+        )
+    }
+}
