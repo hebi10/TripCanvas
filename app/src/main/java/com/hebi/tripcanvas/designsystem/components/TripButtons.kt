@@ -2,7 +2,7 @@ package com.hebi.tripcanvas.designsystem.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.shape.RectangleShape
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
