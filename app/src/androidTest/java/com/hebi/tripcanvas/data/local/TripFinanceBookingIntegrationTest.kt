@@ -123,6 +123,38 @@ class TripFinanceBookingIntegrationTest {
         } finally { db.close() }
     }
 
+    @Test
+    fun percentSplitModeAndEnteredPercentagesSurviveBackup() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(context, TripDatabase::class.java).build()
+        try {
+            db.tripDao().insert(trip("trip"))
+            val finance = TripFinanceRepository(db.financeDao(), db.expenseDao())
+            val first = finance.addParticipant("trip", "첫째")
+            val second = finance.addParticipant("trip", "둘째")
+            db.expenseDao().insert(ExpenseEntity(
+                "ratio", "trip", "101", "KRW",
+                "2026-11-11T13:00:00", "FOOD", "", null, 1L, 1L
+            ))
+            finance.saveAllocation(
+                "trip", "ratio", first, "", "", SplitMode.PERCENT,
+                listOf(first to "60", second to "40")
+            )
+            val rows = db.financeDao().observeExpenseShares("ratio").first()
+            assertEquals(listOf("PERCENT", "PERCENT"), rows.map { it.splitMode })
+            assertEquals(setOf("60", "40"), rows.map { it.enteredValue }.toSet())
+            assertEquals(101L, rows.sumOf { it.amountMinor })
+            val snapshot = db.backupDao().snapshot()
+            val roundTripped = TripBackupCodec.decode(TripBackupCodec.encode(snapshot))
+            assertEquals(snapshot, roundTripped)
+            val mixed = snapshot.copy(
+                shares = rows.mapIndexed { index, row ->
+                    if (index == 0) row.copy(splitMode = "AMOUNT") else row
+                }
+            )
+            assertTrue(runCatching { TripBackupCodec.validate(mixed) }.isFailure)
+        } finally { db.close() }
+    }
+
     private fun trip(id: String) = TripEntity(
         id, "QA 제주 여행", "2026-11-10", "2026-11-12", "한국", "제주",
         "Asia/Seoul", "KRW", "", "", 1L, 1L
