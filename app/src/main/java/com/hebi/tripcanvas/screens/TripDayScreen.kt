@@ -64,6 +64,12 @@ private sealed interface DayState {
     data class Ready(val items: List<ItineraryItemEntity>) : DayState
 }
 
+private sealed interface DayTripState {
+    data object Loading : DayTripState
+    data object Failed : DayTripState
+    data class Ready(val trip: TripEntity?) : DayTripState
+}
+
 @Composable
 fun TripDayScreen(
     tripRepository: TripRepository,
@@ -83,10 +89,14 @@ fun TripDayScreen(
     var failedAction by remember { mutableStateOf(false) }
     var deleteTarget by remember { mutableStateOf<ItineraryItemEntity?>(null) }
 
-    val tripFlow = remember(tripRepository, tripId) {
+    var tripRefresh by remember { mutableIntStateOf(0) }
+    val tripFlow = remember(tripRepository, tripId, tripRefresh) {
         tripRepository.observeTrip(tripId)
+            .map<TripEntity?, DayTripState> { DayTripState.Ready(it) }
+            .catch { emit(DayTripState.Failed) }
     }
-    val trip by tripFlow.collectAsState(initial = null)
+    val tripState by tripFlow.collectAsState(initial = DayTripState.Loading)
+    val trip = (tripState as? DayTripState.Ready)?.trip
     LaunchedEffect(trip?.startDate, trip?.endDate, trip?.timeZoneId) {
         val current = trip ?: return@LaunchedEffect
         val start = LocalDate.parse(current.startDate)
@@ -109,8 +119,19 @@ fun TripDayScreen(
     val placeNames = places.associate { it.id to it.name }
 
     TripPageFrame(title = "여행 일정", onBack = onBack) {
-        if (trip == null) {
+        if (tripState == DayTripState.Loading) {
             TripLoadingState("여행 정보를 불러오는 중")
+        } else if (tripState == DayTripState.Failed) {
+            TripErrorState(
+                title = "여행 정보를 읽지 못했습니다",
+                description = "기기 저장소를 확인하고 다시 시도해 주세요.",
+                onRetry = { tripRefresh++ }
+            )
+        } else if (trip == null) {
+            TripEmptyState(
+                title = "여행을 찾을 수 없습니다",
+                description = "삭제되었거나 존재하지 않는 여행입니다."
+            )
         } else {
             val current = requireNotNull(trip)
             val start = LocalDate.parse(current.startDate)
