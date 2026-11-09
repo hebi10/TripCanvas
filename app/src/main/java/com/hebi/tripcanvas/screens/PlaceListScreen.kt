@@ -158,7 +158,9 @@ fun PlaceListScreen(
     deleteTarget?.let { target ->
         TripConfirmDialog(
             title = "장소 삭제",
-            message = if (linked == null) {
+            message = if (deleteFailed) {
+                "연결 정보를 확인하거나 장소를 삭제하지 못했습니다. 취소 후 다시 시도해 주세요."
+            } else if (linked == null) {
                 "연결된 일정을 확인하는 중입니다."
             } else {
                 target.name + " 장소를 삭제하시겠습니까? " +
@@ -166,7 +168,12 @@ fun PlaceListScreen(
             },
             confirmLabel = if (deleting) "삭제 중" else "장소 삭제",
             destructive = true,
-            onDismiss = { if (!deleting) deleteTarget = null },
+            onDismiss = {
+                if (!deleting) {
+                    deleteTarget = null
+                    deleteFailed = false
+                }
+            },
             onConfirm = {
                 if (!deleting && linked != null) {
                     deleting = true
@@ -186,11 +193,5 @@ fun PlaceListScreen(
                 }
             }
         )
-        if (deleteFailed) {
-            TripErrorState(
-                title = "장소 삭제 오류",
-                description = "삭제하지 못했습니다. 다시 시도하거나 취소해 주세요."
-            )
-        }
     }
 }
