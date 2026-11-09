@@ -15,7 +15,7 @@
 | Compose Compiler | Kotlin 2.3.21 동버전 Compose Gradle 플러그인 |
 | Gradle | 9.5.0 (CI에서 고정 설치) |
 | Compose BOM | 2026.09.00 |
-| Android API | compileSdk 37 / targetSdk 36 / minSdk 26 |
+| Android API | compileSdk 36 / targetSdk 36 / minSdk 26 |
 | Java | JDK 17 |
 | 구조 | 단일 :app 모듈 + designsystem/theme, tokens, components, responsive |
 | CI | PR·main push 시 debug assemble 및 로컬 단위 테스트, APK 7일 보관 |
