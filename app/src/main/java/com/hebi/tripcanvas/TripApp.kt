@@ -28,6 +28,7 @@ import com.hebi.tripcanvas.data.ExpenseRepository
 import com.hebi.tripcanvas.data.ItineraryRepository
 import com.hebi.tripcanvas.data.PlaceRepository
 import com.hebi.tripcanvas.data.TripRepository
+import com.hebi.tripcanvas.data.search.PhotonPlaceSearch
 import com.hebi.tripcanvas.data.local.TripDatabase
 import com.hebi.tripcanvas.data.TripUserPreferences
 import com.hebi.tripcanvas.data.tripPreferencesRepository
@@ -50,6 +51,9 @@ import com.hebi.tripcanvas.screens.TripDayScreen
 import com.hebi.tripcanvas.screens.TripFormScreen
 import com.hebi.tripcanvas.screens.SettingsScreen
 import com.hebi.tripcanvas.screens.TripWorkspaceScreen
+import com.hebi.tripcanvas.screens.TripMapScreen
+import com.hebi.tripcanvas.screens.TripPlaceSearchScreen
+import com.hebi.tripcanvas.screens.TripPlaceDetailScreen
 import com.hebi.tripcanvas.screens.WelcomeScreen
 import com.hebi.tripcanvas.showcase.DesignSystemScreen
 import kotlinx.coroutines.CancellationException
@@ -82,6 +86,7 @@ fun TripApp(onThemeResolved: (Boolean) -> Unit) {
             tripDatabase.expenseDao(), tripDatabase.tripDao(), tripDatabase.placeDao()
         )
     }
+    val photonPlaceSearch = remember { PhotonPlaceSearch() }
     val checklistRepository = remember(tripDatabase) {
         ChecklistRepository(tripDatabase.checklistDao(), tripDatabase.tripDao())
     }
@@ -281,6 +286,9 @@ fun TripApp(onThemeResolved: (Boolean) -> Unit) {
                                         navController.navigate(TripDestinations.places(tripId))
                                     }
                                 },
+                                onMap = {
+                                    if (tripId != null) navController.navigate(TripDestinations.map(tripId))
+                                },
                                 checklistRepository = checklistRepository,
                                 expenseRepository = expenseRepository,
                                 onChecklist = {
@@ -384,7 +392,10 @@ fun TripApp(onThemeResolved: (Boolean) -> Unit) {
                                 onEdit = { id ->
                                     navController.navigate(TripDestinations.editSchedule(tripId, id))
                                 },
-                                onPlaces = { navController.navigate(TripDestinations.places(tripId)) }
+                                onPlaces = { navController.navigate(TripDestinations.places(tripId)) },
+                                onMap = { date ->
+                                    navController.navigate(TripDestinations.map(tripId, date))
+                                }
                             )
                         }
                         composable(
@@ -453,7 +464,14 @@ fun TripApp(onThemeResolved: (Boolean) -> Unit) {
                                 onEdit = { id ->
                                     navController.navigate(TripDestinations.editPlace(tripId, id))
                                 },
-                                onBack = { navController.popBackStack() }
+                                onBack = { navController.popBackStack() },
+                                onMap = { navController.navigate(TripDestinations.map(tripId)) },
+                                onExternalSearch = {
+                                    navController.navigate(TripDestinations.externalPlaceSearch(tripId))
+                                },
+                                onDetail = { id ->
+                                    navController.navigate(TripDestinations.placeDetail(tripId, id))
+                                }
                             )
                         }
                         composable(
@@ -478,7 +496,85 @@ fun TripApp(onThemeResolved: (Boolean) -> Unit) {
                                     navController.navigate(TripDestinations.editPlace(tripId, id))
                                 },
                                 onBack = { navController.popBackStack() },
-                                newlyCreatedPlaceId = newId
+                                newlyCreatedPlaceId = newId,
+                                onMap = { navController.navigate(TripDestinations.map(tripId)) },
+                                onExternalSearch = {
+                                    navController.navigate(TripDestinations.externalPlaceSearch(tripId))
+                                },
+                                onDetail = { id ->
+                                    navController.navigate(TripDestinations.placeDetail(tripId, id))
+                                }
+                            )
+                        }
+                        composable(
+                            route = TripDestinations.MapRoute,
+                            arguments = listOf(
+                                navArgument("tripId") { type = NavType.StringType },
+                                navArgument("date") { type = NavType.StringType },
+                                navArgument("focusId") { type = NavType.StringType }
+                            )
+                        ) { entry ->
+                            val tripId = requireNotNull(entry.arguments?.getString("tripId"))
+                            TripMapScreen(
+                                tripId = tripId,
+                                initialDate = entry.arguments?.getString("date") ?: "all",
+                                initialPlaceId = entry.arguments?.getString("focusId") ?: "all",
+                                trips = tripRepository,
+                                places = placeRepository,
+                                itinerary = itineraryRepository,
+                                onBack = { navController.popBackStack() },
+                                onSearch = {
+                                    navController.navigate(TripDestinations.externalPlaceSearch(tripId))
+                                },
+                                onPlace = { id ->
+                                    navController.navigate(TripDestinations.placeDetail(tripId, id))
+                                },
+                                onSchedule = { id ->
+                                    navController.navigate(TripDestinations.editSchedule(tripId, id))
+                                }
+                            )
+                        }
+                        composable(
+                            route = TripDestinations.ExternalPlaceSearchRoute,
+                            arguments = listOf(navArgument("tripId") { type = NavType.StringType })
+                        ) { entry ->
+                            val tripId = requireNotNull(entry.arguments?.getString("tripId"))
+                            TripPlaceSearchScreen(
+                                tripId = tripId,
+                                repository = placeRepository,
+                                searchService = photonPlaceSearch,
+                                onBack = { navController.popBackStack() },
+                                onSaved = { id ->
+                                    navController.previousBackStackEntry?.savedStateHandle
+                                        ?.set("newPlaceId", id)
+                                    navController.popBackStack()
+                                }
+                            )
+                        }
+                        composable(
+                            route = TripDestinations.PlaceDetailRoute,
+                            arguments = listOf(
+                                navArgument("tripId") { type = NavType.StringType },
+                                navArgument("placeId") { type = NavType.StringType }
+                            )
+                        ) { entry ->
+                            val tripId = requireNotNull(entry.arguments?.getString("tripId"))
+                            val placeId = requireNotNull(entry.arguments?.getString("placeId"))
+                            TripPlaceDetailScreen(
+                                tripId = tripId,
+                                placeId = placeId,
+                                places = placeRepository,
+                                itinerary = itineraryRepository,
+                                onBack = { navController.popBackStack() },
+                                onEdit = {
+                                    navController.navigate(TripDestinations.editPlace(tripId, placeId))
+                                },
+                                onMap = {
+                                    navController.navigate(TripDestinations.map(tripId, focusId = placeId))
+                                },
+                                onSchedule = { id ->
+                                    navController.navigate(TripDestinations.editSchedule(tripId, id))
+                                }
                             )
                         }
                         composable(
