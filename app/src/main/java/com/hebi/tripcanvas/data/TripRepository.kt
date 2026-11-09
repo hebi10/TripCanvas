@@ -8,6 +8,9 @@ import java.time.Clock
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 
+class TripPeriodConflictException(val affectedDates: List<String>) :
+    IllegalStateException("Trip period leaves " + affectedDates.size + " schedules outside its dates")
+
 class TripRepository(
     private val dao: TripDao,
     private val clock: Clock = Clock.systemUTC()
@@ -42,6 +45,10 @@ class TripRepository(
     suspend fun update(tripId: String, input: TripInput) {
         val valid = requireValid(input)
         val original = dao.findById(tripId) ?: throw NoSuchElementException("Trip not found")
+        if (valid.startDate != original.startDate || valid.endDate != original.endDate) {
+            val outside = dao.outOfRangeDates(tripId, valid.startDate, valid.endDate)
+            if (outside.isNotEmpty()) throw TripPeriodConflictException(outside)
+        }
         val updated = dao.update(
             original.copy(
                 title = valid.title,
