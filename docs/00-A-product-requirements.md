@@ -90,7 +90,8 @@ P0의 '기본 경비'는 개인별 지출 금액/분류/시각/메모 저장을 
 - FR-EXP-03 [P0] 지출 분류: 식비/교통/숙박/관광/쇼핑/기타. 사용자가 메모와 영수증 참조를 추가 가능(첨부는 P1).
 - FR-EXP-04 [P1] 총예산 대비 지출, 일자별·카테고리별 내역, 기본 통화 환산 요약을 제공.
 - FR-EXP-05 [P1] 기본 통화와 다른 통화의 지출은 해당 지출에 확정된 환산 비율 스냅샷이 있어야 정산 합계에 포함; 값 없으면 '환산 필요'로 별도 표시. 환율 출처/기준일 고지.
-- FR-SPLIT-01 [P1] 지출당 결제자, 부담 참가자, 분담 방식(균등/지정 금액/비율)을 기록.
+- FR-PART-01 [P1] 계정 없이 여행에 로컬 참가자 이름을 등록·수정·선택 가능. 동명이인은 별도 ID로 구분하고 P2 계정 연결 시 기존 정산 내역 보존.
+- FR-SPLIT-01 [P1] 지출당 결제자(로컬 참가자 ID), 부담 참가자, 분담 방식(균등/지정 금액/비율)을 기록.
 - FR-SPLIT-02 [P1] 분담액 합계는 환산된 지출액과 최소 통화 단위까지 정확히 일치. 균등 분배 잔여 단위는 정해진 참가자 순서로 배정하고 배정 결과를 UI에 표시.
 - FR-SPLIT-03 [P1] 참가자별 지불액·부담액·정산 상태를 계산하며 기존 거래 변경 시 재계산. 정산 완료 표시 후 내역 수정 시 재확인 요청.
 - FR-SPLIT-04 [P1] 정산 결과는 '누가 누구에게 얼마'의 검토용 내역이며 실제 송금 기능은 제공하지 않음.
@@ -141,7 +142,7 @@ P0의 '기본 경비'는 개인별 지출 금액/분류/시각/메모 저장을 
 - BR-05 환율: 지출별 환율 및 기준일을 저장하고, 과거 정산액이 새로운 환율로 묵시적 변경되지 않음.
 - BR-06 지출 음수 금지: 환불 처리는 원거래와 연결되는 별도 유형으로 향후 설계. P0는 일반 지출만 입력.
 - BR-07 분담: 균등/지정금액/비율이 정확히 합계와 일치해야 확정; 반올림 잔액 정책은 UI에 표시.
-- BR-08 로컬/공유: 처음 로컬 여행과 이후 클라우드 여행을 구분, 공유 전 동기화 범위·권한을 명시적으로 승인.
+- BR-08 로컬/공유: 처음 로컬 여행과 이후 클라우드 여행을 구분, 공유 전 동기화 범위·권한을 명시적으로 승인. P1 로컬 참가자는 P2에서 계정과 연동하되 삭제·중복 병합 없이 기존 분담 기록을 유지.
 - BR-09 영구 삭제: 사용자 확인 전 다른 참가자의 데이터에 영향을 줄 범위를 고지. 소유자만 공유 여행 자체 삭제 가능.
 - BR-10 '완료' 정의: 날짜 지남 = 종료된 여행 분류. 실제 방문 완료와 동일시하지 않음.
 - BR-11 권한: 소유자·편집자·열람자는 서버 검증 기준; 권한 변경은 오프라인에서 임의 확정 불가.
@@ -152,13 +153,14 @@ P0의 '기본 경비'는 개인별 지출 금액/분류/시각/메모 저장을 
 | 엔터티 | 핵심 필드 | 관계/제약 |
 | --- | --- | --- |
 | Trip | id, title, startDate, endDate, zoneId, baseCurrency, destination, description, ownerId? | 최상위 단위, 로컬 UUID |
-| TripMember | tripId, userId, role, inviteStatus | P2, 복합 고유 키 |
+| TripParticipant | id, tripId, displayName, linkedUserId? | P1, 로컬 정산 대상, P2 계정 연동 시 ID 유지 |
+| TripMember | tripId, participantId, userId, role, inviteStatus | P2, 계정·권한 연결 |
 | ItineraryDay | id, tripId, localDate, sortOrder | 여행 날짜별 |
 | ItineraryItem | id, dayId, title, placeId?, startLocalTime?, endLocalTime?, sortOrder, note, priority, state | 시간 미정 허용 |
 | Place | id, tripId, name, address?, lat?, lng?, provider?, providerPlaceId?, note? | 여행 내부 장소 참조 |
 | ChecklistItem | id, tripId, title, isDone, sortOrder | P0 신규 추가 |
-| Expense | id, tripId, amountDecimal, currencyCode, occurredAt, category, payerId?, note, rateSnapshot? | 금액 양수, 환율 스냅샷 |
-| ExpenseShare | id, expenseId, memberId, amountDecimal, settledAt? | P1, 정확한 분담 합계 |
+| Expense | id, tripId, amountDecimal, currencyCode, occurredAt, category, payerParticipantId?, note, rateSnapshot? | 금액 양수, 환율 스냅샷 |
+| ExpenseShare | id, expenseId, participantId, amountDecimal, settledAt? | P1, 정확한 분담 합계 |
 | Booking | id, tripId, type, title, referenceNumber?, startAt?, note? | P1 |
 | Attachment | id, ownerEntityType, ownerEntityId, localUriOrPath, mimeType, status | P1, 파일 연결 관리 |
 | VisitRecord | id, tripId, placeId?, itineraryItemId?, visitedAtUtc, note? | P3, 실제 방문 |
