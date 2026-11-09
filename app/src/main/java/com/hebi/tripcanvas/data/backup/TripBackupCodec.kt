@@ -20,7 +20,7 @@ import org.json.JSONObject
 
 object TripBackupCodec {
     const val FORMAT = "tripcanvas-structured-backup"
-    const val VERSION = 1
+    const val VERSION = 2
     const val MAX_BYTES = 10 * 1024 * 1024
     private const val MAX_ROWS = 100_000
 
@@ -48,6 +48,9 @@ object TripBackupCodec {
                     .put("longitude", it.longitude ?: JSONObject.NULL)
                     .put("createdAtMillis", it.createdAtMillis)
                     .put("updatedAtMillis", it.updatedAtMillis)
+                    .put("provider", it.provider ?: JSONObject.NULL)
+                    .put("providerPlaceId", it.providerPlaceId ?: JSONObject.NULL)
+                    .put("sourceFetchedAtMillis", it.sourceFetchedAtMillis ?: JSONObject.NULL)
             })
             .put("itineraries", array(snapshot.itineraries) {
                 JSONObject()
@@ -92,7 +95,7 @@ object TripBackupCodec {
     fun decode(text: String): TripBackupSnapshot {
         val json = JSONObject(text)
         require(json.getString("format") == FORMAT) { "Unknown backup format" }
-        require(json.getInt("version") == VERSION) { "Unsupported backup version" }
+        require(json.getInt("version") in 1..VERSION) { "Unsupported backup version" }
         val snapshot = TripBackupSnapshot(
             trips = parse(json, "trips") {
                 TripEntity(
@@ -113,7 +116,11 @@ object TripBackupCodec {
                     note = it.getString("note"), latitude = it.nullableDouble("latitude"),
                     longitude = it.nullableDouble("longitude"),
                     createdAtMillis = it.getLong("createdAtMillis"),
-                    updatedAtMillis = it.getLong("updatedAtMillis")
+                    updatedAtMillis = it.getLong("updatedAtMillis"),
+                    provider = it.nullableString("provider"),
+                    providerPlaceId = it.nullableString("providerPlaceId"),
+                    sourceFetchedAtMillis = if (it.isNull("sourceFetchedAtMillis")) null
+                        else it.getLong("sourceFetchedAtMillis")
                 )
             },
             itineraries = parse(json, "itineraries") {
@@ -180,6 +187,17 @@ object TripBackupCodec {
         for (place in snapshot.places) {
             require(validId(place.id) && trips.containsKey(place.tripId)) { "Invalid place owner" }
             require(validatePlace(place.toInput()).normalized != null) { "Invalid place" }
+            require(
+                if (place.provider == null) {
+                    place.providerPlaceId == null && place.sourceFetchedAtMillis == null
+                } else {
+                    place.provider == "Photon/OSM" &&
+                        !place.providerPlaceId.isNullOrBlank() &&
+                        place.providerPlaceId.length <= 200 &&
+                        place.sourceFetchedAtMillis != null &&
+                        place.sourceFetchedAtMillis >= 0L
+                }
+            ) { "Invalid place source" }
         }
         for (item in snapshot.itineraries) {
             val trip = trips[item.tripId] ?: throw IllegalArgumentException("Invalid itinerary trip")

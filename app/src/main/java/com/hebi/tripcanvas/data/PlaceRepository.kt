@@ -3,12 +3,15 @@ package com.hebi.tripcanvas.data
 import com.hebi.tripcanvas.data.local.PlaceDao
 import com.hebi.tripcanvas.data.local.PlaceEntity
 import com.hebi.tripcanvas.data.local.TripDao
+import com.hebi.tripcanvas.data.search.RemotePlace
 import com.hebi.tripcanvas.domain.PlaceInput
 import com.hebi.tripcanvas.domain.ValidPlace
 import com.hebi.tripcanvas.domain.validatePlace
 import java.time.Clock
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
+
+data class ImportedPlace(val id: String, val alreadySaved: Boolean)
 
 class PlaceRepository(
     private val placeDao: PlaceDao,
@@ -36,6 +39,37 @@ class PlaceRepository(
                 valid.latitude, valid.longitude, now, now)
         )
         return id
+    }
+
+    suspend fun importRemote(tripId: String, remote: RemotePlace): ImportedPlace {
+        requireNotNull(tripDao.findById(tripId)) { "Trip not found" }
+        require(remote.provider == "Photon/OSM" && remote.providerId.isNotBlank())
+        val existing = placeDao.findByProvider(tripId, remote.provider, remote.providerId)
+        if (existing != null) return ImportedPlace(existing.id, true)
+        val fields = requireValid(
+            PlaceInput(
+                name = remote.name.take(100),
+                address = remote.address.take(500),
+                latitude = remote.latitude.toString(),
+                longitude = remote.longitude.toString()
+            )
+        )
+        val now = clock.millis()
+        val id = UUID.randomUUID().toString()
+        try {
+            placeDao.insert(
+                PlaceEntity(
+                    id, tripId, fields.name, fields.address, "",
+                    fields.latitude, fields.longitude, now, now,
+                    remote.provider, remote.providerId, now
+                )
+            )
+        } catch (error: android.database.sqlite.SQLiteConstraintException) {
+            val duplicate = placeDao.findByProvider(tripId, remote.provider, remote.providerId)
+            if (duplicate != null) return ImportedPlace(duplicate.id, true)
+            throw error
+        }
+        return ImportedPlace(id, false)
     }
 
     suspend fun update(tripId: String, placeId: String, input: PlaceInput) {

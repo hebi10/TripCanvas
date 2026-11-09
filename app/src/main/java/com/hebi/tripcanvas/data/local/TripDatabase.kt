@@ -12,7 +12,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         TripEntity::class, PlaceEntity::class, ItineraryItemEntity::class,
         ExpenseEntity::class, TripBudgetEntity::class, ChecklistItemEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = true
 )
 abstract class TripDatabase : RoomDatabase() {
@@ -104,6 +104,18 @@ abstract class TripDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE places ADD COLUMN provider TEXT")
+                db.execSQL("ALTER TABLE places ADD COLUMN providerPlaceId TEXT")
+                db.execSQL("ALTER TABLE places ADD COLUMN sourceFetchedAtMillis INTEGER")
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS index_places_tripId_provider_providerPlaceId " +
+                        "ON places(tripId, provider, providerPlaceId)"
+                )
+            }
+        }
+
         @Volatile private var instance: TripDatabase? = null
 
         fun get(context: Context): TripDatabase =
@@ -112,7 +124,7 @@ abstract class TripDatabase : RoomDatabase() {
                     context.applicationContext,
                     TripDatabase::class.java,
                     "tripcanvas.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { instance = it }
             }
     }
 }

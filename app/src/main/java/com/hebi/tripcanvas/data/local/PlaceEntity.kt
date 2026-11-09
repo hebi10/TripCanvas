@@ -15,7 +15,10 @@ import androidx.room.PrimaryKey
             onDelete = ForeignKey.CASCADE
         )
     ],
-    indices = [Index("tripId")]
+    indices = [
+        Index("tripId"),
+        Index(value = ["tripId", "provider", "providerPlaceId"], unique = true)
+    ]
 )
 data class PlaceEntity(
     @PrimaryKey val id: String,
@@ -26,5 +29,8 @@ data class PlaceEntity(
     val latitude: Double?,
     val longitude: Double?,
     val createdAtMillis: Long,
-    val updatedAtMillis: Long
+    val updatedAtMillis: Long,
+    val provider: String? = null,
+    val providerPlaceId: String? = null,
+    val sourceFetchedAtMillis: Long? = null
 )

@@ -17,6 +17,12 @@ interface PlaceDao {
     @Query("SELECT * FROM places WHERE tripId = :tripId AND id = :placeId LIMIT 1")
     suspend fun findForTrip(tripId: String, placeId: String): PlaceEntity?
 
+    @Query(
+        "SELECT * FROM places WHERE tripId = :tripId AND provider = :provider " +
+            "AND providerPlaceId = :providerPlaceId LIMIT 1"
+    )
+    suspend fun findByProvider(tripId: String, provider: String, providerPlaceId: String): PlaceEntity?
+
     @Insert
     suspend fun insert(place: PlaceEntity)
 
