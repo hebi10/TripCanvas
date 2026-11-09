@@ -31,7 +31,8 @@ collect_evidence() {
 
 trap collect_evidence EXIT
 set +e
-./gradlew :app:connectedDebugAndroidTest --stacktrace "$@" 2>&1 | tee "$evidence_dir/gradle-connected.txt"
+./gradlew :app:connectedDebugAndroidTest --stacktrace \
+  -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true "$@" 2>&1 | tee "$evidence_dir/gradle-connected.txt"
 test_status=${PIPESTATUS[0]}
 set -e
 exit "$test_status"

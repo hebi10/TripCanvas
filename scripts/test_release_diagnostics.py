@@ -49,6 +49,7 @@ class InstrumentationDiagnosticsTests(unittest.TestCase):
         self.assertIn('/files/qa/', adb)
         self.assertIn('/files/qa3a/', adb)
         self.assertIn('run-as com.hebi.tripcanvas tar -cf - databases files/datastore', adb)
+        self.assertIn('android.injected.androidTest.leaveApksInstalledAfterRun=true', log)
         self.assertNotIn('testInstrumentationRunnerArguments.class', log)
 
     def test_failed_gradle_exit_is_preserved_even_when_all_adb_collection_commands_fail(self):
