@@ -24,6 +24,12 @@ object TripDestinations {
     const val ExpensesRoute = "trip/{tripId}/expenses"
     const val NewExpenseRoute = "trip/{tripId}/expenses/new"
     const val EditExpenseRoute = "trip/{tripId}/expenses/{expenseId}/edit"
+    const val ParticipantsRoute = "trip/{tripId}/participants"
+    const val SettlementRoute = "trip/{tripId}/settlement"
+    const val ExpenseSplitRoute = "trip/{tripId}/expenses/{expenseId}/split"
+    const val BookingsRoute = "trip/{tripId}/bookings"
+    const val NewBookingRoute = "trip/{tripId}/bookings/new"
+    const val EditBookingRoute = "trip/{tripId}/bookings/{bookingId}/edit"
     const val BackupRoute = "settings/backup"
 
     fun workspace(tripId: String): String = "trip/" + tripId
@@ -45,6 +51,15 @@ object TripDestinations {
     fun placeDetail(tripId: String, placeId: String): String =
         "trip/" + tripId + "/places/" + placeId + "/detail"
 
+    fun participants(tripId: String) = "trip/" + tripId + "/participants"
+    fun settlement(tripId: String) = "trip/" + tripId + "/settlement"
+    fun expenseSplit(tripId: String, expenseId: String) =
+        "trip/" + tripId + "/expenses/" + expenseId + "/split"
+    fun bookings(tripId: String) = "trip/" + tripId + "/bookings"
+    fun newBooking(tripId: String) = "trip/" + tripId + "/bookings/new"
+    fun editBooking(tripId: String, bookingId: String) =
+        "trip/" + tripId + "/bookings/" + bookingId + "/edit"
+
     fun checklist(tripId: String): String = "trip/" + tripId + "/checklist"
     fun expenses(tripId: String): String = "trip/" + tripId + "/expenses"
     fun newExpense(tripId: String): String = "trip/" + tripId + "/expenses/new"
@@ -60,6 +75,8 @@ object TripDestinations {
         NewScheduleRoute, EditScheduleRoute, PlacesRoute, PickPlaceRoute,
         NewPlaceRoute, EditPlaceRoute, ChecklistRoute,
         ExpensesRoute, NewExpenseRoute, EditExpenseRoute, BackupRoute,
-        MapRoute, ExternalPlaceSearchRoute, PlaceDetailRoute
+        MapRoute, ExternalPlaceSearchRoute, PlaceDetailRoute,
+        ParticipantsRoute, SettlementRoute, ExpenseSplitRoute,
+        BookingsRoute, NewBookingRoute, EditBookingRoute
     )
 }
