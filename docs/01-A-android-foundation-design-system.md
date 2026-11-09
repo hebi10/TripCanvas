@@ -13,14 +13,14 @@
 | 언어·UI | Kotlin + Jetpack Compose + Material 3 |
 | Android Gradle Plugin | 9.3.3, 내장 Kotlin 지원 사용 |
 | Compose Compiler | Kotlin 2.3.21 동버전 Compose Gradle 플러그인 |
-| Gradle | 9.5.0 (CI에서 고정 설치) |
+| Gradle | 9.5.0 (공식 Wrapper 포함, 로컬·CI 공통) |
 | Compose BOM | 2026.09.00 |
 | Android API | compileSdk 37.1 / targetSdk 36 / minSdk 26 |
 | Java | JDK 17 |
 | 구조 | 단일 :app 모듈 + designsystem/theme, tokens, components, responsive |
 | CI | PR·main push 시 debug assemble 및 로컬 단위 테스트, APK 7일 보관 |
 
-Gradle wrapper JAR·스크립트는 이 PR에 포함하지 않았다. CI는 `gradle/actions/setup-gradle`에서 버전을 설치한다. 로컬 개발 시 동일 Gradle 9.5.0을 설치하거나 설치된 Gradle로 `gradle wrapper --gradle-version 9.5.0 --distribution-type bin`을 실행하여 공식 Wrapper를 생성한 후 저장소에 추가해야 한다. Wrapper 생성 전에 `./gradlew`가 동작한다고 주장하지 않는다.
+공식 Gradle 9.5.0 Wrapper(`gradlew`, `gradlew.bat`, `gradle/wrapper/gradle-wrapper.jar`, `gradle-wrapper.properties`)를 저장소에 포함했다. Wrapper JAR의 Git blob SHA는 Gradle 공식 v9.5.0 저장소의 `b1b8ef56b44f16b14dc800fa8103a6d89abb526f`와 동일하다. 로컬·CI 모두 프로젝트 루트에서 `./gradlew :app:assembleDebug :app:testDebugUnitTest`로 실행한다. Windows에서는 `gradlew.bat`를 사용한다.
 
 ## 2. 색상 토큰
 
@@ -96,7 +96,7 @@ Gradle wrapper JAR·스크립트는 이 PR에 포함하지 않았다. CI는 `gra
 
 ### 자동 검증
 - 단위 테스트: 가용 너비 599/600/839/840dp 경계 검증
-- PR CI: `assembleDebug`, `testDebugUnitTest`
+- PR CI: 공식 Wrapper를 이용한 `assembleDebug`, `testDebugUnitTest`
 - 결과물: 디버그 APK 첨부 (Play 배포 아님)
 
 ### 후속 실기기 QA

@@ -31,18 +31,11 @@ jobs:
       - name: Install compile SDK
         run: sdkmanager --install "platforms;android-37.1" "build-tools;36.0.0"
 
-      - name: Set up Gradle 9.5
+      - name: Set up Gradle Wrapper caching
         uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '9.5.0'
-
-      - name: Generate official Gradle wrapper for repository bootstrap
-        run: |
-          gradle wrapper --gradle-version 9.5.0 --distribution-type bin
-          base64 -w76 gradle/wrapper/gradle-wrapper.jar | sed 's/^/GRADLE_WRAPPER_CHUNK:/'
 
       - name: Compile and test
-        run: gradle :app:assembleDebug :app:testDebugUnitTest --stacktrace
+        run: ./gradlew :app:assembleDebug :app:testDebugUnitTest --stacktrace
 
       - name: Archive debug APK
         if: success()
