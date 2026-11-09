@@ -43,9 +43,11 @@ import com.hebi.tripcanvas.designsystem.components.TripPrimaryButton
 import com.hebi.tripcanvas.designsystem.components.TripSecondaryButton
 import com.hebi.tripcanvas.designsystem.components.TripSectionHeading
 import com.hebi.tripcanvas.designsystem.components.TripStatusTag
+import com.hebi.tripcanvas.designsystem.components.TripStatusTone
 import com.hebi.tripcanvas.designsystem.components.TripSurfacePanel
 import com.hebi.tripcanvas.designsystem.theme.TripDesign
 import com.hebi.tripcanvas.designsystem.tokens.TripSpacing
+import com.hebi.tripcanvas.domain.scheduleOverlaps
 import com.hebi.tripcanvas.ui.TripPageFrame
 import java.time.Instant
 import java.time.LocalDate
@@ -201,6 +203,12 @@ fun TripDayScreen(
                                 item = item,
                                 placeName = item.placeId?.let(placeNames::get),
                                 disabled = busy,
+                                hasConflict = result.items.any { other ->
+                                    other.id != item.id && scheduleOverlaps(
+                                        item.startTime, item.endTime,
+                                        other.startTime, other.endTime
+                                    )
+                                },
                                 onEdit = { onEdit(item.id) },
                                 onDuplicate = {
                                     if (!busy) {
@@ -251,6 +259,12 @@ fun TripDayScreen(
                                 item = item,
                                 placeName = item.placeId?.let(placeNames::get),
                                 disabled = busy,
+                                hasConflict = result.items.any { other ->
+                                    other.id != item.id && scheduleOverlaps(
+                                        item.startTime, item.endTime,
+                                        other.startTime, other.endTime
+                                    )
+                                },
                                 onEdit = { onEdit(item.id) },
                                 onDuplicate = {
                                     if (!busy) {
@@ -338,6 +352,7 @@ private fun ScheduleRow(
     item: ItineraryItemEntity,
     placeName: String?,
     disabled: Boolean,
+    hasConflict: Boolean,
     onEdit: () -> Unit,
     onDuplicate: () -> Unit,
     onDelete: () -> Unit,
@@ -396,6 +411,7 @@ private fun ScheduleRow(
                 horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs),
                 verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
             ) {
+                if (hasConflict) TripStatusTag("시간 겹침", TripStatusTone.Warning)
                 if (item.important) TripStatusTag("중요")
                 if (item.confirmed) TripStatusTag("확정")
                 TripSecondaryButton(label = "수정", onClick = onEdit, enabled = !disabled)
