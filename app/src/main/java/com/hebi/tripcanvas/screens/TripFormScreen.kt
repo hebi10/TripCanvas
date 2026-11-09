@@ -78,7 +78,7 @@ fun TripFormScreen(
     onSaved: (String) -> Unit
 ) {
     val defaults = remember(tripId) { defaultTripInput() }
-    var input by rememberSaveable(tripId, saver = TripInputSaver) { mutableStateOf(defaults) }
+    var input by rememberSaveable(tripId, stateSaver = TripInputSaver) { mutableStateOf(defaults) }
     var hydrated by rememberSaveable(tripId) { mutableStateOf(tripId == null) }
     var errors by remember { mutableStateOf<Map<TripField, String>>(emptyMap()) }
     var saveFailed by remember { mutableStateOf(false) }
@@ -109,9 +109,11 @@ fun TripFormScreen(
         else currentTrip != null && input != currentTrip.toInput()
     )
     val requestBack = {
-        if (dirty) showDiscard = true else onBack()
+        if (!saving) {
+            if (dirty) showDiscard = true else onBack()
+        }
     }
-    BackHandler(enabled = dirty && !saving) { requestBack() }
+    BackHandler(enabled = dirty || saving) { requestBack() }
 
     TripPageFrame(
         title = if (tripId == null) "새 여행" else "여행 편집",
