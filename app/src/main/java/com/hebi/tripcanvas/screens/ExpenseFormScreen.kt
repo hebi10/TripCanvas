@@ -136,7 +136,7 @@ fun ExpenseFormScreen(
         onBack = requestBack
     ) {
         when {
-            trip == null || state == ExpenseFormState.Loading || !hydrated ->
+            trip == null || state == ExpenseFormState.Loading ->
                 TripLoadingState("지출 정보를 불러오는 중")
             state == ExpenseFormState.Failed -> TripErrorState(
                 title = "지출 정보를 불러오지 못했습니다",
@@ -146,6 +146,7 @@ fun ExpenseFormScreen(
                 title = "지출을 찾을 수 없습니다",
                 description = "삭제된 항목이거나 다른 여행의 지출입니다."
             )
+            !hydrated -> TripLoadingState("지출 정보를 불러오는 중")
             else -> {
                 TripSectionHeading(
                     title = "지출 정보",
