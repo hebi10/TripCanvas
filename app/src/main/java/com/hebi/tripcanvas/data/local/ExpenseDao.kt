@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -23,6 +24,16 @@ interface ExpenseDao {
 
     @Update
     suspend fun update(item: ExpenseEntity): Int
+
+    @Query("DELETE FROM expense_shares WHERE expenseId = :expenseId")
+    suspend fun clearExpenseShares(expenseId: String)
+
+    @Transaction
+    suspend fun updateAndResetAllocation(item: ExpenseEntity): Int {
+        val changed = update(item)
+        if (changed == 1) clearExpenseShares(item.id)
+        return changed
+    }
 
     @Query("DELETE FROM expenses WHERE tripId = :tripId AND id = :id")
     suspend fun delete(tripId: String, id: String): Int
