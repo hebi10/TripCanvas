@@ -251,7 +251,21 @@ class TripCanvas2CScreenshotTest {
         runCatching {
             device.dumpWindowHierarchy(File(diagnosticDir, "99-failed-hierarchy.xml"))
         }
-        File(diagnosticDir, "99-failed-reason.txt").writeText("Missing text: $text\\nPackage: ${device.currentPackageName}\\n")
+        File(diagnosticDir, "99-failed-reason.txt").writeText("Missing text: $text\nPackage: ${device.currentPackageName}\n")
+        runCatching {
+            File(diagnosticDir, "99-failed-db.txt").writeText(runBlocking {
+                database.backupDao().snapshot().toString()
+            })
+        }.onFailure {
+            File(diagnosticDir, "99-failed-db-error.txt").writeText(it.stackTraceToString())
+        }
+        runCatching {
+            File(diagnosticDir, "99-failed-preferences.txt").writeText(runBlocking {
+                tripPreferencesRepository(context).preferences.first().toString()
+            })
+        }.onFailure {
+            File(diagnosticDir, "99-failed-preferences-error.txt").writeText(it.stackTraceToString())
+        }
         fail("Android 화면에서 다음 문구를 찾지 못했습니다: $text")
     }
 
