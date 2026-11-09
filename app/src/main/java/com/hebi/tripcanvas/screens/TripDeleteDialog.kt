@@ -40,7 +40,7 @@ fun TripDeleteDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)) {
                 Text(
-                    "삭제 후 복구할 백업이 없다면 되돌릴 수 없습니다. 여행명을 정확히 입력해 주세요.",
+                    "여행과 연결된 일정·저장 장소도 함께 삭제됩니다. 복구할 백업이 없다면 되돌릴 수 없습니다. 여행명을 정확히 입력해 주세요.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = p.textSecondary
                 )

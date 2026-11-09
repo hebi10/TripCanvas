@@ -16,12 +16,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.hebi.tripcanvas.data.ItineraryRepository
 import com.hebi.tripcanvas.data.TripRepository
 import com.hebi.tripcanvas.data.local.TripEntity
 import com.hebi.tripcanvas.designsystem.components.TripEmptyState
 import com.hebi.tripcanvas.designsystem.components.TripErrorState
 import com.hebi.tripcanvas.designsystem.components.TripLoadingState
 import com.hebi.tripcanvas.designsystem.components.TripSectionHeading
+import com.hebi.tripcanvas.designsystem.components.TripSecondaryButton
 import com.hebi.tripcanvas.designsystem.components.TripStatusTag
 import com.hebi.tripcanvas.designsystem.components.TripSurfacePanel
 import com.hebi.tripcanvas.designsystem.responsive.TripAdaptiveContainer
@@ -45,7 +47,10 @@ fun TripWorkspaceScreen(
     isPreview: Boolean,
     repository: TripRepository? = null,
     tripId: String? = null,
-    onEdit: () -> Unit = {}
+    onEdit: () -> Unit = {},
+    itineraryRepository: ItineraryRepository? = null,
+    onSchedule: () -> Unit = {},
+    onPlaces: () -> Unit = {}
 ) {
     var refresh by remember { mutableIntStateOf(0) }
     val flow = remember(repository, tripId, refresh) {
@@ -63,6 +68,14 @@ fun TripWorkspaceScreen(
     }
     val loaded = (state as? WorkspaceState.Ready)?.trip
     var showDelete by remember { mutableStateOf(false) }
+    val countFlow = remember(itineraryRepository, tripId) {
+        if (itineraryRepository != null && tripId != null) {
+            itineraryRepository.observeTripCount(tripId)
+        } else {
+            kotlinx.coroutines.flow.flowOf(0)
+        }
+    }
+    val scheduleCount by countFlow.collectAsState(initial = 0)
 
     TripPageFrame(
         title = loaded?.title ?: "여행 작업 공간",
@@ -75,7 +88,7 @@ fun TripWorkspaceScreen(
         }
     ) {
         when {
-            isPreview -> WorkspaceContent(trip = null, isPreview = true)
+            isPreview -> WorkspaceContent(trip = null, isPreview = true, scheduleCount = 0, onSchedule = onSchedule, onPlaces = onPlaces)
             state == WorkspaceState.Loading -> TripLoadingState("여행 정보를 불러오는 중")
             state == WorkspaceState.Failed -> TripErrorState(
                 title = "여행 정보를 불러오지 못했습니다",
@@ -86,7 +99,7 @@ fun TripWorkspaceScreen(
                 title = "여행을 찾을 수 없습니다",
                 description = "삭제되었거나 존재하지 않는 여행입니다."
             )
-            else -> WorkspaceContent(trip = loaded, isPreview = false)
+            else -> WorkspaceContent(trip = loaded, isPreview = false, scheduleCount = scheduleCount, onSchedule = onSchedule, onPlaces = onPlaces)
         }
     }
     if (loaded != null && showDelete && repository != null) {
@@ -100,7 +113,13 @@ fun TripWorkspaceScreen(
 }
 
 @Composable
-private fun WorkspaceContent(trip: TripEntity?, isPreview: Boolean) {
+private fun WorkspaceContent(
+    trip: TripEntity?,
+    isPreview: Boolean,
+    scheduleCount: Int,
+    onSchedule: () -> Unit,
+    onPlaces: () -> Unit
+) {
     val p = TripDesign.palette
     TripStatusTag(label = if (isPreview) "화면 미리보기" else requireNotNull(trip).phase().label)
     TripSectionHeading(
@@ -129,7 +148,7 @@ private fun WorkspaceContent(trip: TripEntity?, isPreview: Boolean) {
     TripAdaptiveContainer(modifier = Modifier.fillMaxWidth()) { width ->
         if (width == TripWindowWidth.Compact) {
             Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.md)) {
-                WorkspacePanel("일정", "날짜별 일정 · 2-B에서 연결")
+                WorkspacePanel("일정", if (isPreview) "날짜별 일정 미리보기" else "등록된 일정 " + scheduleCount + "개", if (isPreview) null else onSchedule, "일정 열기")
                 WorkspacePanel("경비", "지출과 예산 · 2-C에서 연결")
                 WorkspacePanel("준비물", "체크리스트 · 2-C에서 연결")
             }
@@ -139,7 +158,7 @@ private fun WorkspaceContent(trip: TripEntity?, isPreview: Boolean) {
                 horizontalArrangement = Arrangement.spacedBy(TripSpacing.md)
             ) {
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TripSpacing.md)) {
-                    WorkspacePanel("일정", "날짜별 일정 · 2-B에서 연결")
+                    WorkspacePanel("일정", if (isPreview) "날짜별 일정 미리보기" else "등록된 일정 " + scheduleCount + "개", if (isPreview) null else onSchedule, "일정 열기")
                     WorkspacePanel("준비물", "체크리스트 · 2-C에서 연결")
                 }
                 Column(modifier = Modifier.weight(1f)) {
@@ -148,15 +167,27 @@ private fun WorkspaceContent(trip: TripEntity?, isPreview: Boolean) {
             }
         }
     }
+    if (!isPreview) {
+        TripSecondaryButton(
+            label = "저장 장소 관리",
+            onClick = onPlaces,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
     Text(
-        "일정·경비·준비물 통계는 해당 기능을 구현한 뒤 표시됩니다.",
+        "경비·준비물은 2-C 단계에서 연결됩니다.",
         style = MaterialTheme.typography.bodyMedium,
         color = p.textSecondary
     )
 }
 
 @Composable
-private fun WorkspacePanel(title: String, description: String) {
+private fun WorkspacePanel(
+    title: String,
+    description: String,
+    onClick: (() -> Unit)? = null,
+    actionLabel: String = ""
+) {
     val p = TripDesign.palette
     TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -165,6 +196,13 @@ private fun WorkspacePanel(title: String, description: String) {
         ) {
             Text(title, style = MaterialTheme.typography.titleMedium, color = p.textPrimary)
             Text(description, style = MaterialTheme.typography.bodyMedium, color = p.textSecondary)
+            if (onClick != null) {
+                TripSecondaryButton(
+                    label = actionLabel,
+                    onClick = onClick,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         }
     }
 }
