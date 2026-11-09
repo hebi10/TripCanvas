@@ -284,7 +284,11 @@ class TripCanvas2CScreenshotTest {
         Thread.sleep(500)
         val node: UiObject2 = device.findObject(By.text(text))
             ?: throw AssertionError("클릭 대상 없음: $text")
-        node.click()
+        var clickable = node
+        while (!clickable.isClickable) {
+            clickable = clickable.parent ?: break
+        }
+        clickable.click()
         device.waitForIdle()
         Thread.sleep(400)
     }
