@@ -124,7 +124,7 @@ fun TripMapScreen(
                     description = "좌표가 있는 장소를 추가하거나 날짜를 바꿔 주세요."
                 )
             } else {
-                TripMapCanvas(pins, selectedId, onSelected = { selectedId = it })
+                TripMapCanvas(pins, selectedId, onSelected = onPlace)
                 Text(
                     "지도: OpenFreeMap · © OpenStreetMap contributors. " +
                         "지도 타일은 인터넷 연결이 필요합니다. 오프라인에서는 아래 장소 목록을 확인하세요.",
