@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "com.hebi.tripcanvas"
-    compileSdk = 37
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.hebi.tripcanvas"
