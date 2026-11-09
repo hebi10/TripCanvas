@@ -101,7 +101,7 @@ class TripCanvas2CScreenshotTest {
 
     @Test
     fun captureRealMainActivityAndExerciseMvp() {
-        ActivityScenario.launch(MainActivity::class.java).use {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             awaitText("QA 제주 여행")
             capture("01-home-light")
             click("QA 제주 여행")
@@ -135,6 +135,7 @@ class TripCanvas2CScreenshotTest {
             capture("08-budget-edit-dialog")
             click("취소")
             click("지출 추가")
+            capture("09a-expense-navigation-result")
             awaitText("지출 정보")
             capture("09-expense-create-form")
             click("지출 저장")
@@ -156,7 +157,11 @@ class TripCanvas2CScreenshotTest {
             awaitText("백업 파일 내보내기")
             capture("12-backup-restore-light")
             click("백업 파일 내보내기")
-            device.waitForIdle()
+            val pickerOpened = (0 until 25).any {
+                if (device.currentPackageName != "com.hebi.tripcanvas") true
+                else { Thread.sleep(300); false }
+            }
+            assertTrue("Android document picker did not become foreground", pickerOpened)
             capture("13-android-file-save-picker")
             device.pressBack()
             awaitText("백업·복원")
@@ -172,7 +177,10 @@ class TripCanvas2CScreenshotTest {
             device.waitForIdle()
             capture("15-home-dark")
             device.executeShellCommand("settings put system font_scale 1.6")
-            device.waitForIdle()
+            Thread.sleep(2000)
+            scenario.recreate()
+            awaitText("내 여행")
+            Thread.sleep(1200)
             capture("16-home-dark-font160")
             awaitText("내 여행")
         }
@@ -195,6 +203,13 @@ class TripCanvas2CScreenshotTest {
             swipeUp()
             if (device.wait(Until.hasObject(By.text(text)), 1200)) return
         }
+        val diagnosticDir = File(context.getExternalFilesDir(null), "qa")
+        diagnosticDir.mkdirs()
+        device.takeScreenshot(File(diagnosticDir, "99-failed-screen.png"))
+        runCatching {
+            device.dumpWindowHierarchy(File(diagnosticDir, "99-failed-hierarchy.xml"))
+        }
+        File(diagnosticDir, "99-failed-reason.txt").writeText("Missing text: $text\\nPackage: ${device.currentPackageName}\\n")
         fail("Android 화면에서 다음 문구를 찾지 못했습니다: $text")
     }
 
