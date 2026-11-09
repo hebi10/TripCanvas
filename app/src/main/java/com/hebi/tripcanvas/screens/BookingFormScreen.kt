@@ -48,7 +48,7 @@ fun BookingFormScreen(
     bookingId: String?,
     repository: BookingRepository,
     onBack: () -> Unit,
-    onSaved: () -> Unit
+    onSaved: (String) -> Unit
 ) {
     val context = LocalContext.current
     val palette = TripDesign.palette
@@ -226,8 +226,8 @@ fun BookingFormScreen(
                         saving = true; error = null
                         scope.launch {
                             try {
-                                repository.save(tripId, input, bookingId)
-                                onSaved()
+                                val id = repository.save(tripId, input, bookingId)
+                                onSaved(id)
                             } catch (cancelled: CancellationException) {
                                 throw cancelled
                             } catch (failed: Exception) {
