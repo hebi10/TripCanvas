@@ -1,10 +1,7 @@
 package com.hebi.tripcanvas.screens
 
 import android.os.Bundle
-import android.graphics.Bitmap
-import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Paint
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -44,15 +41,28 @@ import com.hebi.tripcanvas.designsystem.theme.TripDesign
 import com.hebi.tripcanvas.designsystem.tokens.TripSpacing
 import com.hebi.tripcanvas.ui.TripPageFrame
 import org.maplibre.android.MapLibre
-import org.maplibre.android.annotations.MarkerOptions
-import org.maplibre.android.annotations.IconFactory
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import androidx.compose.runtime.rememberUpdatedState
+import com.google.gson.JsonObject
+import org.maplibre.geojson.Feature
+import org.maplibre.geojson.FeatureCollection
+import org.maplibre.geojson.Point
+import org.maplibre.android.style.expressions.Expression
+import org.maplibre.android.style.layers.CircleLayer
+import org.maplibre.android.style.layers.PropertyFactory
+import org.maplibre.android.style.sources.GeoJsonSource
 
 private data class PlacePin(val place: PlaceEntity, val label: String)
+
+private const val PIN_SOURCE = "tripcanvas-place-source"
+private const val PIN_CONFIRMED = "tripcanvas-place-confirmed"
+private const val PIN_CANDIDATE = "tripcanvas-place-candidate"
+private const val PIN_SAVED = "tripcanvas-place-saved"
+private val PIN_LAYERS = arrayOf(PIN_CONFIRMED, PIN_CANDIDATE, PIN_SAVED)
 
 @Composable
 fun TripMapScreen(
@@ -241,49 +251,86 @@ private fun TripMapCanvas(
         },
         modifier = Modifier.fillMaxWidth().height(340.dp)
     )
+    val currentOnSelected by rememberUpdatedState(onSelected)
+    DisposableEffect(map) {
+        val ready = map
+        if (ready == null) {
+            onDispose { }
+        } else {
+            val listener = MapLibreMap.OnMapClickListener { coordinate ->
+                val features = ready.queryRenderedFeatures(
+                    ready.projection.toScreenLocation(coordinate),
+                    PIN_LAYERS
+                )
+                val placeId = features.firstOrNull()?.getStringProperty("placeId")
+                if (placeId.isNullOrBlank()) false
+                else {
+                    currentOnSelected(placeId)
+                    true
+                }
+            }
+            ready.addOnMapClickListener(listener)
+            onDispose { ready.removeOnMapClickListener(listener) }
+        }
+    }
     LaunchedEffect(map, pins, selectedId) {
         val ready = map ?: return@LaunchedEffect
-        val iconFactory = IconFactory.getInstance(context)
-        val markerIcons = listOf("확정", "후보", "저장").associateWith {
-            iconFactory.fromBitmap(tripPinBitmap(it))
-        }
-        ready.clear()
-        pins.forEach { item ->
-            ready.addMarker(
-                MarkerOptions()
-                    .position(LatLng(item.place.latitude!!, item.place.longitude!!))
-                    .icon(requireNotNull(markerIcons[item.label]))
-                    .title("[" + item.label + "] " + item.place.name)
-                    .snippet(item.place.id)
+        val style = ready.style ?: return@LaunchedEffect
+        val features = pins.map { item ->
+            val attributes = JsonObject().apply {
+                addProperty("placeId", item.place.id)
+                addProperty("status", item.label)
+            }
+            Feature.fromGeometry(
+                Point.fromLngLat(
+                    requireNotNull(item.place.longitude),
+                    requireNotNull(item.place.latitude)
+                ),
+                attributes
             )
+        }.toTypedArray()
+        val collection = FeatureCollection.fromFeatures(features)
+        val source = style.getSource(PIN_SOURCE) as? GeoJsonSource
+        if (source == null) {
+            style.addSource(GeoJsonSource(PIN_SOURCE, collection))
+        } else {
+            source.setGeoJson(collection)
         }
-        ready.setOnMarkerClickListener { marker ->
-            val placeId = marker.snippet
-            if (!placeId.isNullOrBlank()) onSelected(placeId)
-            true
+        listOf(
+            Triple(PIN_CONFIRMED, "확정", Color.rgb(44, 112, 73)),
+            Triple(PIN_CANDIDATE, "후보", Color.rgb(153, 107, 36)),
+            Triple(PIN_SAVED, "저장", Color.rgb(45, 45, 45))
+        ).forEach { (layerId, status, color) ->
+            if (style.getLayer(layerId) == null) {
+                style.addLayer(
+                    CircleLayer(layerId, PIN_SOURCE)
+                        .withFilter(
+                            Expression.eq(
+                                Expression.get("status"),
+                                Expression.literal(status)
+                            )
+                        )
+                        .withProperties(
+                            PropertyFactory.circleColor(color),
+                            PropertyFactory.circleRadius(11f),
+                            PropertyFactory.circleStrokeWidth(2.5f),
+                            PropertyFactory.circleStrokeColor(Color.WHITE)
+                        )
+                )
+            }
         }
-        val target = pins.firstOrNull { it.place.id == selectedId } ?: pins.firstOrNull()
+        val target = pins.firstOrNull { it.place.id == selectedId }
+            ?: pins.firstOrNull()
         if (target != null) {
-            ready.animateCamera(
+            ready.moveCamera(
                 CameraUpdateFactory.newLatLngZoom(
-                    LatLng(target.place.latitude!!, target.place.longitude!!), 12.0
+                    LatLng(
+                        requireNotNull(target.place.latitude),
+                        requireNotNull(target.place.longitude)
+                    ),
+                    12.0
                 )
             )
         }
     }
-}
-
-private fun tripPinBitmap(status: String): Bitmap {
-    val bitmap = Bitmap.createBitmap(72, 88, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(bitmap)
-    val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-    paint.color = when (status) {
-        "확정" -> Color.rgb(44, 112, 73)
-        "후보" -> Color.rgb(153, 107, 36)
-        else -> Color.rgb(45, 45, 45)
-    }
-    canvas.drawCircle(36f, 34f, 22f, paint)
-    paint.color = Color.WHITE
-    canvas.drawCircle(36f, 34f, 10f, paint)
-    return bitmap
 }
