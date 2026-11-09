@@ -191,8 +191,12 @@ class TripCanvas3AMapTest {
 
     private fun click(text: String) {
         awaitText(text)
-        val target = device.findObject(By.text(text))
+        val node = device.findObject(By.text(text))
             ?: throw AssertionError("Click target missing: $text")
+        var target = node
+        while (!target.isClickable) {
+            target = target.parent ?: break
+        }
         target.click()
         device.waitForIdle()
         SystemClock.sleep(400)
