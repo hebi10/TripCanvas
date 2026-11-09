@@ -1,5 +1,6 @@
 package com.hebi.tripcanvas.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -55,6 +56,7 @@ fun BackupScreen(
     var busy by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    BackHandler(enabled = busy) {}
 
     val exportPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
@@ -72,6 +74,8 @@ fun BackupScreen(
                         saved.totalRows + "건"
                 } catch (cancelled: CancellationException) {
                     throw cancelled
+                } catch (failed: IllegalArgumentException) {
+                    error = "백업 파일이 10MB를 초과했습니다. 데이터 양을 확인해 주세요."
                 } catch (failed: Exception) {
                     error = "파일 저장에 실패했습니다. 사용 가능한 저장 공간과 접근 권한을 확인해 주세요."
                 } finally {
@@ -99,6 +103,12 @@ fun BackupScreen(
                     throw cancelled
                 } catch (failed: IOException) {
                     error = "파일을 열지 못했습니다. 파일 접근 권한을 확인해 주세요."
+                } catch (failed: IllegalArgumentException) {
+                    error = if (failed.message?.contains("허용 범위") == true) {
+                        "파일 크기가 10MB 제한을 초과했습니다."
+                    } else {
+                        "백업 파일이 손상되었거나 지원하지 않는 버전입니다."
+                    }
                 } catch (failed: Exception) {
                     error = "백업 파일이 손상되었거나 지원되지 않는 버전입니다."
                 } finally {
