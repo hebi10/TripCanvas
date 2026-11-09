@@ -6,6 +6,7 @@ import com.hebi.tripcanvas.data.local.PlaceDao
 import com.hebi.tripcanvas.data.local.PlaceEntity
 import com.hebi.tripcanvas.data.local.TripDao
 import com.hebi.tripcanvas.data.local.TripEntity
+import com.hebi.tripcanvas.data.search.RemotePlace
 import com.hebi.tripcanvas.domain.PlaceInput
 import com.hebi.tripcanvas.domain.ScheduleInput
 import com.hebi.tripcanvas.domain.TripInput
@@ -98,6 +99,25 @@ class ItineraryPlaceRepositoryTest {
         assertNull(repository.observeItem(secondTrip, itemId).first())
     }
 
+    @Test fun externalPlaceImportDeduplicatesWithinTripButNotAcrossTrips() = runBlocking {
+        val schedules = FakeScheduleDao()
+        val trips = FakeTravelDao(schedules)
+        val places = FakePlaceDao(schedules)
+        val repo = PlaceRepository(places, trips, clock)
+        val first = TripRepository(trips, clock).create(tripInput)
+        val second = TripRepository(trips, clock).create(tripInput)
+        val remote = RemotePlace("N:1234", "제주국제공항", "제주", 33.51, 126.49)
+        val saved = repo.importRemote(first, remote)
+        assertTrue(!saved.alreadySaved)
+        val repeat = repo.importRemote(first, remote)
+        assertTrue(repeat.alreadySaved)
+        assertEquals(saved.id, repeat.id)
+        assertEquals(1, repo.observePlaces(first).first().size)
+        val elsewhere = repo.importRemote(second, remote)
+        assertNotEquals(saved.id, elsewhere.id)
+        assertEquals("Photon/OSM", repo.find(first, saved.id)?.provider)
+    }
+
     @Test fun incompleteTimeAndDateOutsideTripCannotBeSaved() = runBlocking {
         val dao = FakeScheduleDao()
         val tripDao = FakeTravelDao(dao)
@@ -131,6 +151,12 @@ private class FakeScheduleDao : ItineraryDao {
         items.map { entries -> entries.firstOrNull { it.tripId == tripId && it.id == itemId } }
     override suspend fun findForTrip(tripId: String, itemId: String): ItineraryItemEntity? =
         items.value.firstOrNull { it.tripId == tripId && it.id == itemId }
+    override fun observeTrip(tripId: String): Flow<List<ItineraryItemEntity>> =
+        items.map { values -> values.filter { it.tripId == tripId }.sortedWith(
+            compareBy<ItineraryItemEntity> { it.date }.thenBy { it.sortOrder }
+        ) }
+    override fun observeLinkedPlace(tripId: String, placeId: String): Flow<List<ItineraryItemEntity>> =
+        items.map { values -> values.filter { it.tripId == tripId && it.placeId == placeId } }
     override fun observeTripCount(tripId: String): Flow<Int> =
         items.map { entries -> entries.count { it.tripId == tripId } }
     override suspend fun nextOrder(tripId: String, date: String): Int =
@@ -188,6 +214,10 @@ private class FakePlaceDao(private val schedules: FakeScheduleDao) : PlaceDao {
         places.map { all -> all.firstOrNull { it.tripId == tripId && it.id == placeId } }
     override suspend fun findForTrip(tripId: String, placeId: String): PlaceEntity? =
         places.value.firstOrNull { it.tripId == tripId && it.id == placeId }
+    override suspend fun findByProvider(tripId: String, provider: String, providerPlaceId: String): PlaceEntity? =
+        places.value.firstOrNull {
+            it.tripId == tripId && it.provider == provider && it.providerPlaceId == providerPlaceId
+        }
     override suspend fun insert(place: PlaceEntity) { places.value = places.value + place }
     override suspend fun update(place: PlaceEntity): Int {
         if (places.value.none { it.id == place.id && it.tripId == place.tripId }) return 0
