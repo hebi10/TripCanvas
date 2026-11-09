@@ -106,7 +106,7 @@ fun TripPlaceDetailScreen(
                             color = palette.textPrimary
                         )
                         Text(if (item.confirmed) "확정" else "후보", color = palette.textSecondary)
-                        TripSecondaryButton("일정에서 보기", onClick = { onSchedule(item.id) })
+                        TripSecondaryButton("일정 편집", onClick = { onSchedule(item.id) })
                     }
                 }
             }

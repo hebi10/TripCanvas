@@ -189,7 +189,7 @@ fun TripMapScreen(
                         )
                         linked.forEach { item ->
                             TripSecondaryButton(
-                                label = "일정에서 보기: " + item.title,
+                                label = "일정 편집: " + item.title,
                                 onClick = { onSchedule(item.id) }
                             )
                         }

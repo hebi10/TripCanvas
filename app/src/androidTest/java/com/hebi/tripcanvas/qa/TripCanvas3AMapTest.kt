@@ -1,6 +1,10 @@
 package com.hebi.tripcanvas.qa
 
 import android.content.Context
+import android.graphics.Rect
+import android.view.View
+import android.view.ViewGroup
+import org.maplibre.android.maps.MapView
 import android.os.SystemClock
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -67,7 +71,7 @@ class TripCanvas3AMapTest {
             )
         }
         try {
-            ActivityScenario.launch(MainActivity::class.java).use {
+            ActivityScenario.launch(MainActivity::class.java).use { scenario ->
                 awaitText("QA 제주 여행 3A")
                 capture("01-home-light")
                 click("QA 제주 여행 3A")
@@ -78,13 +82,29 @@ class TripCanvas3AMapTest {
                 SystemClock.sleep(3000)
                 capture("03-map-all-light")
                 click("2026-11-11")
+                SystemClock.sleep(1000)
+                var tapX = 0
+                var tapY = 0
+                scenario.onActivity { activity ->
+                    val mapView = findMapView(activity.window.decorView)
+                        ?: throw AssertionError("MapLibre view missing from 3-A map screen")
+                    val bounds = Rect()
+                    assertTrue("MapLibre map is not visible", mapView.getGlobalVisibleRect(bounds))
+                    tapX = bounds.centerX()
+                    tapY = bounds.centerY()
+                }
+                device.click(tapX, tapY)
+                awaitText("공급자: Photon/OSM")
+                capture("04a-pin-tap-detail")
+                device.pressBack()
+                awaitText("여행 지도")
                 awaitText("확정 · 일정 1개")
                 awaitText("제주국제공항")
                 capture("04-map-date-filter")
                 click("장소 상세")
                 awaitText("공급자: Photon/OSM")
                 capture("05-place-detail")
-                click("일정에서 보기")
+                click("일정 편집")
                 awaitText("일정 제목 *")
                 capture("06-linked-schedule")
                 device.pressBack()
@@ -113,6 +133,17 @@ class TripCanvas3AMapTest {
         } finally {
             device.executeShellCommand("settings put system font_scale 1.0")
         }
+    }
+
+    private fun findMapView(root: View): MapView? {
+        if (root is MapView) return root
+        if (root is ViewGroup) {
+            for (i in 0 until root.childCount) {
+                val result = findMapView(root.getChildAt(i))
+                if (result != null) return result
+            }
+        }
+        return null
     }
 
     private fun awaitText(text: String) {
