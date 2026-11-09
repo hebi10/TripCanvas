@@ -27,6 +27,7 @@ import com.hebi.tripcanvas.designsystem.components.TripConfirmDialog
 import com.hebi.tripcanvas.designsystem.components.TripErrorState
 import com.hebi.tripcanvas.designsystem.components.TripLoadingState
 import com.hebi.tripcanvas.designsystem.components.TripPrimaryButton
+import com.hebi.tripcanvas.designsystem.components.TripSecondaryButton
 import com.hebi.tripcanvas.designsystem.components.TripSectionHeading
 import com.hebi.tripcanvas.designsystem.components.TripTextField
 import com.hebi.tripcanvas.designsystem.theme.TripDesign
