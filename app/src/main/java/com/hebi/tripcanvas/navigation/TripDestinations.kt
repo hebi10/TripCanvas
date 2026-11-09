@@ -17,6 +17,9 @@ object TripDestinations {
     const val PickPlaceRoute = "trip/{tripId}/places/pick"
     const val NewPlaceRoute = "trip/{tripId}/places/new"
     const val EditPlaceRoute = "trip/{tripId}/places/{placeId}/edit"
+    const val MapRoute = "trip/{tripId}/map/{date}/{focusId}"
+    const val ExternalPlaceSearchRoute = "trip/{tripId}/places/search"
+    const val PlaceDetailRoute = "trip/{tripId}/places/{placeId}/detail"
     const val ChecklistRoute = "trip/{tripId}/checklist"
     const val ExpensesRoute = "trip/{tripId}/expenses"
     const val NewExpenseRoute = "trip/{tripId}/expenses/new"
@@ -36,6 +39,12 @@ object TripDestinations {
     fun editPlace(tripId: String, placeId: String): String =
         "trip/" + tripId + "/places/" + placeId + "/edit"
 
+    fun map(tripId: String, date: String = "all", focusId: String = "all"): String =
+        "trip/" + tripId + "/map/" + date + "/" + focusId
+    fun externalPlaceSearch(tripId: String): String = "trip/" + tripId + "/places/search"
+    fun placeDetail(tripId: String, placeId: String): String =
+        "trip/" + tripId + "/places/" + placeId + "/detail"
+
     fun checklist(tripId: String): String = "trip/" + tripId + "/checklist"
     fun expenses(tripId: String): String = "trip/" + tripId + "/expenses"
     fun newExpense(tripId: String): String = "trip/" + tripId + "/expenses/new"
@@ -50,6 +59,7 @@ object TripDestinations {
         CreateTrip, WorkspaceRoute, EditTripRoute, DayRoute,
         NewScheduleRoute, EditScheduleRoute, PlacesRoute, PickPlaceRoute,
         NewPlaceRoute, EditPlaceRoute, ChecklistRoute,
-        ExpensesRoute, NewExpenseRoute, EditExpenseRoute, BackupRoute
+        ExpensesRoute, NewExpenseRoute, EditExpenseRoute, BackupRoute,
+        MapRoute, ExternalPlaceSearchRoute, PlaceDetailRoute
     )
 }
