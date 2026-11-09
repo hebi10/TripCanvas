@@ -140,8 +140,7 @@ abstract class TripDatabase : RoomDatabase() {
                     """CREATE TABLE IF NOT EXISTS expense_shares (
                         expenseId TEXT NOT NULL, participantId TEXT NOT NULL,
                         amountMinor INTEGER NOT NULL, baseCurrencyCode TEXT NOT NULL,
-                        splitMode TEXT NOT NULL DEFAULT 'AMOUNT',
-                        enteredValue TEXT NOT NULL DEFAULT '',
+                        splitMode TEXT NOT NULL, enteredValue TEXT NOT NULL,
                         PRIMARY KEY(expenseId,participantId),
                         FOREIGN KEY(expenseId) REFERENCES expenses(id) ON UPDATE NO ACTION ON DELETE CASCADE,
                         FOREIGN KEY(participantId) REFERENCES trip_participants(id) ON UPDATE NO ACTION ON DELETE RESTRICT
