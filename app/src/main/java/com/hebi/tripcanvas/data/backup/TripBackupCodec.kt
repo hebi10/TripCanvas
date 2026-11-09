@@ -184,6 +184,11 @@ object TripBackupCodec {
             require(validId(trip.id) && validateTrip(trip.toInput()).isValid) { "Invalid trip" }
         }
         val places = snapshot.places.associateBy { it.id }
+        val externalKeys = snapshot.places.filter { it.provider != null }
+            .map { Triple(it.tripId, it.provider, it.providerPlaceId) }
+        require(externalKeys.size == externalKeys.toSet().size) {
+            "Duplicate external place identities"
+        }
         for (place in snapshot.places) {
             require(validId(place.id) && trips.containsKey(place.tripId)) { "Invalid place owner" }
             require(validatePlace(place.toInput()).normalized != null) { "Invalid place" }

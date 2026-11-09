@@ -103,6 +103,19 @@ class TripBackupRestoreTest {
     }
 
     @Test
+    fun duplicateExternalProviderPlaceIsRejectedBeforeRestore() {
+        val original = sample()
+        val sourced = original.places.single().copy(
+            provider = "Photon/OSM",
+            providerPlaceId = "N:321",
+            sourceFetchedAtMillis = 1000L
+        )
+        val duplicate = sourced.copy(id = "another-uuid")
+        val backup = original.copy(places = listOf(sourced, duplicate))
+        assertTrue(runCatching { TripBackupCodec.validate(backup) }.isFailure)
+    }
+
+    @Test
     fun versionTwoBackupRetainsExternalProviderIdentity() {
         val original = sample()
         val sourced = original.copy(
