@@ -30,6 +30,12 @@ class ItineraryRepository(
 
     fun observeTripCount(tripId: String): Flow<Int> = itemDao.observeTripCount(tripId)
 
+    fun observeTrip(tripId: String): Flow<List<ItineraryItemEntity>> =
+        itemDao.observeTrip(tripId)
+
+    fun observeLinkedPlace(tripId: String, placeId: String): Flow<List<ItineraryItemEntity>> =
+        itemDao.observeLinkedPlace(tripId, placeId)
+
     suspend fun save(
         tripId: String,
         input: ScheduleInput,
