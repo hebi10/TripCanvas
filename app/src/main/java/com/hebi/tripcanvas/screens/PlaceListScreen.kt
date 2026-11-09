@@ -52,7 +52,10 @@ fun PlaceListScreen(
     onCreate: () -> Unit,
     onEdit: (String) -> Unit,
     onBack: () -> Unit,
-    newlyCreatedPlaceId: String? = null
+    newlyCreatedPlaceId: String? = null,
+    onMap: () -> Unit = {},
+    onExternalSearch: () -> Unit = {},
+    onDetail: (String) -> Unit = {}
 ) {
     val p = TripDesign.palette
     val scope = rememberCoroutineScope()
@@ -93,7 +96,17 @@ fun PlaceListScreen(
     ) {
         TripSectionHeading(
             title = if (selectionMode) "장소 연결" else "여행 장소",
-            supportingText = "이 여행에 저장된 장소만 표시됩니다. 지도 검색 없이도 직접 추가할 수 있습니다."
+            supportingText = "저장한 장소와 외부 검색 결과를 이 여행에 연결할 수 있습니다."
+        )
+        TripSecondaryButton(
+            label = "지도에서 보기",
+            onClick = onMap,
+            modifier = Modifier.fillMaxWidth()
+        )
+        TripSecondaryButton(
+            label = "외부 장소 검색",
+            onClick = onExternalSearch,
+            modifier = Modifier.fillMaxWidth()
         )
         TripTextField(
             value = search,
@@ -131,6 +144,13 @@ fun PlaceListScreen(
                             if (place.address.isNotBlank()) {
                                 Text(place.address, style = MaterialTheme.typography.bodyMedium, color = p.textSecondary)
                             }
+                            if (place.provider != null) {
+                                Text(
+                                    "출처: " + place.provider,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = p.textSecondary
+                                )
+                            }
                             if (place.note.isNotBlank()) {
                                 Text(place.note, style = MaterialTheme.typography.bodyMedium, color = p.textSecondary)
                             }
@@ -138,6 +158,7 @@ fun PlaceListScreen(
                                 if (selectionMode) {
                                     TripSecondaryButton(label = "선택", onClick = { onSelect(place.id) })
                                 }
+                                TripSecondaryButton(label = "상세", onClick = { onDetail(place.id) })
                                 TripSecondaryButton(label = "편집", onClick = { onEdit(place.id) })
                                 TripSecondaryButton(label = "삭제", onClick = {
                                     deleteFailed = false
