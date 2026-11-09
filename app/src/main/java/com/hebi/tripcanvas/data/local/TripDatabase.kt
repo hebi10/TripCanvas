@@ -10,9 +10,11 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 @Database(
     entities = [
         TripEntity::class, PlaceEntity::class, ItineraryItemEntity::class,
-        ExpenseEntity::class, TripBudgetEntity::class, ChecklistItemEntity::class
+        ExpenseEntity::class, TripBudgetEntity::class, ChecklistItemEntity::class,
+        TripParticipantEntity::class, ExpenseShareEntity::class, TripSettlementEntity::class,
+        BookingEntity::class, BookingAttachmentEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = true
 )
 abstract class TripDatabase : RoomDatabase() {
@@ -22,6 +24,8 @@ abstract class TripDatabase : RoomDatabase() {
     abstract fun expenseDao(): ExpenseDao
     abstract fun checklistDao(): ChecklistDao
     abstract fun backupDao(): TripBackupDao
+    abstract fun financeDao(): TripFinanceDao
+    abstract fun bookingDao(): BookingDao
 
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -116,6 +120,63 @@ abstract class TripDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE expenses ADD COLUMN payerParticipantId TEXT")
+                db.execSQL("ALTER TABLE expenses ADD COLUMN baseCurrencyCode TEXT")
+                db.execSQL("ALTER TABLE expenses ADD COLUMN rateToBaseDecimal TEXT")
+                db.execSQL("ALTER TABLE expenses ADD COLUMN rateDate TEXT")
+                db.execSQL("ALTER TABLE expenses ADD COLUMN rateSource TEXT")
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS trip_participants (
+                        id TEXT NOT NULL PRIMARY KEY, tripId TEXT NOT NULL,
+                        displayName TEXT NOT NULL, createdAtMillis INTEGER NOT NULL,
+                        updatedAtMillis INTEGER NOT NULL,
+                        FOREIGN KEY(tripId) REFERENCES trips(id) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )""".trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_trip_participants_tripId ON trip_participants(tripId)")
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS expense_shares (
+                        expenseId TEXT NOT NULL, participantId TEXT NOT NULL,
+                        amountMinor INTEGER NOT NULL, baseCurrencyCode TEXT NOT NULL,
+                        PRIMARY KEY(expenseId,participantId),
+                        FOREIGN KEY(expenseId) REFERENCES expenses(id) ON UPDATE NO ACTION ON DELETE CASCADE,
+                        FOREIGN KEY(participantId) REFERENCES trip_participants(id) ON UPDATE NO ACTION ON DELETE RESTRICT
+                    )""".trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_expense_shares_expenseId ON expense_shares(expenseId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_expense_shares_participantId ON expense_shares(participantId)")
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS trip_settlements (
+                        tripId TEXT NOT NULL PRIMARY KEY, fingerprint TEXT NOT NULL,
+                        confirmedAtMillis INTEGER NOT NULL,
+                        FOREIGN KEY(tripId) REFERENCES trips(id) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )""".trimIndent()
+                )
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS bookings (
+                        id TEXT NOT NULL PRIMARY KEY, tripId TEXT NOT NULL,
+                        type TEXT NOT NULL, title TEXT NOT NULL,
+                        startAtLocal TEXT, referenceNumber TEXT NOT NULL,
+                        note TEXT NOT NULL, createdAtMillis INTEGER NOT NULL,
+                        updatedAtMillis INTEGER NOT NULL,
+                        FOREIGN KEY(tripId) REFERENCES trips(id) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )""".trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_bookings_tripId ON bookings(tripId)")
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS booking_attachments (
+                        id TEXT NOT NULL PRIMARY KEY, bookingId TEXT NOT NULL,
+                        uriString TEXT NOT NULL, displayName TEXT NOT NULL,
+                        mimeType TEXT NOT NULL, addedAtMillis INTEGER NOT NULL,
+                        FOREIGN KEY(bookingId) REFERENCES bookings(id) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )""".trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_booking_attachments_bookingId ON booking_attachments(bookingId)")
+            }
+        }
+
         @Volatile private var instance: TripDatabase? = null
 
         fun get(context: Context): TripDatabase =
@@ -124,7 +185,7 @@ abstract class TripDatabase : RoomDatabase() {
                     context.applicationContext,
                     TripDatabase::class.java,
                     "tripcanvas.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build().also { instance = it }
             }
     }
 }

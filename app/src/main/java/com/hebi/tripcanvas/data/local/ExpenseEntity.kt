@@ -33,5 +33,10 @@ data class ExpenseEntity(
     val note: String,
     val placeId: String?,
     val createdAtMillis: Long,
-    val updatedAtMillis: Long
+    val updatedAtMillis: Long,
+    val payerParticipantId: String? = null,
+    val baseCurrencyCode: String? = null,
+    val rateToBaseDecimal: String? = null,
+    val rateDate: String? = null,
+    val rateSource: String? = null
 )
