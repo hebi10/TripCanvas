@@ -53,7 +53,7 @@ class TripDatabaseMigrationTest {
         }
 
         val db = Room.databaseBuilder(context, TripDatabase::class.java, dbName)
-            .addMigrations(TripDatabase.MIGRATION_1_2)
+            .addMigrations(TripDatabase.MIGRATION_1_2, TripDatabase.MIGRATION_2_3)
             .build()
         try {
             val oldTrips = db.tripDao().observeAll().first()
