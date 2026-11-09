@@ -260,7 +260,7 @@ private fun TripMapCanvas(
             val listener = MapLibreMap.OnMapClickListener { coordinate ->
                 val features = ready.queryRenderedFeatures(
                     ready.projection.toScreenLocation(coordinate),
-                    PIN_LAYERS
+                    *PIN_LAYERS
                 )
                 val placeId = features.firstOrNull()?.getStringProperty("placeId")
                 if (placeId.isNullOrBlank()) false
