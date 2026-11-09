@@ -79,7 +79,8 @@ fun TripDayScreen(
     onBack: () -> Unit,
     onAdd: (String) -> Unit,
     onEdit: (String) -> Unit,
-    onPlaces: () -> Unit
+    onPlaces: () -> Unit,
+    onMap: (String) -> Unit = {}
 ) {
     val p = TripDesign.palette
     val scope = rememberCoroutineScope()
@@ -331,6 +332,11 @@ fun TripDayScreen(
                 label = "일정 추가",
                 onClick = { onAdd(selectedDate) },
                 enabled = selectedDate.isNotBlank(),
+                modifier = Modifier.fillMaxWidth()
+            )
+            TripSecondaryButton(
+                label = "지도에서 보기",
+                onClick = { onMap(selectedDate.ifBlank { "all" }) },
                 modifier = Modifier.fillMaxWidth()
             )
             TripSecondaryButton(

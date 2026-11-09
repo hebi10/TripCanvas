@@ -27,6 +27,18 @@ interface ItineraryDao {
     @Query("SELECT * FROM itinerary_items WHERE tripId = :tripId AND id = :itemId LIMIT 1")
     suspend fun findForTrip(tripId: String, itemId: String): ItineraryItemEntity?
 
+    @Query(
+        "SELECT * FROM itinerary_items WHERE tripId = :tripId " +
+            "ORDER BY date, sortOrder, createdAtMillis, id"
+    )
+    fun observeTrip(tripId: String): Flow<List<ItineraryItemEntity>>
+
+    @Query(
+        "SELECT * FROM itinerary_items WHERE tripId = :tripId AND placeId = :placeId " +
+            "ORDER BY date, sortOrder, id"
+    )
+    fun observeLinkedPlace(tripId: String, placeId: String): Flow<List<ItineraryItemEntity>>
+
     @Query("SELECT COUNT(*) FROM itinerary_items WHERE tripId = :tripId")
     fun observeTripCount(tripId: String): Flow<Int>
 
