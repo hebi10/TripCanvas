@@ -85,7 +85,7 @@ class TripDatabaseV2MigrationTest {
             raw.close()
         }
         val db = Room.databaseBuilder(context, TripDatabase::class.java, dbName)
-            .addMigrations(TripDatabase.MIGRATION_2_3, TripDatabase.MIGRATION_3_4).build()
+            .addMigrations(TripDatabase.MIGRATION_2_3, TripDatabase.MIGRATION_3_4, TripDatabase.MIGRATION_4_5).build()
         try {
             assertEquals("기존 여행", db.tripDao().findById("trip-v2")?.title)
             assertEquals("서울역", db.placeDao().findForTrip("trip-v2", "place-v2")?.name)
