@@ -46,7 +46,8 @@ import com.hebi.tripcanvas.designsystem.tokens.TripSpacing
 @Composable
 fun DesignSystemScreen(
     themeMode: TripThemeMode,
-    onThemeModeChange: (TripThemeMode) -> Unit
+    onThemeModeChange: (TripThemeMode) -> Unit,
+    onBack: () -> Unit
 ) {
     val palette = TripDesign.palette
     Surface(modifier = Modifier.fillMaxSize(), color = palette.background) {
@@ -68,6 +69,10 @@ fun DesignSystemScreen(
                     style = MaterialTheme.typography.labelMedium,
                     color = palette.textSecondary
                 )
+                TripSecondaryButton(
+                    label = "설정으로 돌아가기",
+                    onClick = onBack
+                )
                 TripSectionHeading(
                     title = "여행을 위한 하나의 캔버스",
                     supportingText = "Travel Editorial 디자인 시스템 미리보기 — 여행 관리 기능은 다음 단계에서 연결됩니다."
@@ -75,7 +80,7 @@ fun DesignSystemScreen(
                 TripDivider()
                 TripSectionHeading(
                     title = "색상 및 테마",
-                    supportingText = "사용자의 선택은 이 미리보기에서만 유지되며 아직 설정에 저장되지 않습니다."
+                    supportingText = "선택한 테마는 설정에 저장되며 앱을 다시 실행해도 유지됩니다."
                 )
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs),
