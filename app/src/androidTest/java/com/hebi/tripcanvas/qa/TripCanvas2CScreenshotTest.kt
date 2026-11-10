@@ -107,6 +107,19 @@ class TripCanvas2CScreenshotTest {
             awaitText("QA 제주 여행")
             capture("01-home-light")
             assertStatusBarBackground(dark = false)
+            openTripActions()
+            capture("01a-home-actions-menu")
+            click("여행 편집")
+            awaitText("여행 기본 정보")
+            capture("01b-home-edit-from-menu")
+            device.pressBack()
+            awaitText("내 여행")
+            openTripActions()
+            click("여행 삭제")
+            awaitText("여행명 확인")
+            capture("01c-home-delete-confirm")
+            click("취소")
+            awaitText("내 여행")
             click("QA 제주 여행")
             awaitText("경비 열기")
             capture("02-workspace-light")
@@ -247,6 +260,15 @@ class TripCanvas2CScreenshotTest {
             bitmap.recycle()
             screenshot.delete()
         }
+    }
+
+    private fun openTripActions() {
+        val button = device.wait(
+            Until.findObject(By.desc("QA 제주 여행 메뉴")), 5000
+        ) ?: throw AssertionError("여행 카드 더보기 버튼을 찾지 못했습니다.")
+        button.click()
+        awaitText("여행 편집")
+        awaitText("여행 삭제")
     }
 
     private fun waitForChecklistCount(expected: Int): Boolean {
