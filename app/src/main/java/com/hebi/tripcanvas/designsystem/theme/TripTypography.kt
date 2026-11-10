@@ -80,3 +80,4 @@ internal val TripTypography = Typography(
         fontSize = 12.sp,
         lineHeight = 18.sp
     )
+)
