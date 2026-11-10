@@ -1,6 +1,8 @@
 package com.hebi.tripcanvas.qa
 
 import android.content.Context
+import android.graphics.BitmapFactory
+import android.graphics.Color
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -104,6 +106,7 @@ class TripCanvas2CScreenshotTest {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             awaitText("QA 제주 여행")
             capture("01-home-light")
+            assertStatusBarBackground(dark = false)
             click("QA 제주 여행")
             awaitText("경비 열기")
             capture("02-workspace-light")
@@ -180,6 +183,7 @@ class TripCanvas2CScreenshotTest {
             device.waitForIdle()
             awaitText("내 여행")
             capture("15-home-dark")
+            assertStatusBarBackground(dark = true)
 
             click("QA 제주 여행")
             awaitText("경비 열기")
@@ -211,6 +215,7 @@ class TripCanvas2CScreenshotTest {
             awaitText("내 여행")
             Thread.sleep(1200)
             capture("20-home-dark-font160")
+            assertStatusBarBackground(dark = true)
             click("QA 제주 여행")
             awaitText("경비 열기")
             capture("21-workspace-dark-font160")
@@ -221,6 +226,26 @@ class TripCanvas2CScreenshotTest {
             awaitText("경비 열기")
             openScreen("경비 열기", "예산 설정·변경")
             capture("23-expenses-dark-font160")
+        }
+    }
+
+    private fun assertStatusBarBackground(dark: Boolean) {
+        val screenshot = File(context.cacheDir, "qa-status-bar.png")
+        assertTrue("Status bar screenshot failed", device.takeScreenshot(screenshot))
+        val bitmap = BitmapFactory.decodeFile(screenshot.absolutePath)
+            ?: throw AssertionError("Status bar screenshot could not be decoded")
+        try {
+            val safeY = (context.resources.displayMetrics.density * 10).toInt()
+                .coerceIn(0, bitmap.height - 1)
+            val pixel = bitmap.getPixel(bitmap.width / 2, safeY)
+            val brightness = (Color.red(pixel) + Color.green(pixel) + Color.blue(pixel)) / 3
+            assertTrue(
+                "Status bar background does not match ${if (dark) "dark" else "light"} theme (brightness=$brightness)",
+                if (dark) brightness < 100 else brightness > 155
+            )
+        } finally {
+            bitmap.recycle()
+            screenshot.delete()
         }
     }
 
