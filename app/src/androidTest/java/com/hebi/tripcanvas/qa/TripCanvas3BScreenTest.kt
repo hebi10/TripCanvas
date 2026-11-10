@@ -137,7 +137,11 @@ class TripCanvas3BScreenTest {
         SystemClock.sleep(300)
         val node = device.findObject(By.text(text))
             ?: throw AssertionError("Missing click target: " + text)
-        node.click()
+        var target = node
+        while (!target.isClickable) {
+            target = target.parent ?: break
+        }
+        target.click()
         device.waitForIdle()
         SystemClock.sleep(300)
     }
