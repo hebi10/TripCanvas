@@ -25,16 +25,33 @@ REVIEW_HOLD_FORBIDDEN_MESSAGE = 'Changes are sent for review automatically. The 
 REVIEW_HOLD_FORBIDDEN_REASON = 'CHANGES_NOT_SENT_FOR_REVIEW_FORBIDDEN'
 
 
+def safe_play_api_operation(method, path):
+    """Classify fixed endpoints without exposing edit IDs, query data, or API messages."""
+    endpoint = path.split('?', 1)[0]
+    if method == 'POST' and endpoint == '/edits':
+        return 'edit_create'
+    if method == 'POST' and re.fullmatch(r'/edits/[A-Za-z0-9]+:validate', endpoint):
+        return 'edit_validate'
+    if method == 'POST' and re.fullmatch(r'/edits/[A-Za-z0-9]+:commit', endpoint):
+        return 'edit_commit'
+    if method == 'PUT' and re.fullmatch(r'/edits/[A-Za-z0-9]+/tracks/alpha', endpoint):
+        return 'alpha_track_update'
+    return 'unclassified'
+
+
 class ReleaseError(RuntimeError):
     pass
 
 
 class PlayApiError(ReleaseError):
-    def __init__(self, method, status, api_status=None, safe_reason=None):
+    def __init__(self, method, status, api_status=None, safe_reason=None, operation=None):
         self.http_status = status
         self.api_status = api_status if api_status in API_STATUSES else None
         self.safe_reason = safe_reason if safe_reason == REVIEW_HOLD_FORBIDDEN_REASON else None
-        super().__init__(f'Play API {method} failed with HTTP {status}; inspect Console registration, permissions and validation')
+        self.operation = operation if operation in (
+            'edit_create', 'edit_validate', 'edit_commit', 'alpha_track_update'
+        ) else 'unclassified'
+        super().__init__(f'Play API {method} failed with HTTP {status} at {self.operation}; inspect Console registration, permissions and validation')
 
 
 def require_initialization_request(env):
@@ -102,7 +119,8 @@ class HttpTransport:
                 pass
             finally:
                 error.close()
-            raise PlayApiError(method, error.code, api_status, safe_reason) from None
+            raise PlayApiError(method, error.code, api_status, safe_reason,
+                               safe_play_api_operation(method, path)) from None
         except (urllib.error.URLError, TimeoutError, ValueError):
             raise ReleaseError('Play API request or response failed; no successful deployment can be claimed') from None
 
@@ -354,9 +372,14 @@ def main():
         return 0
     except (ReleaseError, KeyError, OSError, RuntimeError) as error:
         message = str(error) if isinstance(error, RuntimeError) else 'Release input or API response is invalid'
-        if args.command in ('inspect', 'allocate-first', 'initialize'):
-            result = {'package': PACKAGE, 'status': 'api_preflight_blocked', 'deployment': 'not_attempted'}
-            if args.command != 'inspect':
+        if args.command in ('inspect', 'allocate-first', 'initialize', 'promote'):
+            if args.command == 'promote':
+                result = {'package': PACKAGE, 'track': 'alpha', 'versionCode': args.version_code,
+                          'status': 'promotion_not_verified', 'deployment': 'unconfirmed',
+                          'availability': 'requires_console_check'}
+            else:
+                result = {'package': PACKAGE, 'status': 'api_preflight_blocked', 'deployment': 'not_attempted'}
+            if args.command in ('allocate-first', 'initialize'):
                 result.update(status='initialization_committed_readback_failed' if getattr(error, 'committed', False) else 'initialization_blocked',
                               stage=getattr(error, 'stage', 'request_guard'))
                 if args.command == 'initialize':
@@ -370,6 +393,8 @@ def main():
                 result['httpStatus'] = error.http_status
             if getattr(error, 'api_status', None) is not None:
                 result['apiStatus'] = error.api_status
+            if args.command == 'promote' and getattr(error, 'operation', None) is not None:
+                result['failedOperation'] = error.operation
             if getattr(error, 'review_hold_parameter_omitted', False):
                 result.update(reviewHoldParameterOmitted=True, reason=REVIEW_HOLD_FORBIDDEN_REASON)
             if args.report:
