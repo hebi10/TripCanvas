@@ -8,6 +8,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
+import androidx.test.uiautomator.StaleObjectException
 import androidx.test.uiautomator.UiObject2
 import androidx.test.uiautomator.Until
 import com.hebi.tripcanvas.MainActivity
@@ -346,17 +347,29 @@ class TripCanvas2CScreenshotTest {
 
     private fun click(text: String) {
         awaitText(text)
-        device.waitForIdle()
-        Thread.sleep(500)
-        val node: UiObject2 = device.findObject(By.text(text))
-            ?: throw AssertionError("클릭 대상 없음: $text")
-        var clickable = node
-        while (!clickable.isClickable) {
-            clickable = clickable.parent ?: break
+        repeat(4) { attempt ->
+            try {
+                val node: UiObject2 = device.wait(
+                    Until.findObject(By.text(text)), 3000
+                ) ?: throw AssertionError("클릭 대상 없음: $text")
+                var clickable = node
+                while (!clickable.isClickable) {
+                    clickable = clickable.parent ?: break
+                }
+                if (!clickable.isClickable) {
+                    throw AssertionError("클릭 가능한 상위 요소가 없습니다: $text")
+                }
+                clickable.click()
+                device.waitForIdle()
+                Thread.sleep(300)
+                return
+            } catch (stale: StaleObjectException) {
+                if (attempt == 3) {
+                    throw AssertionError("화면 갱신 후 클릭 대상을 찾지 못했습니다: $text", stale)
+                }
+                Thread.sleep(200)
+            }
         }
-        clickable.click()
-        device.waitForIdle()
-        Thread.sleep(400)
     }
 
     private fun swipeUp() {
