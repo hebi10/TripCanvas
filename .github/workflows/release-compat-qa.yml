@@ -67,3 +67,21 @@ jobs:
           path: qa-output/compat/
           if-no-files-found: warn
           retention-days: 14
+
+  privacy-policy-public:
+    name: public-policy-http-and-content
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require publicly readable privacy policy
+        env:
+          PRIVACY_URL: https://hebi10.github.io/TripCanvas/privacy-policy.html
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error \
+            --retry 2 --max-time 25 \
+            --output "$RUNNER_TEMP/tripcanvas-policy.html" \
+            --write-out 'Privacy policy HTTP status: %{http_code}\n' "$PRIVACY_URL"
+          grep -Fq 'TripCanvas 개인정보처리방침' "$RUNNER_TEMP/tripcanvas-policy.html"
+          grep -Fq 'OpenFreeMap' "$RUNNER_TEMP/tripcanvas-policy.html"
+          grep -Fq 'Photon' "$RUNNER_TEMP/tripcanvas-policy.html"
