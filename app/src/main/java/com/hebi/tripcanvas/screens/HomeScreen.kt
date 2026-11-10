@@ -236,7 +236,11 @@ private fun TripListCard(
                     }
                     DropdownMenu(
                         expanded = showMenu,
-                        onDismissRequest = { showMenu = false }
+                        onDismissRequest = { showMenu = false },
+                        containerColor = p.surface,
+                        tonalElevation = 0.dp,
+                        shadowElevation = 0.dp,
+                        border = BorderStroke(1.dp, p.outline)
                     ) {
                         DropdownMenuItem(
                             text = { Text("여행 편집") },
