@@ -215,6 +215,26 @@ jobs:
           if [[ "$KEEP_FOR_REVIEW" == 'true' ]]; then args+=(--changes-not-sent-for-review); fi
           python3 scripts/play/publisher.py --report output/play-release.json deploy --bundle app/build/outputs/bundle/release/app-release.aab --version-code "$VERSION_CODE" --status "$RELEASE_STATUS" "${args[@]}"
           echo 'Play API commit and fresh readback passed. Console review, publication and tester installability still require confirmation.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Promote this exact internal code to closed alpha only for authorized one-time release
+        if: needs.source.outputs.mode == 'deploy' && github.event_name == 'workflow_run'
+        env:
+          PLAY_CONSOLE_INITIALIZED: ${{ steps.readiness.outputs.initialized }}
+          PLAY_ACCESS_TOKEN: ${{ steps.wif.outputs.access_token || steps.json.outputs.access_token }}
+          VERSION_CODE: ${{ steps.version.outputs.version_code }}
+          SOURCE_SHA: ${{ needs.source.outputs.sha }}
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          subject="$(git show -s --format=%s "$SOURCE_SHA")"
+          if [[ "$subject" != *' [tripcanvas-closed-alpha-once]' ]]; then
+            echo 'No explicit one-time closed alpha marker on this trusted main release; internal only.'
+            exit 0
+          fi
+          python3 scripts/play/source.py --assert-current "$SOURCE_SHA"
+          python3 scripts/play/publisher.py --report output/play-promotion.json promote --version-code "$VERSION_CODE" --track alpha
+          echo 'Closed alpha API commit and fresh readback succeeded. Play Console review, publication, tester enrollment, and installability remain separate checks.' >> "$GITHUB_STEP_SUMMARY"
+
       - name: Report build-only result
         if: needs.source.outputs.mode == 'build'
         run: echo 'Signed bootstrap AAB verified. No Play API call or deployment was performed. Upload this AAB in Console using the existing app certificate.' >> "$GITHUB_STEP_SUMMARY"
