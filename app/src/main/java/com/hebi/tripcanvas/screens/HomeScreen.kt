@@ -2,11 +2,17 @@ package com.hebi.tripcanvas.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -14,13 +20,18 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.hebi.tripcanvas.data.TripRepository
 import com.hebi.tripcanvas.data.local.TripEntity
@@ -31,7 +42,9 @@ import com.hebi.tripcanvas.designsystem.components.TripLoadingState
 import com.hebi.tripcanvas.designsystem.components.TripPrimaryButton
 import com.hebi.tripcanvas.designsystem.components.TripSectionHeading
 import com.hebi.tripcanvas.designsystem.components.TripStatusTag
+import com.hebi.tripcanvas.designsystem.icons.TripIcons
 import com.hebi.tripcanvas.designsystem.theme.TripDesign
+import com.hebi.tripcanvas.designsystem.tokens.TripSizes
 import com.hebi.tripcanvas.designsystem.tokens.TripSpacing
 import com.hebi.tripcanvas.domain.TripPhase
 import com.hebi.tripcanvas.domain.daysUntil
@@ -115,22 +128,23 @@ fun HomeScreen(
                         } else {
                             "다른 여행 상태를 선택하거나 새 여행을 추가해 보세요."
                         },
-                        actionLabel = if (selectedFilter == TripListFilter.All) "새 여행" else null,
-                        onAction = onCreateTrip
+                        actionLabel = null
                     )
                 } else {
                     Text(
                         "여행 " + filtered.size + "개",
-                        style = MaterialTheme.typography.labelMedium,
+                        style = MaterialTheme.typography.bodyMedium,
                         color = p.textSecondary
                     )
                     filtered.forEach { trip ->
-                        TripListCard(
-                            trip = trip,
-                            onOpen = { onOpenTrip(trip.id) },
-                            onEdit = { onEditTrip(trip.id) },
-                            onDelete = { deleteTarget = trip }
-                        )
+                        key(trip.id) {
+                            TripListCard(
+                                trip = trip,
+                                onOpen = { onOpenTrip(trip.id) },
+                                onEdit = { onEditTrip(trip.id) },
+                                onDelete = { deleteTarget = trip }
+                            )
+                        }
                     }
                 }
             }
@@ -160,6 +174,16 @@ private fun TripListCard(
 ) {
     val p = TripDesign.palette
     val phase = trip.phase()
+    val destination = listOf(trip.country, trip.city)
+        .filter { it.isNotBlank() }
+        .joinToString(" · ")
+    val timing = when (phase) {
+        TripPhase.Upcoming -> "출발 D-" + trip.daysUntil()
+        TripPhase.Active -> "여행 진행 중"
+        TripPhase.Completed -> "지난 여행"
+    }
+    var showMenu by remember(trip.id) { mutableStateOf(false) }
+
     Surface(
         modifier = Modifier.fillMaxWidth(),
         onClick = onOpen,
@@ -169,33 +193,84 @@ private fun TripListCard(
     ) {
         Column(
             modifier = Modifier.padding(TripSpacing.md),
-            verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)
+            verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
         ) {
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(TripSpacing.sm),
-                verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs)
             ) {
-                Text(trip.title, style = MaterialTheme.typography.titleLarge, color = p.textPrimary)
-                TripStatusTag(label = phase.label)
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(TripSpacing.xxs)
+                ) {
+                    Text(
+                        text = trip.title,
+                        style = MaterialTheme.typography.titleLarge,
+                        color = p.textPrimary,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (destination.isNotEmpty()) {
+                        Text(
+                            text = destination,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = p.textSecondary,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                Box {
+                    IconButton(
+                        onClick = { showMenu = true },
+                        modifier = Modifier
+                            .size(TripSizes.minimumTouchTarget)
+                            .semantics { contentDescription = "${trip.title} 여행 메뉴" }
+                    ) {
+                        Icon(
+                            imageVector = TripIcons.MoreVert,
+                            contentDescription = null,
+                            tint = p.textPrimary
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("여행 편집") },
+                            onClick = {
+                                showMenu = false
+                                onEdit()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("여행 삭제", color = p.error) },
+                            onClick = {
+                                showMenu = false
+                                onDelete()
+                            }
+                        )
+                    }
+                }
             }
             Text(
-                text = trip.startDate + " ~ " + trip.endDate + "  ·  " + trip.timeZoneId,
+                text = trip.startDate.replace('-', '.') + " ~ " + trip.endDate.replace('-', '.'),
                 style = MaterialTheme.typography.bodyMedium,
                 color = p.textSecondary
             )
-            val location = listOf(trip.country, trip.city).filter { it.isNotBlank() }.joinToString(" · ")
-            if (location.isNotEmpty()) {
-                Text(location, style = MaterialTheme.typography.bodyMedium, color = p.textPrimary)
-            }
-            val timing = when (phase) {
-                TripPhase.Upcoming -> "출발 D-" + trip.daysUntil()
-                TripPhase.Active -> "여행 진행 중"
-                TripPhase.Completed -> "지난 여행"
-            }
-            Text(timing, style = MaterialTheme.typography.labelMedium, color = p.textSecondary)
-            Row(horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
-                TextButton(onClick = onEdit) { Text("편집", color = p.textPrimary) }
-                TextButton(onClick = onDelete) { Text("삭제", color = p.error) }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                TripStatusTag(label = phase.label)
+                Text(
+                    text = timing,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = p.textPrimary
+                )
             }
         }
     }
