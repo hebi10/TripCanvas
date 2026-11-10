@@ -129,6 +129,22 @@ class TripCanvas2CScreenshotTest {
             click("QA 제주 여행")
             awaitText("여행 한눈에")
             capture("02a-workspace-overview-light")
+            awaitText("작업 도구")
+            capture("02b-workspace-tools-light")
+            awaitText("저장 장소 관리")
+            capture("02c-workspace-tools-last-light")
+            awaitText("일정 열기")
+            click("일정 열기")
+            awaitText("여행 일정")
+            capture("02d-workspace-schedule-route")
+            device.pressBack()
+            awaitText("작업 도구")
+            awaitText("저장 장소 관리")
+            click("저장 장소 관리")
+            awaitText("여행 장소")
+            capture("02e-workspace-places-route")
+            device.pressBack()
+            awaitText("작업 도구")
             awaitText("다음 일정")
             awaitText("사용 경비")
             awaitText("KRW 12,500")
@@ -215,6 +231,8 @@ class TripCanvas2CScreenshotTest {
             click("QA 제주 여행")
             awaitText("여행 한눈에")
             capture("16a-workspace-overview-dark")
+            awaitText("작업 도구")
+            capture("16b-workspace-tools-dark")
             awaitText("준비물 완료")
             awaitText("1 / 4")
             awaitText("경비 열기")
@@ -251,6 +269,8 @@ class TripCanvas2CScreenshotTest {
             click("QA 제주 여행")
             awaitText("여행 한눈에")
             capture("21a-workspace-overview-dark-font160")
+            awaitText("작업 도구")
+            capture("21b-workspace-tools-dark-font160")
             awaitText("경비 열기")
             capture("21-workspace-dark-font160")
             openScreen("준비물 열기", "체크 상태와 항목 순서는 기기에 저장됩니다.")
@@ -317,16 +337,16 @@ class TripCanvas2CScreenshotTest {
 
     private fun awaitText(text: String) {
         dismissSystemAnr()
-        if (device.wait(Until.hasObject(By.text(text)), 5000)) return
+        if (device.wait(Until.hasObject(uiSelector(text)), 5000)) return
         repeat(6) {
             dismissSystemAnr()
             swipeUp()
-            if (device.wait(Until.hasObject(By.text(text)), 1200)) return
+            if (device.wait(Until.hasObject(uiSelector(text)), 1200)) return
         }
         repeat(6) {
             dismissSystemAnr()
             swipeDown()
-            if (device.wait(Until.hasObject(By.text(text)), 1200)) return
+            if (device.wait(Until.hasObject(uiSelector(text)), 1200)) return
         }
         val diagnosticDir = File(context.getExternalFilesDir(null), "qa")
         diagnosticDir.mkdirs()
@@ -361,12 +381,15 @@ class TripCanvas2CScreenshotTest {
         awaitText(expectedTitle)
     }
 
+    private fun uiSelector(text: String) =
+        if (text.endsWith(" 열기") || text == "저장 장소 관리") By.desc(text) else By.text(text)
+
     private fun click(text: String) {
         awaitText(text)
         repeat(4) { attempt ->
             try {
                 val node: UiObject2 = device.wait(
-                    Until.findObject(By.text(text)), 3000
+                    Until.findObject(uiSelector(text)), 3000
                 ) ?: throw AssertionError("클릭 대상 없음: $text")
                 var clickable = node
                 while (!clickable.isClickable) {
