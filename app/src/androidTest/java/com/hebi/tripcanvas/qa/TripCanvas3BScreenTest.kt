@@ -7,6 +7,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
+import androidx.test.uiautomator.StaleObjectException
 import androidx.test.uiautomator.Until
 import com.hebi.tripcanvas.MainActivity
 import com.hebi.tripcanvas.data.local.BookingEntity
@@ -94,7 +95,7 @@ class TripCanvas3BScreenTest {
                 awaitText("동행자 정산")
                 device.pressBack()
                 awaitText("예약 열기")
-                click("예약 열기")
+                clickWorkspaceCard("예약 열기")
                 awaitText("예약 1건")
                 capture("08-bookings-light")
                 click("예약 상세·편집")
@@ -132,10 +133,44 @@ class TripCanvas3BScreenTest {
         }
     }
 
+    private fun uiSelector(text: String) =
+        if (text.endsWith(" 열기") || text == "저장 장소 관리") By.desc(text) else By.text(text)
+
+    private fun clickWorkspaceCard(label: String) {
+        repeat(12) {
+            dismissSystemAnr()
+            try {
+                val card = device.wait(Until.findObject(By.desc(label)), 1400)
+                if (card != null) {
+                    val bounds = card.visibleBounds
+                    val height = device.displayHeight
+                    val completelyInside = bounds.width() > 0 &&
+                        bounds.top >= height / 6 &&
+                        bounds.bottom <= height * 5 / 6
+                    if (completelyInside) {
+                        capture("07a-bookings-card-before-click")
+                        card.click()
+                        device.waitForIdle()
+                        SystemClock.sleep(300)
+                        capture("07b-bookings-card-after-click")
+                        return
+                    }
+                    if (bounds.centerY() > height / 2) swipeUp() else swipeDown()
+                } else {
+                    swipeUp()
+                }
+            } catch (_: StaleObjectException) {
+                SystemClock.sleep(250)
+            }
+        }
+        capture("07c-bookings-card-not-centered")
+        throw AssertionError("예약 카드가 화면 중앙의 클릭 가능한 영역에 표시되지 않았습니다: $label")
+    }
+
     private fun click(text: String) {
         awaitText(text)
         SystemClock.sleep(300)
-        val node = device.findObject(By.text(text))
+        val node = device.findObject(uiSelector(text))
             ?: throw AssertionError("Missing click target: " + text)
         var target = node
         while (!target.isClickable) {
@@ -159,16 +194,16 @@ class TripCanvas3BScreenTest {
 
     private fun awaitText(text: String) {
         dismissSystemAnr()
-        if (device.wait(Until.hasObject(By.text(text)), 8000)) return
+        if (device.wait(Until.hasObject(uiSelector(text)), 8000)) return
         repeat(7) {
             dismissSystemAnr()
             swipeUp()
-            if (device.wait(Until.hasObject(By.text(text)), 1100)) return
+            if (device.wait(Until.hasObject(uiSelector(text)), 1100)) return
         }
         repeat(7) {
             dismissSystemAnr()
             swipeDown()
-            if (device.wait(Until.hasObject(By.text(text)), 1100)) return
+            if (device.wait(Until.hasObject(uiSelector(text)), 1100)) return
         }
         capture("99-failure")
         device.dumpWindowHierarchy(File(output(), "99-hierarchy.xml"))

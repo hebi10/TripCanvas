@@ -24,9 +24,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.hebi.tripcanvas.designsystem.components.TripDivider
 import com.hebi.tripcanvas.designsystem.icons.TripIcons
+import com.hebi.tripcanvas.designsystem.responsive.TripAdaptiveContainer
+import com.hebi.tripcanvas.designsystem.responsive.TripWindowWidth
 import com.hebi.tripcanvas.designsystem.theme.TripDesign
 import com.hebi.tripcanvas.designsystem.tokens.TripSizes
 import com.hebi.tripcanvas.designsystem.tokens.TripSpacing
@@ -40,56 +43,65 @@ fun TripPageFrame(
 ) {
     val palette = TripDesign.palette
     Surface(modifier = Modifier.fillMaxSize(), color = palette.background) {
-        Column(
+        TripAdaptiveContainer(
             modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 56.dp)
-                    .padding(horizontal = TripSpacing.md),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs)
-            ) {
-                if (onBack != null) {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = TripIcons.Back,
-                            contentDescription = "뒤로",
-                            tint = palette.textPrimary
-                        )
-                    }
-                }
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleLarge,
-                    color = palette.textPrimary,
-                    modifier = Modifier.weight(1f)
-                )
-                trailingActions()
+        ) { width ->
+            val horizontalGutter = if (width == TripWindowWidth.Compact) {
+                TripSizes.compactGutter
+            } else {
+                TripSizes.expandedGutter
             }
-            TripDivider()
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.TopCenter
-            ) {
-                Column(
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(
-                            horizontal = TripSpacing.md,
-                            vertical = TripSpacing.lg
-                        ),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                        .fillMaxWidth()
+                        .heightIn(min = 56.dp)
+                        .padding(horizontal = horizontalGutter),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs)
+                ) {
+                    if (onBack != null) {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                imageVector = TripIcons.Back,
+                                contentDescription = "뒤로",
+                                tint = palette.textPrimary
+                            )
+                        }
+                    }
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleLarge,
+                        color = palette.textPrimary,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    trailingActions()
+                }
+                TripDivider()
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.TopCenter
                 ) {
                     Column(
                         modifier = Modifier
-                            .widthIn(max = TripSizes.maximumContentWidth)
-                            .fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(TripSpacing.lg),
-                        content = content
-                    )
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(
+                                horizontal = horizontalGutter,
+                                vertical = TripSpacing.lg
+                            ),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .widthIn(max = TripSizes.maximumContentWidth)
+                                .fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(TripSpacing.lg),
+                            content = content
+                        )
+                    }
                 }
             }
         }

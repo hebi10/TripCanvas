@@ -1,11 +1,14 @@
 package com.hebi.tripcanvas.qa
 
 import android.content.Context
+import android.graphics.BitmapFactory
+import android.graphics.Color
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
+import androidx.test.uiautomator.StaleObjectException
 import androidx.test.uiautomator.UiObject2
 import androidx.test.uiautomator.Until
 import com.hebi.tripcanvas.MainActivity
@@ -104,11 +107,56 @@ class TripCanvas2CScreenshotTest {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             awaitText("QA 제주 여행")
             capture("01-home-light")
+            assertStatusBarBackground(dark = false)
+            click("완료")
+            awaitText("완료된 여행이 없습니다")
+            capture("01a-home-filter-empty")
+            click("전체")
+            awaitText("QA 제주 여행")
+            openTripActions()
+            capture("01b-home-actions-menu")
+            click("여행 편집")
+            awaitText("여행 기본 정보")
+            capture("01c-home-edit-from-menu")
+            device.pressBack()
+            awaitText("내 여행")
+            openTripActions()
+            click("여행 삭제")
+            awaitText("여행명 확인")
+            capture("01d-home-delete-confirm")
+            click("취소")
+            awaitText("내 여행")
             click("QA 제주 여행")
+            awaitText("여행 한눈에")
+            capture("02a-workspace-overview-light")
+            awaitText("작업 도구")
+            swipeUp()
+            awaitText("일정 열기")
+            capture("02b-workspace-tools-light")
+            capture("02d-schedule-before-click")
+            click("일정 열기")
+            capture("02d-schedule-after-click")
+            awaitText("여행 일정")
+            capture("02d-workspace-schedule-route")
+            device.pressBack()
+            awaitText("작업 도구")
+            awaitText("저장 장소 관리")
+            capture("02c-workspace-tools-last-light")
+            click("저장 장소 관리")
+            awaitText("여행 장소")
+            capture("02e-workspace-places-route")
+            device.pressBack()
+            awaitText("작업 도구")
+            awaitText("다음 일정")
+            awaitText("사용 경비")
+            awaitText("KRW 12,500")
+            awaitText("준비물 완료")
+            awaitText("1 / 3")
             awaitText("경비 열기")
             capture("02-workspace-light")
 
-            openScreen("준비물 열기", "준비 완료 1 / 3")
+            openScreen("준비물 열기", "체크 상태와 항목 순서는 기기에 저장됩니다.")
+            awaitText("준비 완료 1 / 3")
             awaitText("여권")
             capture("03-checklist-light")
             click("미완료")
@@ -180,11 +228,19 @@ class TripCanvas2CScreenshotTest {
             device.waitForIdle()
             awaitText("내 여행")
             capture("15-home-dark")
+            assertStatusBarBackground(dark = true)
 
             click("QA 제주 여행")
+            awaitText("여행 한눈에")
+            capture("16a-workspace-overview-dark")
+            awaitText("작업 도구")
+            capture("16b-workspace-tools-dark")
+            awaitText("준비물 완료")
+            awaitText("1 / 4")
             awaitText("경비 열기")
             capture("16-workspace-dark")
-            openScreen("준비물 열기", "준비 완료 1 / 4")
+            openScreen("준비물 열기", "체크 상태와 항목 순서는 기기에 저장됩니다.")
+            awaitText("준비 완료 1 / 4")
             awaitText("멀티탭")
             capture("17-checklist-dark")
             device.pressBack()
@@ -211,10 +267,16 @@ class TripCanvas2CScreenshotTest {
             awaitText("내 여행")
             Thread.sleep(1200)
             capture("20-home-dark-font160")
+            assertStatusBarBackground(dark = true)
             click("QA 제주 여행")
+            awaitText("여행 한눈에")
+            capture("21a-workspace-overview-dark-font160")
+            awaitText("작업 도구")
+            capture("21b-workspace-tools-dark-font160")
             awaitText("경비 열기")
             capture("21-workspace-dark-font160")
-            openScreen("준비물 열기", "준비 완료 1 / 4")
+            openScreen("준비물 열기", "체크 상태와 항목 순서는 기기에 저장됩니다.")
+            awaitText("준비 완료 1 / 4")
             awaitText("여권")
             capture("22-checklist-dark-font160")
             device.pressBack()
@@ -222,6 +284,35 @@ class TripCanvas2CScreenshotTest {
             openScreen("경비 열기", "예산 설정·변경")
             capture("23-expenses-dark-font160")
         }
+    }
+
+    private fun assertStatusBarBackground(dark: Boolean) {
+        val screenshot = File(context.cacheDir, "qa-status-bar.png")
+        assertTrue("Status bar screenshot failed", device.takeScreenshot(screenshot))
+        val bitmap = BitmapFactory.decodeFile(screenshot.absolutePath)
+            ?: throw AssertionError("Status bar screenshot could not be decoded")
+        try {
+            val safeY = (context.resources.displayMetrics.density * 10).toInt()
+                .coerceIn(0, bitmap.height - 1)
+            val pixel = bitmap.getPixel(bitmap.width / 2, safeY)
+            val brightness = (Color.red(pixel) + Color.green(pixel) + Color.blue(pixel)) / 3
+            assertTrue(
+                "Status bar background does not match ${if (dark) "dark" else "light"} theme (brightness=$brightness)",
+                if (dark) brightness < 100 else brightness > 155
+            )
+        } finally {
+            bitmap.recycle()
+            screenshot.delete()
+        }
+    }
+
+    private fun openTripActions() {
+        val button = device.wait(
+            Until.findObject(By.desc("QA 제주 여행 메뉴")), 5000
+        ) ?: throw AssertionError("여행 카드 더보기 버튼을 찾지 못했습니다.")
+        button.click()
+        awaitText("여행 편집")
+        awaitText("여행 삭제")
     }
 
     private fun waitForChecklistCount(expected: Int): Boolean {
@@ -248,16 +339,16 @@ class TripCanvas2CScreenshotTest {
 
     private fun awaitText(text: String) {
         dismissSystemAnr()
-        if (device.wait(Until.hasObject(By.text(text)), 5000)) return
+        if (device.wait(Until.hasObject(uiSelector(text)), 5000)) return
         repeat(6) {
             dismissSystemAnr()
             swipeUp()
-            if (device.wait(Until.hasObject(By.text(text)), 1200)) return
+            if (device.wait(Until.hasObject(uiSelector(text)), 1200)) return
         }
         repeat(6) {
             dismissSystemAnr()
             swipeDown()
-            if (device.wait(Until.hasObject(By.text(text)), 1200)) return
+            if (device.wait(Until.hasObject(uiSelector(text)), 1200)) return
         }
         val diagnosticDir = File(context.getExternalFilesDir(null), "qa")
         diagnosticDir.mkdirs()
@@ -292,19 +383,34 @@ class TripCanvas2CScreenshotTest {
         awaitText(expectedTitle)
     }
 
+    private fun uiSelector(text: String) =
+        if (text.endsWith(" 열기") || text == "저장 장소 관리") By.desc(text) else By.text(text)
+
     private fun click(text: String) {
         awaitText(text)
-        device.waitForIdle()
-        Thread.sleep(500)
-        val node: UiObject2 = device.findObject(By.text(text))
-            ?: throw AssertionError("클릭 대상 없음: $text")
-        var clickable = node
-        while (!clickable.isClickable) {
-            clickable = clickable.parent ?: break
+        repeat(4) { attempt ->
+            try {
+                val node: UiObject2 = device.wait(
+                    Until.findObject(uiSelector(text)), 3000
+                ) ?: throw AssertionError("클릭 대상 없음: $text")
+                var clickable = node
+                while (!clickable.isClickable) {
+                    clickable = clickable.parent ?: break
+                }
+                if (!clickable.isClickable) {
+                    throw AssertionError("클릭 가능한 상위 요소가 없습니다: $text")
+                }
+                clickable.click()
+                device.waitForIdle()
+                Thread.sleep(300)
+                return
+            } catch (stale: StaleObjectException) {
+                if (attempt == 3) {
+                    throw AssertionError("화면 갱신 후 클릭 대상을 찾지 못했습니다: $text", stale)
+                }
+                Thread.sleep(200)
+            }
         }
-        clickable.click()
-        device.waitForIdle()
-        Thread.sleep(400)
     }
 
     private fun swipeUp() {

@@ -19,7 +19,12 @@ adb shell am instrument -w \
 status=${PIPESTATUS[0]}
 set -e
 
-adb pull /sdcard/Android/data/com.hebi.tripcanvas/files/qa3b/ qa-output/screenshots/ || true
+bash .github/scripts/collect-android-screenshots.sh qa3b qa-output || true
+count=$(find qa-output/screenshots -type f -name '*.png' | wc -l | tr -d ' ')
+if [ "$count" -lt 13 ]; then
+  adb pull /sdcard/Android/data/com.hebi.tripcanvas/files/qa3b/ qa-output/screenshots/ \
+    > qa-output/qa3b-adb-pull-fallback.txt 2>&1 || true
+fi
 find qa-output/screenshots -type f -name '*.png' -print0 | sort -z | xargs -0 -r sha256sum > qa-output/screenshots-sha256.txt
 find qa-output -type f | sort > qa-output/files.txt
 count=$(find qa-output/screenshots -type f -name '*.png' | wc -l | tr -d ' ')

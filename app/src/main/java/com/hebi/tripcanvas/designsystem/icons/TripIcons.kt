@@ -6,6 +6,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 
 object TripIcons {
@@ -14,5 +15,6 @@ object TripIcons {
     val Close = Icons.Default.Close
     val Info = Icons.Default.Info
     val Search = Icons.Default.Search
+    val MoreVert = Icons.Default.MoreVert
     val Back = Icons.AutoMirrored.Filled.ArrowBack
 }

@@ -4,9 +4,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import com.hebi.tripcanvas.designsystem.theme.TripDesign
 
 @Composable
 fun TripTextField(
@@ -19,6 +21,7 @@ fun TripTextField(
     isError: Boolean = false,
     singleLine: Boolean = true
 ) {
+    val p = TripDesign.palette
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
@@ -30,6 +33,15 @@ fun TripTextField(
         modifier = modifier.fillMaxWidth(),
         isError = isError,
         singleLine = singleLine,
-        shape = RectangleShape
+        shape = RectangleShape,
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = p.textPrimary,
+            unfocusedBorderColor = p.outline,
+            errorBorderColor = p.error,
+            focusedLabelColor = p.textPrimary,
+            unfocusedLabelColor = p.textSecondary,
+            errorLabelColor = p.error,
+            cursorColor = p.textPrimary
+        )
     )
 }

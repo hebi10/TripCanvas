@@ -166,14 +166,14 @@ class TripCanvas3AMapTest {
 
     private fun awaitText(text: String) {
         dismissLauncherAnr()
-        if (device.wait(Until.hasObject(By.text(text)), 8000)) return
+        if (device.wait(Until.hasObject(uiSelector(text)), 8000)) return
         repeat(5) {
             dismissLauncherAnr()
             device.swipe(
                 device.displayWidth / 2, device.displayHeight * 3 / 4,
                 device.displayWidth / 2, device.displayHeight / 3, 25
             )
-            if (device.wait(Until.hasObject(By.text(text)), 1500)) return
+            if (device.wait(Until.hasObject(uiSelector(text)), 1500)) return
         }
         repeat(6) {
             dismissLauncherAnr()
@@ -181,7 +181,7 @@ class TripCanvas3AMapTest {
                 device.displayWidth / 2, device.displayHeight / 3,
                 device.displayWidth / 2, device.displayHeight * 3 / 4, 25
             )
-            if (device.wait(Until.hasObject(By.text(text)), 1500)) return
+            if (device.wait(Until.hasObject(uiSelector(text)), 1500)) return
         }
         val dir = evidenceDir()
         device.takeScreenshot(File(dir, "99-failure.png"))
@@ -189,9 +189,12 @@ class TripCanvas3AMapTest {
         throw AssertionError("Expected UI text missing: $text")
     }
 
+    private fun uiSelector(text: String) =
+        if (text.endsWith(" 열기") || text == "저장 장소 관리") By.desc(text) else By.text(text)
+
     private fun click(text: String) {
         awaitText(text)
-        val node = device.findObject(By.text(text))
+        val node = device.findObject(uiSelector(text))
             ?: throw AssertionError("Click target missing: $text")
         var target = node
         while (!target.isClickable) {

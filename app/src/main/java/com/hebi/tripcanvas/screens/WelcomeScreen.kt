@@ -18,6 +18,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.hebi.tripcanvas.designsystem.components.TripErrorState
 import com.hebi.tripcanvas.designsystem.components.TripPrimaryButton
@@ -32,6 +33,7 @@ fun WelcomeScreen(
     saveFailed: Boolean
 ) {
     val p = TripDesign.palette
+    val compactHeading = LocalDensity.current.fontScale >= 1.4f
     Surface(modifier = Modifier.fillMaxSize(), color = p.background) {
         Column(
             modifier = Modifier
@@ -55,7 +57,7 @@ fun WelcomeScreen(
                 Spacer(modifier = Modifier.height(TripSpacing.lg))
                 Text(
                     text = "여행의 모든 순간을\n하나의 캔버스에.",
-                    style = MaterialTheme.typography.displayLarge,
+                    style = if (compactHeading) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.displayLarge,
                     color = p.textPrimary
                 )
                 Text(
@@ -64,7 +66,7 @@ fun WelcomeScreen(
                     color = p.textSecondary
                 )
                 Text(
-                    text = "처음에는 로그인이나 위치 권한 없이 시작합니다. 여행 데이터는 향후 로컬 저장 기능으로 관리됩니다.",
+                    text = "처음에는 로그인이나 위치 권한 없이 시작합니다. 여행 데이터는 기기에 저장됩니다.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = p.textSecondary
                 )
