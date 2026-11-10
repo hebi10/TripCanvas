@@ -1,11 +1,14 @@
 package com.hebi.tripcanvas.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -17,6 +20,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.style.TextOverflow
 import com.hebi.tripcanvas.data.ChecklistRepository
 import com.hebi.tripcanvas.data.ExpenseRepository
@@ -30,12 +37,12 @@ import com.hebi.tripcanvas.data.local.TripEntity
 import com.hebi.tripcanvas.designsystem.components.TripEmptyState
 import com.hebi.tripcanvas.designsystem.components.TripErrorState
 import com.hebi.tripcanvas.designsystem.components.TripLoadingState
-import com.hebi.tripcanvas.designsystem.components.TripSecondaryButton
 import com.hebi.tripcanvas.designsystem.components.TripStatusTag
 import com.hebi.tripcanvas.designsystem.components.TripSurfacePanel
 import com.hebi.tripcanvas.designsystem.responsive.TripAdaptiveContainer
 import com.hebi.tripcanvas.designsystem.responsive.TripWindowWidth
 import com.hebi.tripcanvas.designsystem.theme.TripDesign
+import com.hebi.tripcanvas.designsystem.tokens.TripSizes
 import com.hebi.tripcanvas.designsystem.tokens.TripSpacing
 import com.hebi.tripcanvas.domain.calculateExpenseTotals
 import com.hebi.tripcanvas.domain.displayMoney
@@ -191,97 +198,21 @@ private fun WorkspaceContent(
         checklist = checklist,
         expenses = expenses
     )
-    TripAdaptiveContainer(modifier = Modifier.fillMaxWidth()) { width ->
-        if (width == TripWindowWidth.Compact) {
-            Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.md)) {
-                WorkspacePanel(
-                    "예약 자료", "예약 확인 정보 및 문서 연결",
-                    if (isPreview) null else onBookings, "예약 열기"
-                )
-                WorkspacePanel(
-                    "동행자 정산", "지출별 환율과 참가자별 비용",
-                    if (isPreview) null else onSettlement, "정산 열기"
-                )
-                WorkspacePanel(
-                    "동행자", "로컬 참가자 이름 관리",
-                    if (isPreview) null else onParticipants, "동행자 열기"
-                )
-                WorkspacePanel(
-                    "지도", "저장한 장소와 날짜별 일정 핀",
-                    if (isPreview) null else onMap, "지도 열기"
-                )
-                WorkspacePanel("일정", if (isPreview) "날짜별 일정 미리보기" else "등록된 일정 " + scheduleCount + "개", if (isPreview) null else onSchedule, "일정 열기")
-                WorkspacePanel(
-                    "경비",
-                    if (trip == null) "경비 미리보기" else
-                        "기본 통화 지출 " + displayMoney(
-                            calculateExpenseTotals(expenses, trip.currencyCode).baseSpent.toPlainString(),
-                            trip.currencyCode
-                        ) + " · " + expenses.size + "건",
-                    if (isPreview) null else onExpenses,
-                    "경비 열기"
-                )
-                WorkspacePanel(
-                    "준비물",
-                    if (trip == null) "준비물 미리보기" else
-                        "준비 완료 " + checklist.count { it.checked } + " / " + checklist.size,
-                    if (isPreview) null else onChecklist,
-                    "준비물 열기"
-                )
-            }
-        } else {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(TripSpacing.md)
-            ) {
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TripSpacing.md)) {
-                    WorkspacePanel(
-                        "예약 자료", "예약 확인 정보 및 문서 연결",
-                        if (isPreview) null else onBookings, "예약 열기"
-                    )
-                    WorkspacePanel(
-                        "동행자 정산", "지출별 환율과 참가자별 비용",
-                        if (isPreview) null else onSettlement, "정산 열기"
-                    )
-                    WorkspacePanel(
-                        "동행자", "로컬 참가자 이름 관리",
-                        if (isPreview) null else onParticipants, "동행자 열기"
-                    )
-                    WorkspacePanel(
-                        "지도", "저장한 장소와 날짜별 일정 핀",
-                        if (isPreview) null else onMap, "지도 열기"
-                    )
-                    WorkspacePanel("일정", if (isPreview) "날짜별 일정 미리보기" else "등록된 일정 " + scheduleCount + "개", if (isPreview) null else onSchedule, "일정 열기")
-                    WorkspacePanel(
-                    "준비물",
-                    if (trip == null) "준비물 미리보기" else
-                        "준비 완료 " + checklist.count { it.checked } + " / " + checklist.size,
-                    if (isPreview) null else onChecklist,
-                    "준비물 열기"
-                )
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    WorkspacePanel(
-                    "경비",
-                    if (trip == null) "경비 미리보기" else
-                        "기본 통화 지출 " + displayMoney(
-                            calculateExpenseTotals(expenses, trip.currencyCode).baseSpent.toPlainString(),
-                            trip.currencyCode
-                        ) + " · " + expenses.size + "건",
-                    if (isPreview) null else onExpenses,
-                    "경비 열기"
-                )
-                }
-            }
-        }
-    }
-    if (!isPreview) {
-        TripSecondaryButton(
-            label = "저장 장소 관리",
-            onClick = onPlaces,
-            modifier = Modifier.fillMaxWidth()
-        )
-    }
+    WorkspaceToolGrid(
+        trip = trip,
+        isPreview = isPreview,
+        scheduleCount = scheduleCount,
+        checklist = checklist,
+        expenses = expenses,
+        onSchedule = onSchedule,
+        onPlaces = onPlaces,
+        onMap = onMap,
+        onChecklist = onChecklist,
+        onExpenses = onExpenses,
+        onSettlement = onSettlement,
+        onParticipants = onParticipants,
+        onBookings = onBookings
+    )
     Text(
         "일정·경비·준비물은 이 여행의 로컬 데이터로 관리됩니다.",
         style = MaterialTheme.typography.bodyMedium,
@@ -466,28 +397,136 @@ private fun WorkspaceMetric(
     }
 }
 
+private data class WorkspaceTool(
+    val title: String,
+    val description: String,
+    val actionLabel: String,
+    val onOpen: (() -> Unit)?
+)
+
 @Composable
-private fun WorkspacePanel(
-    title: String,
-    description: String,
-    onClick: (() -> Unit)? = null,
-    actionLabel: String = ""
+private fun WorkspaceToolGrid(
+    trip: TripEntity?,
+    isPreview: Boolean,
+    scheduleCount: Int,
+    checklist: List<ChecklistItemEntity>,
+    expenses: List<ExpenseEntity>,
+    onSchedule: () -> Unit,
+    onPlaces: () -> Unit,
+    onMap: () -> Unit,
+    onChecklist: () -> Unit,
+    onExpenses: () -> Unit,
+    onSettlement: () -> Unit,
+    onParticipants: () -> Unit,
+    onBookings: () -> Unit
 ) {
     val p = TripDesign.palette
-    TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(TripSpacing.md),
-            verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)
-        ) {
-            Text(title, style = MaterialTheme.typography.titleMedium, color = p.textPrimary)
-            Text(description, style = MaterialTheme.typography.bodyMedium, color = p.textSecondary)
-            if (onClick != null) {
-                TripSecondaryButton(
-                    label = actionLabel,
-                    onClick = onClick,
-                    modifier = Modifier.fillMaxWidth()
-                )
+    val tools = listOf(
+        WorkspaceTool(
+            "일정", if (isPreview) "날짜별 일정 관리" else "등록된 일정 ${scheduleCount}개",
+            "일정 열기", if (isPreview) null else onSchedule
+        ),
+        WorkspaceTool(
+            "지도", "저장한 장소와 날짜별 일정 핀",
+            "지도 열기", if (isPreview) null else onMap
+        ),
+        WorkspaceTool(
+            "경비", if (isPreview) "지출·예산 관리" else "지출 ${expenses.size}건 · 예산 관리",
+            "경비 열기", if (isPreview) null else onExpenses
+        ),
+        WorkspaceTool(
+            "준비물", if (isPreview) "체크리스트 관리" else
+                "준비 완료 ${checklist.count { it.checked }} / ${checklist.size}",
+            "준비물 열기", if (isPreview) null else onChecklist
+        ),
+        WorkspaceTool(
+            "예약 자료", "예약 확인 정보와 문서",
+            "예약 열기", if (isPreview) null else onBookings
+        ),
+        WorkspaceTool(
+            "동행자 정산", "환율과 참가자별 비용",
+            "정산 열기", if (isPreview) null else onSettlement
+        ),
+        WorkspaceTool(
+            "동행자", "로컬 참가자 관리",
+            "동행자 열기", if (isPreview) null else onParticipants
+        ),
+        WorkspaceTool(
+            "저장 장소", "저장한 장소 목록 관리",
+            "저장 장소 관리", if (isPreview) null else onPlaces
+        )
+    )
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)
+    ) {
+        Text(
+            "작업 도구",
+            style = MaterialTheme.typography.titleMedium,
+            color = p.textPrimary
+        )
+        TripAdaptiveContainer(modifier = Modifier.fillMaxWidth()) { width ->
+            if (width == TripWindowWidth.Compact) {
+                Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)) {
+                    tools.forEach { tool ->
+                        WorkspaceToolCard(tool, modifier = Modifier.fillMaxWidth())
+                    }
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)) {
+                    tools.chunked(2).forEach { pair ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(TripSpacing.sm)
+                        ) {
+                            WorkspaceToolCard(pair[0], modifier = Modifier.weight(1f))
+                            if (pair.size == 2) {
+                                WorkspaceToolCard(pair[1], modifier = Modifier.weight(1f))
+                            }
+                        }
+                    }
+                }
             }
+        }
+    }
+}
+
+@Composable
+private fun WorkspaceToolCard(
+    tool: WorkspaceTool,
+    modifier: Modifier = Modifier
+) {
+    val p = TripDesign.palette
+    Surface(
+        onClick = { tool.onOpen?.invoke() },
+        enabled = tool.onOpen != null,
+        modifier = modifier
+            .heightIn(min = TripSizes.minimumTouchTarget)
+            .semantics { contentDescription = tool.actionLabel },
+        shape = RectangleShape,
+        color = p.surface,
+        border = BorderStroke(1.dp, p.outline),
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(
+                horizontal = TripSpacing.md,
+                vertical = TripSpacing.sm
+            ),
+            verticalArrangement = Arrangement.spacedBy(TripSpacing.xxs)
+        ) {
+            Text(
+                tool.title,
+                style = MaterialTheme.typography.titleMedium,
+                color = p.textPrimary
+            )
+            Text(
+                tool.description,
+                style = MaterialTheme.typography.bodySmall,
+                color = p.textSecondary
+            )
         }
     }
 }
