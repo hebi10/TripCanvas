@@ -221,7 +221,7 @@ fun settlementFingerprint(
         ).joinToString("|"))
     }
     shares.sortedWith(compareBy({ it.expenseId }, { it.participantId })).forEach {
-        lines.add(listOf("S", it.expenseId, it.participantId, it.amountMinor, it.baseCurrencyCode).joinToString("|"))
+        lines.add(listOf("S", it.expenseId, it.participantId, it.amountMinor, it.baseCurrencyCode, it.splitMode, it.enteredValue).joinToString("|"))
     }
     val bytes = MessageDigest.getInstance("SHA-256")
         .digest(lines.joinToString("\n").toByteArray(Charsets.UTF_8))

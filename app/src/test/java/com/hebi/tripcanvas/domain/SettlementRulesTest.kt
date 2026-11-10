@@ -86,6 +86,14 @@ class SettlementRulesTest {
         assertFalse(report.fingerprint == settlementFingerprint(
             "KRW", listOf(first, second), listOf(cost.copy(updatedAtMillis = 2L)), shares
         ))
+        assertFalse(report.fingerprint == settlementFingerprint(
+            "KRW", listOf(first, second), listOf(cost),
+            shares.map { it.copy(splitMode = "EQUAL") }
+        ))
+        assertFalse(report.fingerprint == settlementFingerprint(
+            "KRW", listOf(first, second), listOf(cost),
+            shares.map { it.copy(splitMode = "PERCENT", enteredValue = "50") }
+        ))
     }
 
     @Test fun missingRateOrParticipantsNeverCountAsCompletedSettlement() {
