@@ -88,7 +88,7 @@ fun SettingsScreen(
         TripDivider()
         TripSectionHeading(
             title = "데이터 관리",
-            supportingText = "여행·장소·일정·경비·예산·준비물을 파일로 백업하고 복원할 수 있습니다."
+            supportingText = "여행·경비·환율·분담·동행자·예약 자료를 백업합니다. 문서 원본은 제외됩니다."
         )
         TripSecondaryButton(
             label = "로컬 백업·복원",

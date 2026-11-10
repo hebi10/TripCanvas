@@ -25,6 +25,21 @@ interface TripBackupDao {
     @Query("SELECT * FROM checklist_items ORDER BY id")
     suspend fun allChecklist(): List<ChecklistItemEntity>
 
+    @Query("SELECT * FROM trip_participants ORDER BY id")
+    suspend fun allParticipants(): List<TripParticipantEntity>
+
+    @Query("SELECT * FROM expense_shares ORDER BY expenseId, participantId")
+    suspend fun allShares(): List<ExpenseShareEntity>
+
+    @Query("SELECT * FROM trip_settlements ORDER BY tripId")
+    suspend fun allSettlements(): List<TripSettlementEntity>
+
+    @Query("SELECT * FROM bookings ORDER BY id")
+    suspend fun allBookings(): List<BookingEntity>
+
+    @Query("DELETE FROM expense_shares")
+    suspend fun deleteAllShares()
+
     @Query("DELETE FROM trips")
     suspend fun deleteAllTrips()
 
@@ -34,6 +49,10 @@ interface TripBackupDao {
     @Insert suspend fun insertExpenses(items: List<ExpenseEntity>)
     @Insert suspend fun insertBudgets(items: List<TripBudgetEntity>)
     @Insert suspend fun insertChecklist(items: List<ChecklistItemEntity>)
+    @Insert suspend fun insertParticipants(items: List<TripParticipantEntity>)
+    @Insert suspend fun insertShares(items: List<ExpenseShareEntity>)
+    @Insert suspend fun insertSettlements(items: List<TripSettlementEntity>)
+    @Insert suspend fun insertBookings(items: List<BookingEntity>)
 
     @Transaction
     suspend fun snapshot(): TripBackupSnapshot = TripBackupSnapshot(
@@ -42,11 +61,16 @@ interface TripBackupDao {
         itineraries = allItineraries(),
         expenses = allExpenses(),
         budgets = allBudgets(),
-        checklist = allChecklist()
+        checklist = allChecklist(),
+        participants = allParticipants(),
+        shares = allShares(),
+        settlements = allSettlements(),
+        bookings = allBookings()
     )
 
     @Transaction
     suspend fun replaceAll(snapshot: TripBackupSnapshot) {
+        deleteAllShares()
         deleteAllTrips()
         insertTrips(snapshot.trips)
         insertPlaces(snapshot.places)
@@ -54,5 +78,9 @@ interface TripBackupDao {
         insertExpenses(snapshot.expenses)
         insertBudgets(snapshot.budgets)
         insertChecklist(snapshot.checklist)
+        insertParticipants(snapshot.participants)
+        insertShares(snapshot.shares)
+        insertSettlements(snapshot.settlements)
+        insertBookings(snapshot.bookings)
     }
 }

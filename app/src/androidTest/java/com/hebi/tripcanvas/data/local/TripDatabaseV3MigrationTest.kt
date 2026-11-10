@@ -104,7 +104,7 @@ class TripDatabaseV3MigrationTest {
             raw.close()
         }
         val db = Room.databaseBuilder(context, TripDatabase::class.java, dbName)
-            .addMigrations(TripDatabase.MIGRATION_3_4)
+            .addMigrations(TripDatabase.MIGRATION_3_4, TripDatabase.MIGRATION_4_5)
             .build()
         try {
             val original = db.placeDao().findForTrip("t", "p")!!

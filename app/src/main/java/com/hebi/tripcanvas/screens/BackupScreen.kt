@@ -121,7 +121,7 @@ fun BackupScreen(
     TripPageFrame(title = "백업·복원", onBack = { if (!busy) onBack() }) {
         TripSectionHeading(
             title = "로컬 데이터 백업",
-            supportingText = "여행, 저장 장소, 일정, 준비물, 지출, 총예산을 구조화된 JSON 파일로 저장합니다."
+            supportingText = "여행·장소·일정·준비물·경비·예산·동행자·정산·예약 정보를 JSON 파일로 저장합니다."
         )
         TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
             Column(
@@ -167,13 +167,13 @@ fun BackupScreen(
                 verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)
             ) {
                 Text(
-                    "복원을 승인하면 현재 기기의 모든 여행·장소·일정·경비·예산·준비물이 " +
+                    "복원을 승인하면 현재 기기의 여행·장소·일정·경비·예산·준비물·동행자·예약이 " +
                         "백업 파일 내용으로 교체됩니다. 복원 전에 기존 데이터를 내보내세요.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = p.textPrimary
                 )
                 Text(
-                    "현재 로컬 자료 이외의 로그인·테마 설정·첨부파일은 백업에 포함되지 않습니다.",
+                    "앱 테마와 예약 문서 원본 및 파일 URI는 백업에 포함되지 않습니다. 파일은 복원 후 다시 연결해 주세요.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = p.textSecondary
                 )
@@ -210,7 +210,10 @@ fun BackupScreen(
                 "개, 일정 " + snapshot.itineraries.size +
                 "개, 경비 " + snapshot.expenses.size +
                 "개, 예산 " + snapshot.budgets.size +
-                "개, 준비물 " + snapshot.checklist.size + "개.\n\n" +
+                "개, 준비물 " + snapshot.checklist.size +
+                "개, 동행자 " + snapshot.participants.size +
+                "명, 분담 " + snapshot.shares.size +
+                "건, 예약 " + snapshot.bookings.size + "건.\n\n" +
                 "현재 기기의 여행 " + existing.size + "개 및 연결된 데이터를 모두 " +
                 "삭제한 뒤 이 파일로 교체합니다. 기존 백업이 없다면 복구할 수 없습니다. 진행하시겠습니까?",
             confirmLabel = if (busy) "복원 중" else "전체 교체 및 복원",

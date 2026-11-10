@@ -3,7 +3,7 @@ set -euo pipefail
 
 suite="${1:?Missing screenshot suite}"
 evidence_dir="${2:?Missing evidence directory}"
-case "$suite" in qa|qa3a) ;; *) exit 2 ;; esac
+case "$suite" in qa|qa3a|qa3b) ;; *) exit 2 ;; esac
 
 mkdir -p "$evidence_dir/screenshots"
 remote_files=/sdcard/Android/data/com.hebi.tripcanvas/files

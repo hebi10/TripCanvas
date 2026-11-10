@@ -11,6 +11,7 @@ collect_evidence() {
   set +e
   bash "$script_dir/collect-android-screenshots.sh" qa "$evidence_dir"
   bash "$script_dir/collect-android-screenshots.sh" qa3a "$evidence_dir"
+  bash "$script_dir/collect-android-screenshots.sh" qa3b "$evidence_dir"
   adb exec-out run-as com.hebi.tripcanvas tar -cf - databases files/datastore > "$evidence_dir/app-data.tar" 2> "$evidence_dir/app-data-errors.txt"
   adb exec-out screencap -p > "$evidence_dir/final-screen.png" 2> "$evidence_dir/final-screen-errors.txt"
   adb shell uiautomator dump /sdcard/tripcanvas-final-hierarchy.xml > "$evidence_dir/final-hierarchy-dump.txt" 2>&1
@@ -31,9 +32,14 @@ collect_evidence() {
 }
 
 trap collect_evidence EXIT
+selector=()
+if [[ "$#" -eq 0 ]]; then
+  selector+=("-Pandroid.testInstrumentationRunnerArguments.package=com.hebi.tripcanvas.data")
+fi
 set +e
 ./gradlew :app:connectedDebugAndroidTest --stacktrace \
-  -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true "$@" 2>&1 | tee "$evidence_dir/gradle-connected.txt"
+  -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true \
+  "${selector[@]}" "$@" 2>&1 | tee "$evidence_dir/gradle-connected.txt"
 test_status=${PIPESTATUS[0]}
 set -e
 exit "$test_status"

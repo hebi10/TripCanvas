@@ -59,7 +59,10 @@ fun TripWorkspaceScreen(
     checklistRepository: ChecklistRepository? = null,
     expenseRepository: ExpenseRepository? = null,
     onChecklist: () -> Unit = {},
-    onExpenses: () -> Unit = {}
+    onExpenses: () -> Unit = {},
+    onSettlement: () -> Unit = {},
+    onParticipants: () -> Unit = {},
+    onBookings: () -> Unit = {}
 ) {
     var refresh by remember { mutableIntStateOf(0) }
     val flow = remember(repository, tripId, refresh) {
@@ -115,7 +118,8 @@ fun TripWorkspaceScreen(
         when {
             isPreview -> WorkspaceContent(trip = null, isPreview = true, scheduleCount = 0, onSchedule = onSchedule, onPlaces = onPlaces, onMap = onMap,
                 checklist = emptyList(), expenses = emptyList(),
-                onChecklist = onChecklist, onExpenses = onExpenses)
+                onChecklist = onChecklist, onExpenses = onExpenses,
+                onSettlement = onSettlement, onParticipants = onParticipants, onBookings = onBookings)
             state == WorkspaceState.Loading -> TripLoadingState("여행 정보를 불러오는 중")
             state == WorkspaceState.Failed -> TripErrorState(
                 title = "여행 정보를 불러오지 못했습니다",
@@ -128,7 +132,8 @@ fun TripWorkspaceScreen(
             )
             else -> WorkspaceContent(trip = loaded, isPreview = false, scheduleCount = scheduleCount, onSchedule = onSchedule, onPlaces = onPlaces, onMap = onMap,
                 checklist = checklist, expenses = expenses,
-                onChecklist = onChecklist, onExpenses = onExpenses)
+                onChecklist = onChecklist, onExpenses = onExpenses,
+                onSettlement = onSettlement, onParticipants = onParticipants, onBookings = onBookings)
         }
     }
     if (loaded != null && showDelete && repository != null) {
@@ -152,7 +157,10 @@ private fun WorkspaceContent(
     checklist: List<com.hebi.tripcanvas.data.local.ChecklistItemEntity>,
     expenses: List<com.hebi.tripcanvas.data.local.ExpenseEntity>,
     onChecklist: () -> Unit,
-    onExpenses: () -> Unit
+    onExpenses: () -> Unit,
+    onSettlement: () -> Unit,
+    onParticipants: () -> Unit,
+    onBookings: () -> Unit
 ) {
     val p = TripDesign.palette
     TripStatusTag(label = if (isPreview) "화면 미리보기" else requireNotNull(trip).phase().label)
@@ -183,6 +191,18 @@ private fun WorkspaceContent(
         if (width == TripWindowWidth.Compact) {
             Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.md)) {
                 WorkspacePanel(
+                    "예약 자료", "예약 확인 정보 및 문서 연결",
+                    if (isPreview) null else onBookings, "예약 열기"
+                )
+                WorkspacePanel(
+                    "동행자 정산", "지출별 환율과 참가자별 비용",
+                    if (isPreview) null else onSettlement, "정산 열기"
+                )
+                WorkspacePanel(
+                    "동행자", "로컬 참가자 이름 관리",
+                    if (isPreview) null else onParticipants, "동행자 열기"
+                )
+                WorkspacePanel(
                     "지도", "저장한 장소와 날짜별 일정 핀",
                     if (isPreview) null else onMap, "지도 열기"
                 )
@@ -211,6 +231,18 @@ private fun WorkspaceContent(
                 horizontalArrangement = Arrangement.spacedBy(TripSpacing.md)
             ) {
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TripSpacing.md)) {
+                    WorkspacePanel(
+                        "예약 자료", "예약 확인 정보 및 문서 연결",
+                        if (isPreview) null else onBookings, "예약 열기"
+                    )
+                    WorkspacePanel(
+                        "동행자 정산", "지출별 환율과 참가자별 비용",
+                        if (isPreview) null else onSettlement, "정산 열기"
+                    )
+                    WorkspacePanel(
+                        "동행자", "로컬 참가자 이름 관리",
+                        if (isPreview) null else onParticipants, "동행자 열기"
+                    )
                     WorkspacePanel(
                         "지도", "저장한 장소와 날짜별 일정 핀",
                         if (isPreview) null else onMap, "지도 열기"

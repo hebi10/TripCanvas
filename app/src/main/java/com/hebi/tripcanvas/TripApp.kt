@@ -25,6 +25,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.hebi.tripcanvas.data.ChecklistRepository
 import com.hebi.tripcanvas.data.ExpenseRepository
+import com.hebi.tripcanvas.data.TripFinanceRepository
+import com.hebi.tripcanvas.data.BookingRepository
 import com.hebi.tripcanvas.data.ItineraryRepository
 import com.hebi.tripcanvas.data.PlaceRepository
 import com.hebi.tripcanvas.data.TripRepository
@@ -43,6 +45,11 @@ import com.hebi.tripcanvas.screens.BackupScreen
 import com.hebi.tripcanvas.screens.ChecklistScreen
 import com.hebi.tripcanvas.screens.ExpenseFormScreen
 import com.hebi.tripcanvas.screens.ExpenseListScreen
+import com.hebi.tripcanvas.screens.ExpenseSplitScreen
+import com.hebi.tripcanvas.screens.TripSettlementScreen
+import com.hebi.tripcanvas.screens.TripParticipantsScreen
+import com.hebi.tripcanvas.screens.TripBookingsScreen
+import com.hebi.tripcanvas.screens.BookingFormScreen
 import com.hebi.tripcanvas.screens.HomeScreen
 import com.hebi.tripcanvas.screens.PlaceFormScreen
 import com.hebi.tripcanvas.screens.PlaceListScreen
@@ -85,6 +92,12 @@ fun TripApp(onThemeResolved: (Boolean) -> Unit) {
         ExpenseRepository(
             tripDatabase.expenseDao(), tripDatabase.tripDao(), tripDatabase.placeDao()
         )
+    }
+    val tripFinanceRepository = remember(tripDatabase) {
+        TripFinanceRepository(tripDatabase.financeDao(), tripDatabase.expenseDao())
+    }
+    val bookingRepository = remember(tripDatabase) {
+        BookingRepository(tripDatabase.bookingDao(), tripDatabase.tripDao())
     }
     val photonPlaceSearch = remember { PhotonPlaceSearch() }
     val checklistRepository = remember(tripDatabase) {
@@ -300,6 +313,15 @@ fun TripApp(onThemeResolved: (Boolean) -> Unit) {
                                     if (tripId != null) {
                                         navController.navigate(TripDestinations.expenses(tripId))
                                     }
+                                },
+                                onSettlement = {
+                                    if (tripId != null) navController.navigate(TripDestinations.settlement(tripId))
+                                },
+                                onParticipants = {
+                                    if (tripId != null) navController.navigate(TripDestinations.participants(tripId))
+                                },
+                                onBookings = {
+                                    if (tripId != null) navController.navigate(TripDestinations.bookings(tripId))
                                 }
                             )
                         }
@@ -338,6 +360,15 @@ fun TripApp(onThemeResolved: (Boolean) -> Unit) {
                                 },
                                 onEdit = { expenseId ->
                                     navController.navigate(TripDestinations.editExpense(tripId, expenseId))
+                                },
+                                onSplit = { id ->
+                                    navController.navigate(TripDestinations.expenseSplit(tripId, id))
+                                },
+                                onSettlement = {
+                                    navController.navigate(TripDestinations.settlement(tripId))
+                                },
+                                onParticipants = {
+                                    navController.navigate(TripDestinations.participants(tripId))
                                 }
                             )
                         }
@@ -371,6 +402,106 @@ fun TripApp(onThemeResolved: (Boolean) -> Unit) {
                                 trips = tripRepository,
                                 repository = expenseRepository,
                                 places = placeRepository,
+                                onBack = { navController.popBackStack() },
+                                onSaved = { navController.popBackStack() }
+                            )
+                        }
+                        composable(
+                            route = TripDestinations.ParticipantsRoute,
+                            arguments = listOf(navArgument("tripId") { type = NavType.StringType })
+                        ) { entry ->
+                            val tripId = requireNotNull(entry.arguments?.getString("tripId"))
+                            TripParticipantsScreen(
+                                tripId = tripId,
+                                repository = tripFinanceRepository,
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+                        composable(
+                            route = TripDestinations.SettlementRoute,
+                            arguments = listOf(navArgument("tripId") { type = NavType.StringType })
+                        ) { entry ->
+                            val tripId = requireNotNull(entry.arguments?.getString("tripId"))
+                            TripSettlementScreen(
+                                tripId = tripId,
+                                trips = tripRepository,
+                                expenses = expenseRepository,
+                                finance = tripFinanceRepository,
+                                onBack = { navController.popBackStack() },
+                                onParticipants = {
+                                    navController.navigate(TripDestinations.participants(tripId))
+                                },
+                                onExpenseSplit = { id ->
+                                    navController.navigate(TripDestinations.expenseSplit(tripId, id))
+                                }
+                            )
+                        }
+                        composable(
+                            route = TripDestinations.ExpenseSplitRoute,
+                            arguments = listOf(
+                                navArgument("tripId") { type = NavType.StringType },
+                                navArgument("expenseId") { type = NavType.StringType }
+                            )
+                        ) { entry ->
+                            val tripId = requireNotNull(entry.arguments?.getString("tripId"))
+                            val expenseId = requireNotNull(entry.arguments?.getString("expenseId"))
+                            ExpenseSplitScreen(
+                                tripId = tripId,
+                                expenseId = expenseId,
+                                trips = tripRepository,
+                                expenses = expenseRepository,
+                                finance = tripFinanceRepository,
+                                onBack = { navController.popBackStack() },
+                                onSaved = { navController.popBackStack() },
+                                onParticipants = {
+                                    navController.navigate(TripDestinations.participants(tripId))
+                                }
+                            )
+                        }
+                        composable(
+                            route = TripDestinations.BookingsRoute,
+                            arguments = listOf(navArgument("tripId") { type = NavType.StringType })
+                        ) { entry ->
+                            val tripId = requireNotNull(entry.arguments?.getString("tripId"))
+                            TripBookingsScreen(
+                                tripId = tripId, repository = bookingRepository,
+                                onBack = { navController.popBackStack() },
+                                onCreate = {
+                                    navController.navigate(TripDestinations.newBooking(tripId))
+                                },
+                                onEdit = { id ->
+                                    navController.navigate(TripDestinations.editBooking(tripId, id))
+                                }
+                            )
+                        }
+                        composable(
+                            route = TripDestinations.NewBookingRoute,
+                            arguments = listOf(navArgument("tripId") { type = NavType.StringType })
+                        ) { entry ->
+                            val tripId = requireNotNull(entry.arguments?.getString("tripId"))
+                            BookingFormScreen(
+                                tripId = tripId, bookingId = null,
+                                repository = bookingRepository,
+                                onBack = { navController.popBackStack() },
+                                onSaved = { id ->
+                                    navController.navigate(TripDestinations.editBooking(tripId, id)) {
+                                        popUpTo(TripDestinations.NewBookingRoute) { inclusive = true }
+                                    }
+                                }
+                            )
+                        }
+                        composable(
+                            route = TripDestinations.EditBookingRoute,
+                            arguments = listOf(
+                                navArgument("tripId") { type = NavType.StringType },
+                                navArgument("bookingId") { type = NavType.StringType }
+                            )
+                        ) { entry ->
+                            val tripId = requireNotNull(entry.arguments?.getString("tripId"))
+                            val bookingId = requireNotNull(entry.arguments?.getString("bookingId"))
+                            BookingFormScreen(
+                                tripId = tripId, bookingId = bookingId,
+                                repository = bookingRepository,
                                 onBack = { navController.popBackStack() },
                                 onSaved = { navController.popBackStack() }
                             )

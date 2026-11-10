@@ -235,13 +235,27 @@ class TripCanvas2CScreenshotTest {
         return false
     }
 
+    private fun dismissSystemAnr() {
+        val popup = device.findObject(By.textContains("isn't responding"))
+            ?: device.findObject(By.textContains("응답하지"))
+            ?: return
+        val close = device.findObject(By.text("Close app"))
+            ?: device.findObject(By.text("앱 닫기"))
+        if (close != null) close.click() else device.pressBack()
+        device.waitForIdle()
+        Thread.sleep(400)
+    }
+
     private fun awaitText(text: String) {
+        dismissSystemAnr()
         if (device.wait(Until.hasObject(By.text(text)), 5000)) return
         repeat(6) {
+            dismissSystemAnr()
             swipeUp()
             if (device.wait(Until.hasObject(By.text(text)), 1200)) return
         }
         repeat(6) {
+            dismissSystemAnr()
             swipeDown()
             if (device.wait(Until.hasObject(By.text(text)), 1200)) return
         }
@@ -284,7 +298,11 @@ class TripCanvas2CScreenshotTest {
         Thread.sleep(500)
         val node: UiObject2 = device.findObject(By.text(text))
             ?: throw AssertionError("클릭 대상 없음: $text")
-        node.click()
+        var clickable = node
+        while (!clickable.isClickable) {
+            clickable = clickable.parent ?: break
+        }
+        clickable.click()
         device.waitForIdle()
         Thread.sleep(400)
     }

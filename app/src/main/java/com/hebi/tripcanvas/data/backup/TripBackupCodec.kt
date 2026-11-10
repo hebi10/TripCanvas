@@ -1,5 +1,12 @@
 package com.hebi.tripcanvas.data.backup
 
+import com.hebi.tripcanvas.data.local.BookingEntity
+import com.hebi.tripcanvas.data.local.TripParticipantEntity
+import com.hebi.tripcanvas.data.local.ExpenseShareEntity
+import com.hebi.tripcanvas.data.local.TripSettlementEntity
+import com.hebi.tripcanvas.data.BookingType
+import com.hebi.tripcanvas.domain.convertedMinor
+import com.hebi.tripcanvas.domain.validateExchangeRate
 import com.hebi.tripcanvas.data.local.ChecklistItemEntity
 import com.hebi.tripcanvas.data.local.ExpenseEntity
 import com.hebi.tripcanvas.data.local.ItineraryItemEntity
@@ -20,7 +27,7 @@ import org.json.JSONObject
 
 object TripBackupCodec {
     const val FORMAT = "tripcanvas-structured-backup"
-    const val VERSION = 2
+    const val VERSION = 3
     const val MAX_BYTES = 10 * 1024 * 1024
     private const val MAX_ROWS = 100_000
 
@@ -74,6 +81,11 @@ object TripBackupCodec {
                     .put("placeId", it.placeId ?: JSONObject.NULL)
                     .put("createdAtMillis", it.createdAtMillis)
                     .put("updatedAtMillis", it.updatedAtMillis)
+                    .put("payerParticipantId", it.payerParticipantId ?: JSONObject.NULL)
+                    .put("baseCurrencyCode", it.baseCurrencyCode ?: JSONObject.NULL)
+                    .put("rateToBaseDecimal", it.rateToBaseDecimal ?: JSONObject.NULL)
+                    .put("rateDate", it.rateDate ?: JSONObject.NULL)
+                    .put("rateSource", it.rateSource ?: JSONObject.NULL)
             })
             .put("budgets", array(snapshot.budgets) {
                 JSONObject().put("tripId", it.tripId)
@@ -86,6 +98,29 @@ object TripBackupCodec {
                     .put("id", it.id).put("tripId", it.tripId)
                     .put("title", it.title).put("checked", it.checked)
                     .put("position", it.position)
+                    .put("createdAtMillis", it.createdAtMillis)
+                    .put("updatedAtMillis", it.updatedAtMillis)
+            })
+            .put("participants", array(snapshot.participants) {
+                JSONObject().put("id", it.id).put("tripId", it.tripId)
+                    .put("displayName", it.displayName)
+                    .put("createdAtMillis", it.createdAtMillis)
+                    .put("updatedAtMillis", it.updatedAtMillis)
+            })
+            .put("shares", array(snapshot.shares) {
+                JSONObject().put("expenseId", it.expenseId).put("participantId", it.participantId)
+                    .put("amountMinor", it.amountMinor).put("baseCurrencyCode", it.baseCurrencyCode)
+                    .put("splitMode", it.splitMode).put("enteredValue", it.enteredValue)
+            })
+            .put("settlements", array(snapshot.settlements) {
+                JSONObject().put("tripId", it.tripId).put("fingerprint", it.fingerprint)
+                    .put("confirmedAtMillis", it.confirmedAtMillis)
+            })
+            .put("bookings", array(snapshot.bookings) {
+                JSONObject().put("id", it.id).put("tripId", it.tripId)
+                    .put("type", it.type).put("title", it.title)
+                    .put("startAtLocal", it.startAtLocal ?: JSONObject.NULL)
+                    .put("referenceNumber", it.referenceNumber).put("note", it.note)
                     .put("createdAtMillis", it.createdAtMillis)
                     .put("updatedAtMillis", it.updatedAtMillis)
             })
@@ -145,7 +180,12 @@ object TripBackupCodec {
                     category = it.getString("category"), note = it.getString("note"),
                     placeId = it.nullableString("placeId"),
                     createdAtMillis = it.getLong("createdAtMillis"),
-                    updatedAtMillis = it.getLong("updatedAtMillis")
+                    updatedAtMillis = it.getLong("updatedAtMillis"),
+                    payerParticipantId = it.nullableString("payerParticipantId"),
+                    baseCurrencyCode = it.nullableString("baseCurrencyCode"),
+                    rateToBaseDecimal = it.nullableString("rateToBaseDecimal"),
+                    rateDate = it.nullableString("rateDate"),
+                    rateSource = it.nullableString("rateSource")
                 )
             },
             budgets = parse(json, "budgets") {
@@ -164,6 +204,42 @@ object TripBackupCodec {
                     createdAtMillis = it.getLong("createdAtMillis"),
                     updatedAtMillis = it.getLong("updatedAtMillis")
                 )
+            },
+            participants = parseExtension(json, "participants") {
+                TripParticipantEntity(
+                    id = it.getString("id"), tripId = it.getString("tripId"),
+                    displayName = it.getString("displayName"),
+                    createdAtMillis = it.getLong("createdAtMillis"),
+                    updatedAtMillis = it.getLong("updatedAtMillis")
+                )
+            },
+            shares = parseExtension(json, "shares") {
+                ExpenseShareEntity(
+                    expenseId = it.getString("expenseId"),
+                    participantId = it.getString("participantId"),
+                    amountMinor = it.getLong("amountMinor"),
+                    baseCurrencyCode = it.getString("baseCurrencyCode"),
+                    splitMode = it.optString("splitMode", "AMOUNT"),
+                    enteredValue = it.optString("enteredValue", "")
+                )
+            },
+            settlements = parseExtension(json, "settlements") {
+                TripSettlementEntity(
+                    tripId = it.getString("tripId"),
+                    fingerprint = it.getString("fingerprint"),
+                    confirmedAtMillis = it.getLong("confirmedAtMillis")
+                )
+            },
+            bookings = parseExtension(json, "bookings") {
+                BookingEntity(
+                    id = it.getString("id"), tripId = it.getString("tripId"),
+                    type = it.getString("type"), title = it.getString("title"),
+                    startAtLocal = it.nullableString("startAtLocal"),
+                    referenceNumber = it.getString("referenceNumber"),
+                    note = it.getString("note"),
+                    createdAtMillis = it.getLong("createdAtMillis"),
+                    updatedAtMillis = it.getLong("updatedAtMillis")
+                )
             }
         )
         validate(snapshot)
@@ -178,6 +254,10 @@ object TripBackupCodec {
         requireUnique(snapshot.expenses.map { it.id })
         requireUnique(snapshot.checklist.map { it.id })
         requireUnique(snapshot.budgets.map { it.tripId })
+        requireUnique(snapshot.participants.map { it.id })
+        requireUnique(snapshot.bookings.map { it.id })
+        requireUnique(snapshot.settlements.map { it.tripId })
+        requireUnique(snapshot.shares.map { it.expenseId + "/" + it.participantId })
 
         val trips = snapshot.trips.associateBy { it.id }
         for (trip in snapshot.trips) {
@@ -211,6 +291,11 @@ object TripBackupCodec {
             val place = item.placeId?.let { places[it] }
             require(item.placeId == null || place?.tripId == item.tripId) { "Foreign place link" }
         }
+        val participants = snapshot.participants.associateBy { it.id }
+        for (participant in snapshot.participants) {
+            require(validId(participant.id) && trips.containsKey(participant.tripId))
+            require(participant.displayName.trim().length in 1..80)
+        }
         for (expense in snapshot.expenses) {
             require(validId(expense.id) && trips.containsKey(expense.tripId)) { "Invalid expense owner" }
             require(ExpenseCategory.entries.any { it.name == expense.category }) { "Invalid category" }
@@ -221,6 +306,61 @@ object TripBackupCodec {
             }
             val place = expense.placeId?.let { places[it] }
             require(expense.placeId == null || place?.tripId == expense.tripId) { "Foreign expense place" }
+            val payer = expense.payerParticipantId?.let { participants[it] }
+            require(expense.payerParticipantId == null || payer?.tripId == expense.tripId) {
+                "Foreign payer"
+            }
+            val base = trips.getValue(expense.tripId).currencyCode
+            require(expense.baseCurrencyCode == null || expense.baseCurrencyCode == base) {
+                "Foreign base currency"
+            }
+            val anyRateData = expense.rateToBaseDecimal != null ||
+                expense.rateDate != null || expense.rateSource != null
+            if (anyRateData) {
+                require(expense.currencyCode != base) { "Same currency must not have an FX rate" }
+                require(expense.baseCurrencyCode == base && expense.rateToBaseDecimal != null &&
+                    expense.rateDate != null && expense.rateSource == "사용자 입력")
+                validateExchangeRate(expense.rateToBaseDecimal, expense.rateDate)
+            }
+        }
+        val expenses = snapshot.expenses.associateBy { it.id }
+        for (share in snapshot.shares) {
+            val expense = requireNotNull(expenses[share.expenseId]) { "Unknown share expense" }
+            val participant = requireNotNull(participants[share.participantId]) {
+                "Unknown share participant"
+            }
+            require(participant.tripId == expense.tripId &&
+                share.baseCurrencyCode == trips.getValue(expense.tripId).currencyCode &&
+                share.amountMinor >= 0L &&
+                share.splitMode in setOf("EQUAL", "AMOUNT", "PERCENT") &&
+                share.enteredValue.length <= 32) { "Invalid share" }
+        }
+        snapshot.shares.groupBy { it.expenseId }.forEach { (id, rows) ->
+            val expense = requireNotNull(expenses[id])
+            val base = trips.getValue(expense.tripId).currencyCode
+            val total = requireNotNull(convertedMinor(expense, base, expense.rateToBaseDecimal)) {
+                "Unconverted expense share"
+            }
+            require(rows.map { it.splitMode }.distinct().size == 1) {
+                "Mixed split modes for one expense"
+            }
+            val actual = rows.fold(0L) { totalRows, row -> Math.addExact(totalRows, row.amountMinor) }
+            require(actual == total && expense.payerParticipantId != null) {
+                "Share sum does not match the converted expense"
+            }
+        }
+        for (settlement in snapshot.settlements) {
+            require(trips.containsKey(settlement.tripId) &&
+                settlement.fingerprint.matches(Regex("[a-f0-9]{64}")) &&
+                settlement.confirmedAtMillis >= 0L)
+        }
+        for (booking in snapshot.bookings) {
+            require(validId(booking.id) && trips.containsKey(booking.tripId))
+            require(BookingType.entries.any { it.name == booking.type })
+            require(booking.title.trim().length in 1..100 &&
+                booking.referenceNumber.length <= 180 && booking.note.length <= 2000)
+            require(booking.startAtLocal == null ||
+                runCatching { LocalDateTime.parse(booking.startAtLocal) }.isSuccess)
         }
         for (budget in snapshot.budgets) {
             require(trips.containsKey(budget.tripId)) { "Invalid budget owner" }
@@ -248,6 +388,10 @@ object TripBackupCodec {
 
     private fun <T> array(values: List<T>, convert: (T) -> JSONObject): JSONArray =
         JSONArray().apply { values.forEach { put(convert(it)) } }
+
+    private fun <T> parseExtension(
+        json: JSONObject, key: String, convert: (JSONObject) -> T
+    ): List<T> = if (json.getInt("version") < 3) emptyList() else parse(json, key, convert)
 
     private fun <T> parse(json: JSONObject, key: String, convert: (JSONObject) -> T): List<T> {
         val array = json.getJSONArray(key)

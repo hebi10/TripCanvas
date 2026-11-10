@@ -40,16 +40,25 @@ class ExpenseRepository(
             ))
             return id
         }
-        if (dao.update(previous.copy(
+        val financialValueChanged =
+            previous.amountDecimal != valid.amountDecimal || previous.currencyCode != valid.currencyCode
+        val updated = previous.copy(
                 amountDecimal = valid.amountDecimal,
                 currencyCode = valid.currencyCode,
                 occurredAtLocal = valid.occurredAtLocal,
                 category = valid.category,
                 note = valid.note,
                 placeId = valid.placeId,
-                updatedAtMillis = now
-            )) != 1
-        ) throw NoSuchElementException("Expense was removed")
+                updatedAtMillis = now,
+                payerParticipantId = if (financialValueChanged) null else previous.payerParticipantId,
+                baseCurrencyCode = if (financialValueChanged) null else previous.baseCurrencyCode,
+                rateToBaseDecimal = if (financialValueChanged) null else previous.rateToBaseDecimal,
+                rateDate = if (financialValueChanged) null else previous.rateDate,
+                rateSource = if (financialValueChanged) null else previous.rateSource
+            )
+        val affected = if (financialValueChanged) dao.updateAndResetAllocation(updated)
+            else dao.update(updated)
+        if (affected != 1) throw NoSuchElementException("Expense was removed")
         return previous.id
     }
 

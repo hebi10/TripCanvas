@@ -97,8 +97,12 @@ fun calculateExpenseTotals(
     val other = linkedMapOf<String, BigDecimal>()
     for (expense in expenses) {
         val amount = BigDecimal(expense.amountDecimal)
-        if (expense.currencyCode == baseCurrency) {
-            spent = spent.add(amount)
+        val converted = com.hebi.tripcanvas.domain.convertedMinor(
+            expense, baseCurrency, expense.rateToBaseDecimal
+        )
+        if (converted != null) {
+            val digits = requireNotNull(validCurrency(baseCurrency)).defaultFractionDigits
+            spent = spent.add(BigDecimal.valueOf(converted, digits))
         } else {
             other[expense.currencyCode] =
                 (other[expense.currencyCode] ?: BigDecimal.ZERO).add(amount)

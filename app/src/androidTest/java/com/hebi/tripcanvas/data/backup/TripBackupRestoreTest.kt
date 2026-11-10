@@ -4,6 +4,10 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import android.content.Context
+import com.hebi.tripcanvas.data.local.BookingEntity
+import com.hebi.tripcanvas.data.local.TripParticipantEntity
+import com.hebi.tripcanvas.data.local.ExpenseShareEntity
+import com.hebi.tripcanvas.data.local.TripSettlementEntity
 import com.hebi.tripcanvas.data.local.ChecklistItemEntity
 import com.hebi.tripcanvas.data.local.ExpenseEntity
 import com.hebi.tripcanvas.data.local.ItineraryItemEntity
@@ -132,6 +136,59 @@ class TripBackupRestoreTest {
             places = sourced.places.map { it.copy(providerPlaceId = null) }
         )
         assertTrue(runCatching { TripBackupCodec.validate(broken) }.isFailure)
+    }
+
+    @Test
+    fun versionThreeBackupRestoresParticipantsBookingsAndExactShares() = runBlocking {
+        val base = sample()
+        val expense = base.expenses.single().copy(
+            payerParticipantId = "p1",
+            baseCurrencyCode = "KRW",
+            rateToBaseDecimal = "1320",
+            rateDate = "2026-11-10",
+            rateSource = "사용자 입력"
+        )
+        val upgraded = base.copy(
+            expenses = listOf(expense),
+            participants = listOf(
+                TripParticipantEntity("p1", "trip", "유진", 1, 1),
+                TripParticipantEntity("p2", "trip", "도영", 1, 1)
+            ),
+            shares = listOf(
+                ExpenseShareEntity("expense", "p1", 8250L, "KRW"),
+                ExpenseShareEntity("expense", "p2", 8250L, "KRW")
+            ),
+            bookings = listOf(BookingEntity(
+                "book1", "trip", "LODGING", "숙소 예약", "2026-11-11T14:00",
+                "PRIVATE-REFERENCE", "예약 확인", 1, 1
+            ))
+        )
+        val encoded = TripBackupCodec.encode(upgraded)
+        val db = Room.inMemoryDatabaseBuilder(context, TripDatabase::class.java).build()
+        try {
+            db.backupDao().replaceAll(TripBackupCodec.decode(encoded))
+            assertEquals(upgraded, db.backupDao().snapshot())
+            assertEquals("PRIVATE-REFERENCE", db.bookingDao().find("trip", "book1")?.referenceNumber)
+        } finally { db.close() }
+        val damaged = upgraded.copy(shares = listOf(
+            ExpenseShareEntity("expense", "p1", 8251L, "KRW"),
+            ExpenseShareEntity("expense", "p2", 8250L, "KRW")
+        ))
+        assertTrue(runCatching { TripBackupCodec.validate(damaged) }.isFailure)
+    }
+
+    @Test
+    fun legacyVersionTwoBackupStillParsesWithoutNewFinancialArrays() {
+        val before = sample()
+        val json = JSONObject(TripBackupCodec.encode(before))
+            .put("version", 2)
+        listOf("participants", "shares", "settlements", "bookings").forEach { json.remove(it) }
+        val expense = json.getJSONArray("expenses").getJSONObject(0)
+        listOf(
+            "payerParticipantId", "baseCurrencyCode", "rateToBaseDecimal",
+            "rateDate", "rateSource"
+        ).forEach { expense.remove(it) }
+        assertEquals(before, TripBackupCodec.decode(json.toString()))
     }
 
     private fun sample(): TripBackupSnapshot {
