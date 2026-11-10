@@ -15,6 +15,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.LineBreak
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.hebi.tripcanvas.designsystem.theme.TripDesign
 import com.hebi.tripcanvas.designsystem.tokens.TripSpacing
@@ -33,8 +35,14 @@ fun TripEmptyState(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)
     ) {
-        Text(title, style = MaterialTheme.typography.titleMedium, color = p.textPrimary)
-        Text(description, style = MaterialTheme.typography.bodyMedium, color = p.textSecondary)
+        Text(
+            title,
+            style = MaterialTheme.typography.titleMedium.copy(lineBreak = LineBreak.Heading),
+            color = p.textPrimary,
+            textAlign = TextAlign.Center
+        )
+        Text(description, style = MaterialTheme.typography.bodyMedium, color = p.textSecondary,
+            textAlign = TextAlign.Center)
         if (actionLabel != null && onAction != null) {
             TripPrimaryButton(label = actionLabel, onClick = onAction)
         }

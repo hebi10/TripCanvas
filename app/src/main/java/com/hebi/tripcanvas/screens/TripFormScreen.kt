@@ -5,8 +5,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DisplayMode
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -23,6 +26,9 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
 import com.hebi.tripcanvas.data.TripPeriodConflictException
 import com.hebi.tripcanvas.data.TripRepository
 import com.hebi.tripcanvas.data.local.TripEntity
@@ -339,31 +345,59 @@ fun TripDateField(
         }
     }
     if (showPicker) {
+        val widthDp = LocalConfiguration.current.screenWidthDp
+        val compactInput = widthDp < 360 || widthDp / LocalDensity.current.fontScale < 320
         val initialMillis = runCatching {
             LocalDate.parse(date).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
         }.getOrNull()
         val state = androidx.compose.material3.rememberDatePickerState(
-            initialSelectedDateMillis = initialMillis
+            initialSelectedDateMillis = initialMillis,
+            initialDisplayMode = if (compactInput) DisplayMode.Input else DisplayMode.Picker
         )
-        DatePickerDialog(
-            onDismissRequest = { showPicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    state.selectedDateMillis?.let { selectedMillis ->
-                        val value = Instant.ofEpochMilli(selectedMillis)
-                            .atZone(ZoneOffset.UTC).toLocalDate().toString()
-                        onDateSelected(value)
-                    }
-                    showPicker = false
-                }) {
-                    Text("확인")
+        LaunchedEffect(compactInput) {
+            if (compactInput) state.displayMode = DisplayMode.Input
+        }
+        val dismiss = { showPicker = false }
+        val confirmButton: @Composable () -> Unit = {
+            TextButton(enabled = state.selectedDateMillis != null, onClick = {
+                state.selectedDateMillis?.let { selectedMillis ->
+                    val value = Instant.ofEpochMilli(selectedMillis)
+                        .atZone(ZoneOffset.UTC).toLocalDate().toString()
+                    onDateSelected(value)
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = { showPicker = false }) { Text("취소") }
+                showPicker = false
+            }) {
+                Text("확인")
             }
-        ) {
-            DatePicker(state = state)
+        }
+        val dismissButton: @Composable () -> Unit = {
+            TextButton(onClick = dismiss) { Text("취소") }
+        }
+        if (compactInput) {
+            AlertDialog(
+                modifier = Modifier.widthIn(max = widthDp.dp - TripSpacing.md * 2),
+                onDismissRequest = dismiss,
+                title = { Text(label) },
+                text = {
+                    DatePicker(
+                        state = state,
+                        modifier = Modifier.fillMaxWidth(),
+                        title = null,
+                        headline = null,
+                        showModeToggle = false
+                    )
+                },
+                confirmButton = confirmButton,
+                dismissButton = dismissButton
+            )
+        } else {
+            DatePickerDialog(
+                onDismissRequest = dismiss,
+                confirmButton = confirmButton,
+                dismissButton = dismissButton
+            ) {
+                DatePicker(state = state)
+            }
         }
     }
 }

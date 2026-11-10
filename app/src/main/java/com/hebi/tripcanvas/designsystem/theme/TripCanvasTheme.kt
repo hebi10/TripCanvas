@@ -46,7 +46,16 @@ fun TripCanvasTheme(
             onSurface = palette.textPrimary,
             surfaceVariant = palette.surfaceSubtle,
             onSurfaceVariant = palette.textSecondary,
+            surfaceDim = palette.surfaceSubtle,
+            surfaceBright = palette.surface,
+            surfaceContainerLowest = palette.background,
+            surfaceContainerLow = palette.surface,
+            surfaceContainer = palette.surfaceSubtle,
+            surfaceContainerHigh = palette.surfaceSubtle,
+            surfaceContainerHighest = palette.surfaceSubtle,
+            surfaceTint = palette.primaryAction,
             outline = palette.outline,
+            outlineVariant = palette.outline,
             error = palette.error,
             onError = palette.background
         )
@@ -64,7 +73,16 @@ fun TripCanvasTheme(
             onSurface = palette.textPrimary,
             surfaceVariant = palette.surfaceSubtle,
             onSurfaceVariant = palette.textSecondary,
+            surfaceDim = palette.surfaceSubtle,
+            surfaceBright = palette.surface,
+            surfaceContainerLowest = palette.background,
+            surfaceContainerLow = palette.surface,
+            surfaceContainer = palette.surfaceSubtle,
+            surfaceContainerHigh = palette.surfaceSubtle,
+            surfaceContainerHighest = palette.surfaceSubtle,
+            surfaceTint = palette.primaryAction,
             outline = palette.outline,
+            outlineVariant = palette.outline,
             error = palette.error,
             onError = palette.background
         )

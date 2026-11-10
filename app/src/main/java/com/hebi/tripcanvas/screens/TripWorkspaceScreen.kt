@@ -3,10 +3,12 @@ package com.hebi.tripcanvas.screens
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -227,13 +229,13 @@ private fun WorkspaceHeader(trip: TripEntity?, isPreview: Boolean) {
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
     ) {
-        Row(
+        FlowRow(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.Top,
-            horizontalArrangement = Arrangement.spacedBy(TripSpacing.sm)
+            horizontalArrangement = Arrangement.spacedBy(TripSpacing.sm),
+            verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)
         ) {
             Column(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).widthIn(min = 240.dp),
                 verticalArrangement = Arrangement.spacedBy(TripSpacing.xxs)
             ) {
                 Text(
