@@ -1,6 +1,7 @@
 package com.hebi.tripcanvas.designsystem.components
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.material3.Button
@@ -15,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.hebi.tripcanvas.designsystem.theme.TripDesign
 import com.hebi.tripcanvas.designsystem.tokens.TripSizes
+import com.hebi.tripcanvas.designsystem.tokens.TripSpacing
 
 @Composable
 fun TripPrimaryButton(
@@ -29,6 +31,7 @@ fun TripPrimaryButton(
         modifier = modifier.heightIn(min = TripSizes.minimumTouchTarget),
         enabled = enabled,
         shape = RectangleShape,
+        contentPadding = PaddingValues(horizontal = TripSpacing.md, vertical = TripSpacing.sm),
         colors = ButtonDefaults.buttonColors(
             containerColor = p.primaryAction,
             contentColor = p.onPrimaryAction,
@@ -54,6 +57,7 @@ fun TripSecondaryButton(
         enabled = enabled,
         shape = RectangleShape,
         border = BorderStroke(1.dp, p.outline),
+        contentPadding = PaddingValues(horizontal = TripSpacing.md, vertical = TripSpacing.sm),
         colors = ButtonDefaults.outlinedButtonColors(
             contentColor = p.textPrimary,
             disabledContentColor = p.textSecondary
