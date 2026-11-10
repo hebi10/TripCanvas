@@ -75,6 +75,25 @@ class NativeTests(unittest.TestCase):
             with self.assertRaises(native.AlignmentError):
                 native.elf_load_alignments(elf(alignment))
 
+    def test_32bit_elf_accepts_4kb_loads_and_rejects_invalid_alignment(self):
+        for big_endian in (False, True):
+            self.assertEqual(native.elf_load_alignments(elf(4096, bits=32, big_endian=big_endian)), [4096])
+        for alignment in (0, 2048, 6144):
+            with self.assertRaises(native.AlignmentError):
+                native.elf_load_alignments(elf(alignment, bits=32))
+
+    def test_archive_keeps_32bit_libraries_in_native_inventory(self):
+        with tempfile.NamedTemporaryFile(suffix='.aab') as file:
+            with zipfile.ZipFile(file.name, 'w') as archive:
+                archive.writestr('base/lib/armeabi-v7a/libmaplibre.so', elf(4096, bits=32))
+                archive.writestr('base/lib/x86/libmaplibre.so', elf(4096, bits=32))
+                archive.writestr('base/lib/arm64-v8a/libmaplibre.so', elf())
+            libraries = native.inspect_archive(file.name)
+        self.assertEqual(len(libraries), 3)
+        self.assertEqual(libraries[0]['loadAlignments'], [4096])
+        self.assertEqual(libraries[1]['loadAlignments'], [4096])
+        self.assertEqual(libraries[2]['loadAlignments'], [16384])
+
     def test_truncated_or_wrong_native_library_fails(self):
         for raw in (b'not-ELF', elf()[:70], elf(loads=0)):
             with self.assertRaises(native.AlignmentError):
@@ -132,3 +151,4 @@ class NativeTests(unittest.TestCase):
                 archive.writestr('lib/arm64-v8a/libtest.so', b'broken')
             with self.assertRaises(native.AlignmentError):
                 native.verify(bundle, apk, 'bundletool.jar', 'zipalign', allow_no_native=True)
+
