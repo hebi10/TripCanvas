@@ -53,8 +53,8 @@ class PromotionDiagnosticsTests(unittest.TestCase):
             argv = ['publisher.py', '--report', str(report), 'promote', '--version-code', '3', '--track', 'alpha']
             stdout, stderr = io.StringIO(), io.StringIO()
             with mock.patch.dict(os.environ, {'PLAY_ACCESS_TOKEN': 'secret-token',
-                                               'PLAY_CONSOLE_INITIALIZED': 'true'}), \\
-                 mock.patch.object(publisher, 'HttpTransport', return_value=request), \\
+                                               'PLAY_CONSOLE_INITIALIZED': 'true'}), \
+                 mock.patch.object(publisher, 'HttpTransport', return_value=request), \
                  mock.patch('sys.argv', argv), contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
                 self.assertEqual(publisher.main(), 1)
             result = json.loads(report.read_text(encoding='utf-8'))
@@ -80,8 +80,8 @@ class PromotionDiagnosticsTests(unittest.TestCase):
             report = Path(directory) / 'report.json'
             args = ['publisher.py', '--report', str(report), 'promote', '--version-code', '3']
             with mock.patch.dict(os.environ, {'PLAY_ACCESS_TOKEN': 'secret-token',
-                                               'PLAY_CONSOLE_INITIALIZED': 'true'}), \\
-                 mock.patch.object(publisher, 'HttpTransport', return_value=request), \\
+                                               'PLAY_CONSOLE_INITIALIZED': 'true'}), \
+                 mock.patch.object(publisher, 'HttpTransport', return_value=request), \
                  mock.patch('sys.argv', args), contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(publisher.main(), 1)
             data = json.loads(report.read_text(encoding='utf-8'))
