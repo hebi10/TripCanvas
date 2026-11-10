@@ -142,13 +142,27 @@ class TripCanvas3BScreenTest {
         SystemClock.sleep(300)
     }
 
+    private fun dismissSystemAnr() {
+        val popup = device.findObject(By.textContains("isn't responding"))
+            ?: device.findObject(By.textContains("응답하지"))
+            ?: return
+        val close = device.findObject(By.text("Close app"))
+            ?: device.findObject(By.text("앱 닫기"))
+        if (close != null) close.click() else device.pressBack()
+        device.waitForIdle()
+        SystemClock.sleep(400)
+    }
+
     private fun awaitText(text: String) {
+        dismissSystemAnr()
         if (device.wait(Until.hasObject(By.text(text)), 8000)) return
         repeat(7) {
+            dismissSystemAnr()
             swipeUp()
             if (device.wait(Until.hasObject(By.text(text)), 1100)) return
         }
         repeat(7) {
+            dismissSystemAnr()
             swipeDown()
             if (device.wait(Until.hasObject(By.text(text)), 1100)) return
         }
