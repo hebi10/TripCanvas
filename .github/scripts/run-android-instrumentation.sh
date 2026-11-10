@@ -32,11 +32,14 @@ collect_evidence() {
 }
 
 trap collect_evidence EXIT
+selector=()
+if [[ "$#" -eq 0 ]]; then
+  selector+=("-Pandroid.testInstrumentationRunnerArguments.package=com.hebi.tripcanvas.data")
+fi
 set +e
 ./gradlew :app:connectedDebugAndroidTest --stacktrace \
   -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true \
-  -Pandroid.testInstrumentationRunnerArguments.package=com.hebi.tripcanvas.data \
-  "$@" 2>&1 | tee "$evidence_dir/gradle-connected.txt"
+  "${selector[@]}" "$@" 2>&1 | tee "$evidence_dir/gradle-connected.txt"
 test_status=${PIPESTATUS[0]}
 set -e
 exit "$test_status"
