@@ -226,7 +226,7 @@ private fun TripListCard(
                         onClick = { showMenu = true },
                         modifier = Modifier
                             .size(TripSizes.minimumTouchTarget)
-                            .semantics { contentDescription = "${trip.title} 여행 메뉴" }
+                            .semantics { contentDescription = "${trip.title} 메뉴" }
                     ) {
                         Icon(
                             imageVector = TripIcons.MoreVert,
