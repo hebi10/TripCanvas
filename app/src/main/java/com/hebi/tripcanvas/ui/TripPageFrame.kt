@@ -52,58 +52,58 @@ fun TripPageFrame(
                 TripSizes.expandedGutter
             }
             Column(modifier = Modifier.fillMaxSize()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 56.dp)
-                    .padding(horizontal = horizontalGutter),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs)
-            ) {
-                if (onBack != null) {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = TripIcons.Back,
-                            contentDescription = "뒤로",
-                            tint = palette.textPrimary
-                        )
-                    }
-                }
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleLarge,
-                    color = palette.textPrimary,
-                    modifier = Modifier.weight(1f),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                trailingActions()
-            }
-            TripDivider()
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.TopCenter
-            ) {
-                Column(
+                Row(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(
-                            horizontal = horizontalGutter,
-                            vertical = TripSpacing.lg
-                        ),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                        .fillMaxWidth()
+                        .heightIn(min = 56.dp)
+                        .padding(horizontal = horizontalGutter),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs)
+                ) {
+                    if (onBack != null) {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                imageVector = TripIcons.Back,
+                                contentDescription = "뒤로",
+                                tint = palette.textPrimary
+                            )
+                        }
+                    }
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleLarge,
+                        color = palette.textPrimary,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    trailingActions()
+                }
+                TripDivider()
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.TopCenter
                 ) {
                     Column(
                         modifier = Modifier
-                            .widthIn(max = TripSizes.maximumContentWidth)
-                            .fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(TripSpacing.lg),
-                        content = content
-                    )
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(
+                                horizontal = horizontalGutter,
+                                vertical = TripSpacing.lg
+                            ),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .widthIn(max = TripSizes.maximumContentWidth)
+                                .fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(TripSpacing.lg),
+                            content = content
+                        )
+                    }
                 }
             }
-        }
         }
     }
 }
