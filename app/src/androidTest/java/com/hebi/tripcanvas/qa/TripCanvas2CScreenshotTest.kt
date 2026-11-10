@@ -134,6 +134,8 @@ class TripCanvas2CScreenshotTest {
             awaitText("저장 장소 관리")
             capture("02c-workspace-tools-last-light")
             awaitText("일정 열기")
+            swipeUp()
+            awaitText("일정 열기")
             click("일정 열기")
             awaitText("여행 일정")
             capture("02d-workspace-schedule-route")
