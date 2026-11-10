@@ -132,10 +132,13 @@ class TripCanvas3BScreenTest {
         }
     }
 
+    private fun uiSelector(text: String) =
+        if (text.endsWith(" 열기") || text == "저장 장소 관리") By.desc(text) else By.text(text)
+
     private fun click(text: String) {
         awaitText(text)
         SystemClock.sleep(300)
-        val node = device.findObject(By.text(text))
+        val node = device.findObject(uiSelector(text))
             ?: throw AssertionError("Missing click target: " + text)
         var target = node
         while (!target.isClickable) {
@@ -159,16 +162,16 @@ class TripCanvas3BScreenTest {
 
     private fun awaitText(text: String) {
         dismissSystemAnr()
-        if (device.wait(Until.hasObject(By.text(text)), 8000)) return
+        if (device.wait(Until.hasObject(uiSelector(text)), 8000)) return
         repeat(7) {
             dismissSystemAnr()
             swipeUp()
-            if (device.wait(Until.hasObject(By.text(text)), 1100)) return
+            if (device.wait(Until.hasObject(uiSelector(text)), 1100)) return
         }
         repeat(7) {
             dismissSystemAnr()
             swipeDown()
-            if (device.wait(Until.hasObject(By.text(text)), 1100)) return
+            if (device.wait(Until.hasObject(uiSelector(text)), 1100)) return
         }
         capture("99-failure")
         device.dumpWindowHierarchy(File(output(), "99-hierarchy.xml"))
