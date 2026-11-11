@@ -44,7 +44,7 @@ fun SettingsScreen(
     ) {
         TripSectionHeading(
             title = "화면 모드",
-            supportingText = "선택한 테마는 이 기기에 저장되며 앱을 다시 실행해도 유지됩니다."
+            supportingText = "라이트·다크·시스템 설정 중 하나를 선택합니다. 저장된 설정은 앱 재실행 후에도 유지됩니다."
         )
         FlowRow(
             modifier = Modifier.fillMaxWidth(),
@@ -76,11 +76,11 @@ fun SettingsScreen(
         TripDivider()
         TripSectionHeading(
             title = "여행 기본값",
-            supportingText = "여행 생성 시 기기 시간대와 기본 통화를 제안하며, 여행별로 수정할 수 있습니다."
+            supportingText = "새 여행 생성 시 기기 시간대와 기본 통화를 제안합니다."
         )
         TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
             Text(
-                text = "새 여행 화면에서 여행별 통화와 현지 시간대를 변경할 수 있습니다.",
+                text = "현재 여행의 시간대·기준 통화는 해당 여행 편집 화면에서 변경할 수 있습니다.",
                 modifier = Modifier.padding(TripSpacing.md),
                 style = MaterialTheme.typography.bodyMedium,
                 color = p.textSecondary
@@ -89,17 +89,26 @@ fun SettingsScreen(
         TripDivider()
         TripSectionHeading(
             title = "데이터 관리",
-            supportingText = "여행·경비·환율·분담·동행자·예약 자료를 백업합니다. 문서 원본은 제외됩니다."
+            supportingText = "기기의 여행 데이터를 JSON 파일로 내보내거나 검증한 파일로 전체 복원합니다."
         )
         TripSecondaryButton(
             label = "로컬 백업·복원",
             onClick = onOpenBackup,
             modifier = Modifier.fillMaxWidth()
         )
-        Text(
-            "백업 파일은 암호화되지 않으므로 안전한 위치에 보관해야 합니다.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = p.textSecondary
+        TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                "백업은 암호화되지 않습니다. 예약 확인번호·메모 등 개인정보가 포함될 수 있고 " +
+                    "PDF·이미지 원본과 접근 URI는 제외됩니다.",
+                modifier = Modifier.padding(TripSpacing.md),
+                style = MaterialTheme.typography.bodyMedium,
+                color = p.textSecondary
+            )
+        }
+        TripDivider()
+        TripSectionHeading(
+            title = "개인정보·앱 정보",
+            supportingText = "개인정보처리방침은 외부 브라우저에서 확인할 수 있습니다."
         )
         TripSecondaryButton(
             label = "개인정보처리방침",
@@ -115,7 +124,7 @@ fun SettingsScreen(
         TripDivider()
         TripSectionHeading(
             title = "화면 검수",
-            supportingText = "개발 단계의 디자인을 확인하는 미리보기입니다. 실제 여행 데이터는 생성되지 않습니다."
+            supportingText = "개발용 화면 미리보기입니다. 실제 여행 데이터는 생성·변경하지 않습니다."
         )
         Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)) {
             TripSecondaryButton(
