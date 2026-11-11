@@ -119,7 +119,7 @@ class TripCanvas2CScreenshotTest {
             awaitText("여행 기본 정보")
             awaitText("여행 기간·목적지")
             capture("01c-home-edit-from-menu")
-            click("시작일 * 2026-11-20")
+            click("시작일 *  2026-11-20")
             awaitText("취소")
             capture("01c1-home-edit-date-picker")
             click("취소")
