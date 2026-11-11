@@ -29,7 +29,9 @@ jobs:
           expected=5fc89e73137c7e80ce694b808c4d480f06457452
           actual="$(gh api repos/hebi10/TripCanvas/git/ref/heads/main --jq .object.sha)"
           test "$actual" = "$expected"
-          test "$(git rev-parse HEAD^)" = "$expected"
+          git fetch -q origin "$expected" --depth=5
+          git merge-base --is-ancestor "$expected" HEAD
+          test "$(git diff --name-only "$expected" HEAD)" = ".github/workflows/ui-r09-store-assets-import-once.yml"
           gh api repos/hebi10/TripCanvas/actions/runs/43001755572 --jq '"\(.head_sha) \(.conclusion)"' | grep -Fx "$expected success"
           gh api repos/hebi10/TripCanvas/actions/artifacts/13846763210 --jq .digest | grep -Fx 'sha256:760c1d4f416576e54bd60df32b8e000e202d8424cdf34c689b6b6fd0a2591c52'
       - name: Download real Android screenshot review artifact
@@ -84,7 +86,7 @@ jobs:
           git add -- assets/play-store/ko-KR/manifest.json assets/play-store/ko-KR/0*.png
           python3 - <<'PY'
           import subprocess
-          actual=subprocess.check_output(['git','diff','--cached','--name-only'],text=True).splitlines()
+          actual=subprocess.check_output(['git','diff','--cached','--name-only','5fc89e73137c7e80ce694b808c4d480f06457452'],text=True).splitlines()
           expected=[f'assets/play-store/ko-KR/{p}' for p in ['01-home.png','02-workspace.png','03-schedule.png','04-map.png','05-checklist.png','06-expenses.png','07-settlement.png','08-bookings.png','manifest.json']]
           if sorted(actual)!=sorted(expected):
               raise SystemExit(f'Image-only diff rejected: {actual!r}')
