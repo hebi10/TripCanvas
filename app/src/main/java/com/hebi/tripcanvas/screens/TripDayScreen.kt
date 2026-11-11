@@ -1,7 +1,9 @@
 package com.hebi.tripcanvas.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -9,7 +11,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -23,9 +30,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -45,12 +56,16 @@ import com.hebi.tripcanvas.designsystem.components.TripSectionHeading
 import com.hebi.tripcanvas.designsystem.components.TripStatusTag
 import com.hebi.tripcanvas.designsystem.components.TripStatusTone
 import com.hebi.tripcanvas.designsystem.components.TripSurfacePanel
+import com.hebi.tripcanvas.designsystem.icons.TripIcons
 import com.hebi.tripcanvas.designsystem.theme.TripDesign
+import com.hebi.tripcanvas.designsystem.tokens.TripSizes
 import com.hebi.tripcanvas.designsystem.tokens.TripSpacing
 import com.hebi.tripcanvas.domain.scheduleOverlaps
 import com.hebi.tripcanvas.ui.TripPageFrame
 import java.time.Instant
 import java.time.LocalDate
+import java.time.format.TextStyle
+import java.util.Locale
 import java.time.ZoneId
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
@@ -143,39 +158,23 @@ fun TripDayScreen(
                 supportingText = current.startDate + " ~ " + current.endDate +
                     " · " + current.timeZoneId
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
-                TripSecondaryButton(
-                    label = "이전 날짜",
-                    enabled = selected != null && selected.isAfter(start),
-                    onClick = {
-                        selectedDate = selected!!.minusDays(1).toString()
-                    }
-                )
-                TripSecondaryButton(
-                    label = "다음 날짜",
-                    enabled = selected != null && selected.isBefore(end),
-                    onClick = {
-                        selectedDate = selected!!.plusDays(1).toString()
-                    }
-                )
-            }
             if (selected != null) {
-                val dates = (-2L..2L).map { selected.plusDays(it) }
-                    .filter { !it.isBefore(start) && !it.isAfter(end) }
+                Text("날짜 선택", style = MaterialTheme.typography.titleMedium, color = p.textPrimary)
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs),
                     verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
                 ) {
-                    dates.forEach { date ->
+                    visibleScheduleDates(start, end, selected).forEach { date ->
                         TripChoiceChip(
-                            label = date.monthValue.toString() + "/" + date.dayOfMonth,
+                            label = "${date.monthValue}/${date.dayOfMonth} " +
+                                date.dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.KOREAN),
                             selected = date == selected,
                             onClick = { selectedDate = date.toString() }
                         )
                     }
                 }
                 TripDateField(
-                    label = "날짜 바로 이동",
+                    label = "다른 날짜 선택",
                     date = selectedDate,
                     error = null,
                     onDateSelected = { chosen ->
@@ -195,6 +194,12 @@ fun TripDayScreen(
                     onRetry = { failedAction = false }
                 )
             }
+            TripPrimaryButton(
+                label = "일정 추가",
+                onClick = { onAdd(selectedDate) },
+                enabled = selectedDate.isNotBlank(),
+                modifier = Modifier.fillMaxWidth()
+            )
             when (val result = state) {
                 DayState.Loading -> TripLoadingState("선택 날짜의 일정을 불러오는 중")
                 DayState.Failed -> TripErrorState(
@@ -209,22 +214,22 @@ fun TripDayScreen(
                         TripEmptyState(
                             title = "이 날짜에는 일정이 없습니다",
                             description = "일정을 추가하거나 다른 날짜를 선택해 주세요.",
-                            actionLabel = "일정 추가",
-                            onAction = { onAdd(selectedDate) }
+                            actionLabel = null
                         )
                     } else {
-                        TripSectionHeading(
-                            title = "시간 지정 일정",
-                            supportingText = "길게 누른 이동 핸들을 끌거나 위/아래 버튼으로 순서를 저장할 수 있습니다."
-                        )
-                        if (timed.isEmpty()) {
-                            Text("시간을 지정한 일정이 없습니다.", color = p.textSecondary)
+                        if (timed.isNotEmpty()) {
+                            TripSectionHeading(
+                                title = "시간 지정 일정",
+                                supportingText = "손잡이를 길게 끌거나 일정 메뉴에서 순서를 변경할 수 있습니다."
+                            )
                         }
-                        timed.forEach { item ->
+                        timed.forEachIndexed { index, item ->
                             ScheduleRow(
                                 item = item,
                                 placeName = item.placeId?.let(placeNames::get),
                                 disabled = busy,
+                                canMoveUp = index > 0,
+                                canMoveDown = index < timed.lastIndex,
                                 hasConflict = result.items.any { other ->
                                     other.id != item.id && scheduleOverlaps(
                                         item.startTime, item.endTime,
@@ -269,18 +274,16 @@ fun TripDayScreen(
                                 }
                             )
                         }
-                        TripSectionHeading(
-                            title = "시간 미정",
-                            supportingText = "시간 없이 추가한 일정은 별도로 표시됩니다."
-                        )
-                        if (untimed.isEmpty()) {
-                            Text("시간 미정 일정이 없습니다.", color = p.textSecondary)
+                        if (untimed.isNotEmpty()) {
+                            TripSectionHeading(title = "시간 미정")
                         }
-                        untimed.forEach { item ->
+                        untimed.forEachIndexed { index, item ->
                             ScheduleRow(
                                 item = item,
                                 placeName = item.placeId?.let(placeNames::get),
                                 disabled = busy,
+                                canMoveUp = index > 0,
+                                canMoveDown = index < untimed.lastIndex,
                                 hasConflict = result.items.any { other ->
                                     other.id != item.id && scheduleOverlaps(
                                         item.startTime, item.endTime,
@@ -328,12 +331,6 @@ fun TripDayScreen(
                     }
                 }
             }
-            TripPrimaryButton(
-                label = "일정 추가",
-                onClick = { onAdd(selectedDate) },
-                enabled = selectedDate.isNotBlank(),
-                modifier = Modifier.fillMaxWidth()
-            )
             TripSecondaryButton(
                 label = "지도에서 보기",
                 onClick = { onMap(selectedDate.ifBlank { "all" }) },
@@ -379,6 +376,8 @@ private fun ScheduleRow(
     item: ItineraryItemEntity,
     placeName: String?,
     disabled: Boolean,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
     hasConflict: Boolean,
     onEdit: () -> Unit,
     onDuplicate: () -> Unit,
@@ -388,9 +387,11 @@ private fun ScheduleRow(
     val p = TripDesign.palette
     var dragY by remember(item.id) { mutableFloatStateOf(0f) }
     var heightPx by remember(item.id) { mutableIntStateOf(1) }
+    var showMenu by remember(item.id) { mutableStateOf(false) }
     val dragHandle = Modifier
-        .width(48.dp)
-        .heightIn(min = 48.dp)
+        .width(TripSizes.minimumTouchTarget)
+        .heightIn(min = TripSizes.minimumTouchTarget)
+        .semantics { contentDescription = "${item.title} 순서 이동 핸들" }
         .pointerInput(item.id, disabled) {
             if (!disabled) {
                 detectDragGesturesAfterLongPress(
@@ -417,20 +418,87 @@ private fun ScheduleRow(
             modifier = Modifier.padding(TripSpacing.md),
             verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs)
+            ) {
                 Text("≡", modifier = dragHandle, style = MaterialTheme.typography.headlineSmall, color = p.textSecondary)
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(TripSpacing.xxs)
+                ) {
                     Text(
                         item.startTime?.let { it + " ~ " + item.endTime } ?: "시간 미정",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = p.textSecondary
+                        style = MaterialTheme.typography.labelLarge,
+                        color = p.textPrimary
                     )
-                    Text(item.title, style = MaterialTheme.typography.titleMedium, color = p.textPrimary)
+                    Text(
+                        item.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = p.textPrimary,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
                     if (placeName != null) {
-                        Text(placeName, style = MaterialTheme.typography.bodyMedium, color = p.textSecondary)
+                        Text(
+                            placeName,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = p.textSecondary,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                     if (item.note.isNotBlank()) {
-                        Text(item.note.take(120), style = MaterialTheme.typography.bodyMedium, color = p.textSecondary)
+                        Text(
+                            item.note,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = p.textSecondary,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                Box {
+                    IconButton(
+                        onClick = { showMenu = true },
+                        enabled = !disabled,
+                        modifier = Modifier
+                            .size(TripSizes.minimumTouchTarget)
+                            .semantics { contentDescription = "${item.title} 일정 메뉴" }
+                    ) {
+                        Icon(imageVector = TripIcons.MoreVert, contentDescription = null, tint = p.textPrimary)
+                    }
+                    DropdownMenu(
+                        expanded = showMenu && !disabled,
+                        onDismissRequest = { showMenu = false },
+                        containerColor = p.surface,
+                        tonalElevation = 0.dp,
+                        shadowElevation = 0.dp,
+                        border = BorderStroke(1.dp, p.outline)
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("수정") },
+                            onClick = { showMenu = false; onEdit() }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("복제") },
+                            onClick = { showMenu = false; onDuplicate() }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("위로") },
+                            enabled = canMoveUp,
+                            onClick = { showMenu = false; onMove(-1) }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("아래로") },
+                            enabled = canMoveDown,
+                            onClick = { showMenu = false; onMove(1) }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("삭제", color = p.error) },
+                            onClick = { showMenu = false; onDelete() }
+                        )
                     }
                 }
             }
@@ -441,12 +509,20 @@ private fun ScheduleRow(
                 if (hasConflict) TripStatusTag("시간 겹침", TripStatusTone.Warning)
                 if (item.important) TripStatusTag("중요")
                 if (item.confirmed) TripStatusTag("확정")
-                TripSecondaryButton(label = "수정", onClick = onEdit, enabled = !disabled)
-                TripSecondaryButton(label = "복제", onClick = onDuplicate, enabled = !disabled)
-                TripSecondaryButton(label = "위로", onClick = { onMove(-1) }, enabled = !disabled)
-                TripSecondaryButton(label = "아래로", onClick = { onMove(1) }, enabled = !disabled)
-                TripSecondaryButton(label = "삭제", onClick = onDelete, enabled = !disabled)
             }
         }
     }
+}
+
+internal fun visibleScheduleDates(
+    start: LocalDate,
+    end: LocalDate,
+    selected: LocalDate
+): List<LocalDate> {
+    if (start.isAfter(end) || selected.isBefore(start) || selected.isAfter(end)) {
+        return emptyList()
+    }
+    return (-2L..2L)
+        .map { selected.plusDays(it) }
+        .filter { !it.isBefore(start) && !it.isAfter(end) }
 }
