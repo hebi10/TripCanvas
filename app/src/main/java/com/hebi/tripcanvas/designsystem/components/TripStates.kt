@@ -65,7 +65,8 @@ fun TripErrorState(
     title: String,
     description: String,
     onRetry: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    actionLabel: String = "다시 시도"
 ) {
     val p = TripDesign.palette
     Column(
@@ -78,7 +79,7 @@ fun TripErrorState(
         Text(title, style = MaterialTheme.typography.titleMedium, color = p.error)
         Text(description, style = MaterialTheme.typography.bodyMedium, color = p.textSecondary)
         if (onRetry != null) {
-            TripSecondaryButton(label = "다시 시도", onClick = onRetry)
+            TripSecondaryButton(label = actionLabel, onClick = onRetry)
         }
     }
 }
