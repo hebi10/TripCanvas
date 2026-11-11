@@ -312,6 +312,20 @@ class TripCanvas2CScreenshotTest {
                 database.tripDao().findById("qa-trip") != null
             })
             capture("14-backup-cancelled")
+            click("백업 파일 선택 및 검증")
+            val importPickerOpened = (0 until 25).any {
+                if (device.currentPackageName != "com.hebi.tripcanvas") true
+                else { Thread.sleep(300); false }
+            }
+            assertTrue("Android import document picker did not become foreground", importPickerOpened)
+            capture("14a-backup-import-picker")
+            device.pressBack()
+            awaitText("백업·복원")
+            awaitText("파일 선택을 취소했습니다. 기존 여행 데이터는 변경되지 않았습니다.")
+            assertTrue("백업 선택 취소 후 기존 여행이 유지되어야 합니다.", runBlocking {
+                database.tripDao().findById("qa-trip") != null
+            })
+            capture("14b-backup-import-cancelled")
             device.pressBack()
             awaitText("설정")
             device.pressBack()
