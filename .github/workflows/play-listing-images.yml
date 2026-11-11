@@ -8,11 +8,12 @@ on:
       - 'scripts/play/verify_listing_assets.py'
       - 'scripts/play/tests/test_listing_images.py'
       - '.github/workflows/play-listing-images.yml'
-  # STORE-03 user-authorized one-time main merge. All later changes use manual dispatch.
+  # STORE-03 initial merge and a single guarded diagnostic retry; otherwise manual dispatch.
   push:
     branches: [main]
     paths:
       - 'assets/play-store/ko-KR/**'
+      - 'scripts/play/listing_images.py'
       - '.github/workflows/play-listing-images.yml'
   workflow_dispatch:
     inputs:
@@ -53,7 +54,9 @@ jobs:
     if: >-
       github.repository == 'hebi10/TripCanvas' && github.ref == 'refs/heads/main' &&
       ((github.event_name == 'workflow_dispatch' && inputs.mode == 'upload') ||
-       (github.event_name == 'push' && contains(github.event.head_commit.message, '[tripcanvas-store03-listing-once]')))
+       (github.event_name == 'push' &&
+        (contains(github.event.head_commit.message, '[tripcanvas-store03-listing-once]') ||
+         contains(github.event.head_commit.message, '[tripcanvas-store03-retry-once]'))))
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment: google-play
@@ -69,7 +72,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git show -s --format=%s HEAD)" = "store: TripCanvas STORE-03 Korean listing [tripcanvas-store03-listing-once]"
+          subject="$(git show -s --format=%s HEAD)"
+          if [[ "$subject" != 'store: TripCanvas STORE-03 Korean listing [tripcanvas-store03-listing-once]' &&
+                "$subject" != 'fix: TripCanvas STORE-03 safe Play retry [tripcanvas-store03-retry-once]' ]]; then
+            echo 'Unapproved Play listing push blocked'
+            exit 1
+          fi
       - name: Refuse a stale main revision before changing Play
         env:
           GH_TOKEN: ${{ github.token }}
