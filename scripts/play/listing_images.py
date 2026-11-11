@@ -43,6 +43,22 @@ class ListingError(RuntimeError):
     pass
 
 
+REVIEW_HOLD_FORBIDDEN = 'CHANGES_NOT_SENT_FOR_REVIEW_FORBIDDEN'
+CHANGES_ALREADY_IN_REVIEW = 'CHANGES_ALREADY_IN_REVIEW'
+REVIEW_HOLD_FORBIDDEN_MESSAGE = (
+    'Changes are sent for review automatically. '
+    'The query parameter changesNotSentForReview must not be set.'
+)
+
+
+class PlayApiError(ListingError):
+    def __init__(self, stage: str, http_status: int, safe_reason: str | None = None):
+        self.http_status = http_status
+        self.safe_reason = safe_reason
+        suffix = f'; {safe_reason}' if safe_reason else ''
+        super().__init__(f'Google Play {stage} failed (HTTP {http_status}{suffix})')
+
+
 def validate_assets(directory: Path = ASSETS) -> dict[str, dict]:
     manifest = json.loads((directory / 'manifest.json').read_text(encoding='utf-8'))
     if manifest.get('package') != PACKAGE or manifest.get('store_locale') != LOCALE:
@@ -99,8 +115,27 @@ class PlayClient:
                 content = response.read()
                 return json.loads(content) if content else {}
         except urllib.error.HTTPError as error:
-            # Never report the original server body: it may contain account or edit metadata.
-            raise ListingError(f'Google Play {stage} failed (HTTP {error.code})') from None
+            # Permit only documented, non-sensitive Google error reasons in CI logs.
+            safe_reason = None
+            try:
+                body = error.read(65537)
+                if len(body) <= 65536 and error.code == 400:
+                    response = json.loads(body)
+                    details = response.get('error', {}) if isinstance(response, dict) else {}
+                    if isinstance(details, dict):
+                        if details.get('message') == REVIEW_HOLD_FORBIDDEN_MESSAGE:
+                            safe_reason = REVIEW_HOLD_FORBIDDEN
+                        elif any(
+                            isinstance(item, dict) and item.get('reason') == CHANGES_ALREADY_IN_REVIEW
+                            for item in details.get('details', [])
+                            if isinstance(details.get('details'), list)
+                        ):
+                            safe_reason = CHANGES_ALREADY_IN_REVIEW
+            except (OSError, ValueError, TypeError, AttributeError):
+                pass
+            finally:
+                error.close()
+            raise PlayApiError(stage, error.code, safe_reason) from None
         except (urllib.error.URLError, TimeoutError, ValueError):
             raise ListingError(f'Google Play {stage} could not be completed') from None
 
@@ -149,9 +184,17 @@ def submit(client: PlayClient, assets: dict) -> str:
                     raise ListingError('Play API upload did not return an image id')
         require_snapshot(client, edit_id, assets, 'uncommitted_edit')
         client.request('POST', f'/edits/{edit_id}:validate', {}, stage='edit_validate')
-        # Do not cancel an existing Google review or implicitly submit changes for review.
-        client.request('POST', f'/edits/{edit_id}:commit?changesNotSentForReview=true&changesInReviewBehavior=ERROR_IF_IN_REVIEW',
-                       {}, stage='edit_commit')
+        # Never cancel a review. Some Play apps reject the optional review-hold
+        # parameter; only retry for that exact response, preserving ERROR_IF_IN_REVIEW.
+        try:
+            client.request('POST',
+                           f'/edits/{edit_id}:commit?changesNotSentForReview=true&changesInReviewBehavior=ERROR_IF_IN_REVIEW',
+                           {}, stage='edit_commit')
+        except PlayApiError as error:
+            if error.http_status != 400 or error.safe_reason != REVIEW_HOLD_FORBIDDEN:
+                raise
+            client.request('POST', f'/edits/{edit_id}:commit?changesInReviewBehavior=ERROR_IF_IN_REVIEW',
+                           {}, stage='edit_commit_without_review_hold')
         committed = True
     finally:
         if not committed:
@@ -183,9 +226,12 @@ def main() -> int:
             if event_name == 'push':
                 subject = subprocess.run(['git', 'show', '-s', '--format=%s', 'HEAD'],
                                          capture_output=True, text=True, check=False)
-                if (subject.returncode or subject.stdout.strip() !=
-                    'store: TripCanvas STORE-03 Korean listing [tripcanvas-store03-listing-once]'):
-                    raise ListingError('Automatic upload is restricted to the authorized STORE-03 merge')
+                allowed = {
+                    'store: TripCanvas STORE-03 Korean listing [tripcanvas-store03-listing-once]',
+                    'fix: TripCanvas STORE-03 safe Play retry [tripcanvas-store03-retry-once]',
+                }
+                if subject.returncode or subject.stdout.strip() not in allowed:
+                    raise ListingError('Automatic upload is restricted to the authorized STORE-03 merges')
             elif event_name != 'workflow_dispatch':
                 raise ListingError('Image upload requires manual dispatch or the authorized STORE-03 merge')
             print(submit(PlayClient(os.environ.get('PLAY_ACCESS_TOKEN', '')), assets))
