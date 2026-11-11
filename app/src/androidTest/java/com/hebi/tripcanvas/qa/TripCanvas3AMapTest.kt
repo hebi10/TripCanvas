@@ -43,9 +43,9 @@ class TripCanvas3AMapTest {
                 TripBackupSnapshot(
                     trips = listOf(
                         TripEntity(
-                            "qa3a", "QA 제주 여행 3A", "2026-11-10", "2026-11-12",
+                            "qa3a", "제주 장소 여행", "2026-11-10", "2026-11-12",
                             "대한민국", "제주", "Asia/Seoul", "KRW",
-                            "", "지도와 일정 연결 자동 검수", 1L, 1L
+                            "", "가고 싶은 장소와 일정을 정리", 1L, 1L
                         )
                     ),
                     places = listOf(
@@ -72,9 +72,9 @@ class TripCanvas3AMapTest {
         }
         try {
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-                awaitText("QA 제주 여행 3A")
+                awaitText("제주 장소 여행")
                 capture("01-home-light")
-                click("QA 제주 여행 3A")
+                click("제주 장소 여행")
                 awaitText("지도 열기")
                 capture("02-workspace-light")
                 click("지도 열기")

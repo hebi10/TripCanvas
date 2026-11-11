@@ -63,6 +63,35 @@ def verify_ci(sha, run, jobs):
         raise SourceError('All required Android build and instrumentation jobs must succeed')
 
 
+LISTING_ONLY_FILES = {
+    '.github/workflows/play-listing-images.yml',
+    'scripts/play/listing_images.py',
+    'scripts/play/verify_listing_assets.py',
+    'scripts/play/tests/test_listing_images.py',
+    'scripts/play/tests/test_listing_assets.py',
+}
+
+
+def is_store_listing_only(paths):
+    return bool(paths) and all(
+        path.startswith('assets/play-store/ko-KR/')
+        or path.startswith('docs/play-store/')
+        or path in LISTING_ONLY_FILES
+        for path in paths
+    )
+
+
+def changed_main_paths(sha):
+    # Compare the first parent so normal commits and merge commits use the same boundary.
+    process = subprocess.run(
+        ['git', 'diff', '--name-only', f'{sha}^1', sha, '--'],
+        capture_output=True, check=False, text=True,
+    )
+    if process.returncode:
+        raise SourceError('Could not validate changed files before Play release')
+    return [line for line in process.stdout.splitlines() if line]
+
+
 def gh(path):
     result = subprocess.run(['gh', 'api', path], capture_output=True, check=False, text=True)
     if result.returncode:
@@ -101,6 +130,9 @@ def main():
         if subject.returncode:
             raise SourceError('Could not inspect the trusted release commit subject')
         mode = release_mode(os.environ, event, subject.stdout)
+        if mode == 'deploy' and os.environ.get('GITHUB_EVENT_NAME') == 'workflow_run':
+            if is_store_listing_only(changed_main_paths(sha)):
+                mode = 'skip'
         with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
             output.write(f'sha={sha}\nverify_run_id={run["id"]}\nrelease_mode={mode}\n')
         print(f'Trusted main source {sha}; required CI run {run["id"]} passed')

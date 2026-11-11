@@ -1,0 +1,132 @@
+{
+  "app": "TripCanvas",
+  "package": "com.hebi.tripcanvas",
+  "version_basis": "0.1.0 (versionCode 3; Android UI build TripCanvas STORE-02 commit f41633fe89bde6124c18d0e11a37a534a0bdde4d)",
+  "created_date": "2026-11-11",
+  "store_locale": "ko-KR",
+  "design": "neutral monochrome editorial, no gradient, no shadow, no rounded frames",
+  "source_note": "The eight real Android screenshots are taken from successful 2026-11-11 GitHub CI runs for commit f41633f. Travel titles changed in Android QA fixtures before capture. Only the outside framing and captions are added. Screenshot internals remain unchanged.",
+  "release_note": "The creation of these files does not mean that Google Play API updates or app tracks have been modified.",
+  "files": [
+    {
+      "order": 0,
+      "name": "store-icon-512.png",
+      "size_bytes": 30613,
+      "sha256": "b523661643cf21c629ff1b405ae2f2bef792069c827c72a2b6d0b7492ec70ec2",
+      "pixels": [
+        512,
+        512
+      ],
+      "mode": "RGBA",
+      "source": "Verified STORE-01 store icon 512 PNG; unchanged source"
+    },
+    {
+      "order": 1,
+      "name": "feature-graphic-1024x500.png",
+      "size_bytes": 45513,
+      "sha256": "83b0a12521a7b561a83ae84389a450263d79a848001abab793d72366519ca8cc",
+      "pixels": [
+        1024,
+        500
+      ],
+      "mode": "RGB",
+      "source": "Verified STORE-01 feature graphic 1024x500 PNG; unchanged source"
+    },
+    {
+      "order": 2,
+      "name": "01-home.png",
+      "size_bytes": 141549,
+      "sha256": "32ec99567149b7b678656942c0047697ba0b9d995d67ff1f51e18a3c9576af68",
+      "pixels": [
+        1350,
+        2400
+      ],
+      "mode": "RGB",
+      "source": "TripCanvas 2-C Android Screen QA run 42952421959 / phone ; qa2c/01-home-light.png"
+    },
+    {
+      "order": 3,
+      "name": "02-workspace.png",
+      "size_bytes": 203984,
+      "sha256": "e13edb1aa5997213f756930acd9e9a8707e80f51717192c4e259a8d072750b93",
+      "pixels": [
+        1350,
+        2400
+      ],
+      "mode": "RGB",
+      "source": "TripCanvas 2-C Android Screen QA run 42952421959 / phone ; qa2c/02a-workspace-overview-light.png"
+    },
+    {
+      "order": 4,
+      "name": "03-schedule.png",
+      "size_bytes": 184648,
+      "sha256": "29681eb21b6523122bcc601c2a27d0ea13049de9534ac31f8123221aea5993a4",
+      "pixels": [
+        1350,
+        2400
+      ],
+      "mode": "RGB",
+      "source": "TripCanvas 2-C Android Screen QA run 42952421959 / phone ; qa2c/02d-workspace-schedule-route.png"
+    },
+    {
+      "order": 5,
+      "name": "04-map.png",
+      "size_bytes": 433664,
+      "sha256": "54df73218af1d54867cd40904110cad0851238de105c35e8ae3b478316fd2e9a",
+      "pixels": [
+        1350,
+        2400
+      ],
+      "mode": "RGB",
+      "source": "TripCanvas 3-A Map Screen QA run 42952421947 / phone ; qa3a/03-map-all-light.png"
+    },
+    {
+      "order": 6,
+      "name": "05-checklist.png",
+      "size_bytes": 136819,
+      "sha256": "121047b7f5a637ff09106140da05f7153d947dacd16bf29a9ea48dfadcba468f",
+      "pixels": [
+        1350,
+        2400
+      ],
+      "mode": "RGB",
+      "source": "TripCanvas 2-C Android Screen QA run 42952421959 / phone ; qa2c/03-checklist-light.png"
+    },
+    {
+      "order": 7,
+      "name": "06-expenses.png",
+      "size_bytes": 177397,
+      "sha256": "faee0507ee9e1dbc2af609434a519222fbe84f9ffe6f23ae1d356dc8e0e36fa5",
+      "pixels": [
+        1350,
+        2400
+      ],
+      "mode": "RGB",
+      "source": "TripCanvas 2-C Android Screen QA run 42952421959 / phone ; qa2c/07-expenses-light.png"
+    },
+    {
+      "order": 8,
+      "name": "07-settlement.png",
+      "size_bytes": 183193,
+      "sha256": "fea2ccd33adfd5379c10cbc1692c501e9b6bcb2eaa6aaaf30771da72a1f3eb82",
+      "pixels": [
+        1350,
+        2400
+      ],
+      "mode": "RGB",
+      "source": "TripCanvas 3-B Finance Booking Screen QA run 42952422005 / phone ; qa3b/05-settlement-light.png"
+    },
+    {
+      "order": 9,
+      "name": "08-bookings.png",
+      "size_bytes": 136795,
+      "sha256": "894b153b49cb782bd044d129f2f13e0763acd490cc56e6d9d0f417db1c0f251c",
+      "pixels": [
+        1350,
+        2400
+      ],
+      "mode": "RGB",
+      "source": "TripCanvas 3-B Finance Booking Screen QA run 42952422005 / phone ; qa3b/08-bookings-light.png"
+    }
+  ]
+}

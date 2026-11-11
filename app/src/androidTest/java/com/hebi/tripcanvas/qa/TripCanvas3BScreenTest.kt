@@ -41,8 +41,8 @@ class TripCanvas3BScreenTest {
             db.backupDao().replaceAll(
                 TripBackupSnapshot(
                     trips = listOf(TripEntity(
-                        "qa3b", "QA 제주 여행 3B", "2026-11-10", "2026-11-12",
-                        "대한민국", "제주", "Asia/Seoul", "KRW", "", "환율·정산 QA", 1L, 1L
+                        "qa3b", "제주 동행 여행", "2026-11-10", "2026-11-12",
+                        "대한민국", "제주", "Asia/Seoul", "KRW", "", "동행자와 경비 정리", 1L, 1L
                     )),
                     places = emptyList(), itineraries = emptyList(),
                     expenses = listOf(ExpenseEntity(
@@ -68,9 +68,9 @@ class TripCanvas3BScreenTest {
         }
         try {
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-                awaitText("QA 제주 여행 3B")
+                awaitText("제주 동행 여행")
                 capture("01-home-light")
-                click("QA 제주 여행 3B")
+                click("제주 동행 여행")
                 awaitText("동행자 열기")
                 capture("02-workspace-light")
                 click("동행자 열기")
