@@ -322,7 +322,11 @@ private fun TripMapPlacesPane(
                         )
                     } else {
                         TripSecondaryButton(
-                            label = if (selectedId == place.id) "지도 선택됨" else "지도에서 선택",
+                            label = if (selectedId == place.id) {
+                                "지도 선택됨: " + place.name
+                            } else {
+                                "지도에서 선택: " + place.name
+                            },
                             onClick = { onFocusPlace(place.id) }
                         )
                     }
