@@ -1,6 +1,11 @@
 name: TripCanvas UI-R09 verified real screenshots
 
 on:
+  pull_request:
+    paths:
+      - '.github/workflows/ui-r09-verified-screens.yml'
+      - 'scripts/play/build_from_verified_qa.py'
+      - 'docs/ui-r09-final-qa-store.md'
   push:
     branches: [main]
   workflow_dispatch:
@@ -13,6 +18,68 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  validate-renderer:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile offline renderer, install test-only fonts/Pillow
+        run: |
+          python3 -m py_compile scripts/play/build_from_verified_qa.py
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq fonts-noto-cjk
+          python3 -m pip install --disable-pip-version-check 'Pillow==12.0.0'
+      - name: Prove rendering and manifest validation using non-published dummy PNGs
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          from io import BytesIO
+          import hashlib, json, os, zipfile
+          root = Path(os.environ['RUNNER_TEMP']) / 'r09-fixtures'
+          root.mkdir(parents=True, exist_ok=True)
+          names = {
+              '2c': ['01-home-light.png', '02a-workspace-overview-light.png',
+                     '02d-workspace-schedule-route.png', '03-checklist-light.png',
+                     '07-expenses-light.png'],
+              '3a': ['03-map-all-light.png'],
+              '3b': ['05-settlement-light.png', '08-bookings-light.png'],
+          }
+          runs = {}
+          for kind, group in names.items():
+              path = root / f'{kind}.zip'
+              with zipfile.ZipFile(path, 'w') as archive:
+                  for filename in group:
+                      tmp = BytesIO()
+                      Image.new('RGB', (1080, 1920), '#EEEEEE').save(tmp, 'PNG')
+                      archive.writestr('screenshots/qa/' + filename, tmp.getvalue())
+              runs[kind] = {
+                  'head_sha': '0'*40, 'conclusion': 'success', 'run_id': 1,
+                  'artifact_sha256': hashlib.sha256(path.read_bytes()).hexdigest()
+              }
+          (root / 'evidence.json').write_text(
+              json.dumps({'main_sha': '0'*40, 'runs': runs}), encoding='utf-8')
+          PY
+          python3 scripts/play/build_from_verified_qa.py \
+            --qa-2c "$RUNNER_TEMP/r09-fixtures/2c.zip" \
+            --qa-3a "$RUNNER_TEMP/r09-fixtures/3a.zip" \
+            --qa-3b "$RUNNER_TEMP/r09-fixtures/3b.zip" \
+            --evidence "$RUNNER_TEMP/r09-fixtures/evidence.json" \
+            --output "$RUNNER_TEMP/r09-fixtures/generated"
+          STAGING="$RUNNER_TEMP/r09-fixtures/generated" python3 - <<'PY'
+          import os
+          from pathlib import Path
+          from scripts.play.listing_images import validate_assets
+          assert len(validate_assets(Path(os.environ['STAGING']))) == 10
+          print('Renderer smoke test passed; dummy images are never published.')
+          PY
+
   capture:
     if: >-
       github.repository == 'hebi10/TripCanvas' && github.ref == 'refs/heads/main' &&
