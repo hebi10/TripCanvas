@@ -11,6 +11,7 @@ import androidx.test.uiautomator.StaleObjectException
 import androidx.test.uiautomator.Until
 import com.hebi.tripcanvas.MainActivity
 import com.hebi.tripcanvas.data.local.BookingEntity
+import com.hebi.tripcanvas.data.local.BookingAttachmentEntity
 import com.hebi.tripcanvas.data.local.ExpenseEntity
 import com.hebi.tripcanvas.data.local.ExpenseShareEntity
 import com.hebi.tripcanvas.data.local.TripBackupSnapshot
@@ -22,6 +23,9 @@ import com.hebi.tripcanvas.designsystem.theme.TripThemeMode
 import java.io.File
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
+import kotlinx.coroutines.flow.first
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -65,6 +69,13 @@ class TripCanvas3BScreenTest {
                     ))
                 )
             )
+            db.bookingDao().addAttachment(
+                BookingAttachmentEntity(
+                    "qa3b-attachment", "qa3b-book",
+                    "content://com.hebi.tripcanvas.invalid/booking.pdf",
+                    "숙소 예약 확인서.pdf", "application/pdf", 1L
+                )
+            )
         }
         try {
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
@@ -100,10 +111,28 @@ class TripCanvas3BScreenTest {
                 awaitText("예약 열기")
                 clickWorkspaceCard("예약 열기")
                 awaitText("예약 1건")
+                awaitText("예약 일정 · 2026.11.11 (수) 14:00")
+                awaitText("첨부 1개")
+                assertFalse("예약 확인번호가 목록에 노출되면 안 됩니다.", device.hasObject(By.text("QA-PRIVATE-REF")))
                 capture("08-bookings-light")
                 click("예약 상세·편집")
                 awaitText("예약 확인번호")
+                awaitText("확인번호 보기")
+                awaitText("첨부 1개")
+                awaitText("숙소 예약 확인서.pdf")
                 capture("09-booking-edit")
+                click("확인번호 보기")
+                awaitText("확인번호 숨기기")
+                capture("09a-booking-reference-visible")
+                click("확인번호 숨기기")
+                awaitText("확인번호 보기")
+                click("파일 연결 제거")
+                awaitText("문서 연결 제거")
+                capture("09b-document-detach-confirm")
+                click("취소")
+                assertEquals(1, runBlocking {
+                    db.bookingDao().observeAttachments("qa3b-book").first().size
+                })
                 click("PDF·이미지 첨부")
                 val picked = device.wait(
                     Until.gone(By.pkg("com.hebi.tripcanvas")), 7000
@@ -122,6 +151,11 @@ class TripCanvas3BScreenTest {
                 }
                 awaitText("예약 열기")
                 capture("11-workspace-dark")
+                click("예약 열기")
+                awaitText("예약 일정 · 2026.11.11 (수) 14:00")
+                capture("11a-bookings-dark")
+                device.pressBack()
+                awaitText("예약 열기")
                 click("정산 열기")
                 awaitText("정산 제안 1건")
                 awaitText("현지 → 민재 · KRW 6,600")
@@ -132,6 +166,12 @@ class TripCanvas3BScreenTest {
                 awaitText("동행자 정산")
                 awaitText("정산 제안 1건")
                 capture("13-settlement-font160")
+                device.pressBack()
+                awaitText("예약 열기")
+                clickWorkspaceCard("예약 열기")
+                awaitText("예약 1건")
+                awaitText("첨부 1개")
+                capture("14-bookings-dark-font160")
             }
         } finally {
             device.executeShellCommand("settings put system font_scale 1.0")
