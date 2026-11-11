@@ -5,7 +5,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -18,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.hebi.tripcanvas.designsystem.theme.TripDesign
 import com.hebi.tripcanvas.designsystem.tokens.TripSpacing
+import com.hebi.tripcanvas.designsystem.tokens.TripSizes
 
 @Composable
 fun TripEmptyState(
@@ -33,8 +39,18 @@ fun TripEmptyState(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)
     ) {
-        Text(title, style = MaterialTheme.typography.titleMedium, color = p.textPrimary)
-        Text(description, style = MaterialTheme.typography.bodyMedium, color = p.textSecondary)
+        Text(
+            title,
+            style = MaterialTheme.typography.titleMedium,
+            color = p.textPrimary,
+            textAlign = TextAlign.Center
+        )
+        Text(
+            description,
+            style = MaterialTheme.typography.bodyMedium,
+            color = p.textSecondary,
+            textAlign = TextAlign.Center
+        )
         if (actionLabel != null && onAction != null) {
             TripPrimaryButton(label = actionLabel, onClick = onAction)
         }
@@ -50,7 +66,10 @@ fun TripErrorState(
 ) {
     val p = TripDesign.palette
     Column(
-        modifier = modifier.fillMaxWidth().padding(TripSpacing.lg),
+        modifier = modifier
+            .fillMaxWidth()
+            .semantics { liveRegion = LiveRegionMode.Polite }
+            .padding(TripSpacing.lg),
         verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)
     ) {
         Text(title, style = MaterialTheme.typography.titleMedium, color = p.error)
@@ -68,7 +87,10 @@ fun TripLoadingState(
 ) {
     val p = TripDesign.palette
     Column(
-        modifier = modifier.fillMaxWidth().padding(TripSpacing.lg),
+        modifier = modifier
+            .fillMaxWidth()
+            .semantics { liveRegion = LiveRegionMode.Polite }
+            .padding(TripSpacing.lg),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(TripSpacing.md)
     ) {
@@ -84,7 +106,7 @@ fun TripOfflineNotice(
 ) {
     val p = TripDesign.palette
     Surface(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
         color = p.surfaceSubtle,
         shape = RectangleShape,
         border = BorderStroke(1.dp, p.outline)
@@ -113,12 +135,18 @@ fun TripConfirmDialog(
         title = { Text(title, style = MaterialTheme.typography.titleLarge) },
         text = { Text(message, style = MaterialTheme.typography.bodyLarge) },
         confirmButton = {
-            TextButton(onClick = onConfirm) {
+            TextButton(
+                onClick = onConfirm,
+                modifier = Modifier.heightIn(min = TripSizes.minimumTouchTarget)
+            ) {
                 Text(confirmLabel, color = if (destructive) p.error else p.primaryAction)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.heightIn(min = TripSizes.minimumTouchTarget)
+            ) {
                 Text("취소", color = p.textSecondary)
             }
         },

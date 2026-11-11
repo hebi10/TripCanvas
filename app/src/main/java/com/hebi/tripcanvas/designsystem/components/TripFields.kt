@@ -28,7 +28,11 @@ fun TripTextField(
         label = { Text(label) },
         placeholder = placeholder?.let { { Text(it) } },
         supportingText = supportingText?.let {
-            { Text(it, style = MaterialTheme.typography.bodyMedium) }
+            { Text(
+                it,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (isError) p.error else p.textSecondary
+            ) }
         },
         modifier = modifier.fillMaxWidth(),
         isError = isError,
