@@ -70,7 +70,7 @@ fun TripSettlementScreen(
             val report = requireNotNull(summary)
             TripSectionHeading(
                 title = "정산 · " + trip!!.currencyCode,
-                supportingText = "참가자별 지불액과 부담액으로 계산합니다. 실제 송금하지 않습니다."
+                supportingText = "참가자별 지불액과 부담액으로 계산합니다."
             )
             TripSectionHeading(
                 title = when {
@@ -92,49 +92,20 @@ fun TripSettlementScreen(
                         "미확정 지출은 정산 합계에 포함되지 않습니다."
                 )
             }
-            if (people.isEmpty()) {
-                TripEmptyState("등록한 동행자가 없습니다", "로컬 동행자를 먼저 등록해 주세요.")
-            }
-            TripSecondaryButton(
-                label = "동행자 관리",
-                modifier = Modifier.fillMaxWidth(),
-                onClick = onParticipants
-            )
             TripSectionHeading(
-                title = "참가자별 지불·부담",
-                supportingText = "분담이 확정된 " + report.includedExpenses + "건에 대한 금액"
+                title = "정산 제안 " + report.transfers.size + "건",
+                supportingText = "분담이 확정된 지출 기준 · 실제 송금 기능은 제공하지 않습니다."
             )
-            report.balances.forEach { balance ->
-                TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
-                    Column(
-                        modifier = Modifier.padding(TripSpacing.md),
-                        verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
-                    ) {
-                        Text(
-                            balance.displayName,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = palette.textPrimary
-                        )
-                        Text(
-                            "지불 " + displayMinor(balance.paidMinor, report.baseCurrencyCode) +
-                                " · 부담 " + displayMinor(balance.owedMinor, report.baseCurrencyCode),
-                            color = palette.textSecondary
-                        )
-                        Text(
-                            if (balance.netMinor >= 0) {
-                                "받을 금액 " + displayMinor(balance.netMinor, report.baseCurrencyCode)
-                            } else {
-                                "낼 금액 " + displayMinor(-balance.netMinor, report.baseCurrencyCode)
-                            },
-                            color = palette.textPrimary
-                        )
-                    }
-                }
-            }
-            TripSectionHeading("정산 제안 " + report.transfers.size + "건")
             val peopleById = people.associateBy { it.id }
             if (report.transfers.isEmpty()) {
-                Text("현재 정산할 금액이 없습니다.", color = palette.textSecondary)
+                Text(
+                    text = if (report.unconverted > 0 || report.unallocated > 0) {
+                        "환율 또는 분담이 미완료인 지출은 정산 제안에서 제외됩니다."
+                    } else {
+                        "현재 정산할 금액이 없습니다."
+                    },
+                    color = palette.textSecondary
+                )
             }
             report.transfers.forEach { transfer ->
                 TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
@@ -146,14 +117,6 @@ fun TripSettlementScreen(
                         color = palette.textPrimary
                     )
                 }
-            }
-            TripSectionHeading("지출별 환율·분담 검토")
-            entries.forEach { expense ->
-                TripSecondaryButton(
-                    label = expense.amountDecimal + " " + expense.currencyCode + " · 환율·분담 설정",
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = { onExpenseSplit(expense.id) }
-                )
             }
             if (error != null) {
                 TripErrorState(
@@ -197,7 +160,54 @@ fun TripSettlementScreen(
                         } finally { busy = false }
                     }
                 }
+            )            if (people.isEmpty()) {
+                TripEmptyState("등록한 동행자가 없습니다", "로컬 동행자를 먼저 등록해 주세요.")
+            }
+            TripSectionHeading(
+                title = "참가자별 지불·부담",
+                supportingText = "분담이 확정된 " + report.includedExpenses + "건에 대한 금액"
             )
+            report.balances.forEach { balance ->
+                TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.padding(TripSpacing.md),
+                        verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
+                    ) {
+                        Text(
+                            balance.displayName,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = palette.textPrimary
+                        )
+                        Text(
+                            "지불 " + displayMinor(balance.paidMinor, report.baseCurrencyCode) +
+                                " · 부담 " + displayMinor(balance.owedMinor, report.baseCurrencyCode),
+                            color = palette.textSecondary
+                        )
+                        Text(
+                            if (balance.netMinor >= 0) {
+                                "받을 금액 " + displayMinor(balance.netMinor, report.baseCurrencyCode)
+                            } else {
+                                "낼 금액 " + displayMinor(-balance.netMinor, report.baseCurrencyCode)
+                            },
+                            color = palette.textPrimary
+                        )
+                    }
+                }
+            }
+            TripSecondaryButton(
+                label = "동행자 관리",
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onParticipants
+            )
+            TripSectionHeading("지출별 환율·분담 검토")
+            entries.forEach { expense ->
+                TripSecondaryButton(
+                    label = expense.amountDecimal + " " + expense.currencyCode + " · 환율·분담 설정",
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = { onExpenseSplit(expense.id) }
+                )
+            }
+
         }
     }
 }
