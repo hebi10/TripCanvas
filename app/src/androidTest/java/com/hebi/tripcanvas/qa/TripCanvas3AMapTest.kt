@@ -19,6 +19,8 @@ import com.hebi.tripcanvas.data.local.TripBackupSnapshot
 import com.hebi.tripcanvas.data.local.TripDatabase
 import com.hebi.tripcanvas.data.local.TripEntity
 import com.hebi.tripcanvas.data.tripPreferencesRepository
+import com.hebi.tripcanvas.designsystem.responsive.TripWindowWidth
+import com.hebi.tripcanvas.designsystem.responsive.classifyWindowWidth
 import com.hebi.tripcanvas.designsystem.theme.TripThemeMode
 import java.io.File
 import kotlinx.coroutines.runBlocking
@@ -81,6 +83,23 @@ class TripCanvas3AMapTest {
                 awaitText("여행 지도")
                 SystemClock.sleep(3000)
                 capture("03-map-all-light")
+                val widthDp = (device.displayWidth / context.resources.displayMetrics.density).toInt()
+                if (classifyWindowWidth(widthDp) != TripWindowWidth.Compact) {
+                    val listHeader = device.wait(
+                        Until.findObject(By.text("장소 2개")), 5000
+                    ) ?: throw AssertionError("태블릿 장소 패널 헤더를 찾지 못했습니다.")
+                    val mapBounds = Rect()
+                    scenario.onActivity { activity ->
+                        val mapView = findMapView(activity.window.decorView)
+                            ?: throw AssertionError("태블릿 MapLibre 패널이 없습니다.")
+                        assertTrue("태블릿 지도가 보이지 않습니다.", mapView.getGlobalVisibleRect(mapBounds))
+                    }
+                    assertTrue(
+                        "태블릿 장소 목록이 지도 오른쪽에 표시되지 않았습니다.",
+                        listHeader.visibleBounds.left >= mapBounds.right - 12
+                    )
+                    capture("03a-tablet-two-pane-map-and-list")
+                }
                 click("2026-11-11")
                 SystemClock.sleep(1000)
                 var tapX = 0
@@ -106,8 +125,12 @@ class TripCanvas3AMapTest {
                 device.pressBack()
                 awaitText("여행 지도")
                 awaitText("확정 · 일정 1개")
+                awaitText("장소 1개")
                 awaitText("제주국제공항")
                 capture("04-map-date-filter")
+                click("지도에서 선택")
+                awaitText("지도 선택됨")
+                capture("04b-map-focus-from-place-list")
                 click("장소 상세")
                 awaitText("공급자: Photon/OSM")
                 capture("05-place-detail")
@@ -118,6 +141,11 @@ class TripCanvas3AMapTest {
                 awaitText("장소 상세")
                 device.pressBack()
                 awaitText("여행 지도")
+                click("전체")
+                awaitText("장소 2개")
+                awaitText("좌표 없는 장소")
+                awaitText("좌표 없음 · 지도 핀 제외")
+                capture("06a-map-places-without-coordinates")
                 click("외부 장소 검색")
                 awaitText("검색어")
                 capture("07-external-search-input")
