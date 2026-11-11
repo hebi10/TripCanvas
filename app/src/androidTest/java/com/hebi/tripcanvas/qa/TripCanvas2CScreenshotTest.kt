@@ -141,7 +141,36 @@ class TripCanvas2CScreenshotTest {
             click("일정 열기")
             capture("02d-schedule-after-click")
             awaitText("여행 일정")
+            awaitText("날짜 선택")
+            awaitText("공항 도착")
             capture("02d-workspace-schedule-route")
+            click("11/21 토")
+            awaitText("이 날짜에는 일정이 없습니다")
+            capture("02f-schedule-empty-date")
+            click("11/20 금")
+            awaitText("공항 도착")
+            val scheduleMenu = device.wait(
+                Until.findObject(By.desc("공항 도착 일정 메뉴")), 5000
+            ) ?: throw AssertionError("일정 카드 더보기 메뉴를 찾지 못했습니다.")
+            scheduleMenu.click()
+            awaitText("복제")
+            capture("02g-schedule-actions-menu")
+            click("복제")
+            assertTrue(waitForScheduleCount(2))
+            awaitText("시간 겹침")
+            capture("02h-schedule-after-duplicate")
+            device.wait(Until.findObject(By.desc("공항 도착 일정 메뉴")), 5000)
+                ?.click() ?: throw AssertionError("복제 후 일정 메뉴를 찾지 못했습니다.")
+            awaitText("아래로")
+            click("아래로")
+            assertTrue(waitForScheduleFirstId("qa-schedule", first = false))
+            device.wait(Until.findObject(By.desc("공항 도착 일정 메뉴")), 5000)
+                ?.click() ?: throw AssertionError("재정렬 후 일정 메뉴를 찾지 못했습니다.")
+            click("삭제")
+            awaitText("일정 삭제")
+            capture("02i-schedule-delete-confirm")
+            click("취소")
+            assertTrue(waitForScheduleCount(2))
             device.pressBack()
             awaitText("작업 도구")
             awaitText("저장 장소 관리")
@@ -323,6 +352,28 @@ class TripCanvas2CScreenshotTest {
         button.click()
         awaitText("여행 편집")
         awaitText("여행 삭제")
+    }
+
+    private fun waitForScheduleCount(expected: Int): Boolean {
+        repeat(20) {
+            val size = runBlocking {
+                database.itineraryDao().getDay("qa-trip", "2026-11-20").size
+            }
+            if (size == expected) return true
+            Thread.sleep(250)
+        }
+        return false
+    }
+
+    private fun waitForScheduleFirstId(id: String, first: Boolean): Boolean {
+        repeat(20) {
+            val actual = runBlocking {
+                database.itineraryDao().getDay("qa-trip", "2026-11-20").firstOrNull()?.id
+            }
+            if ((actual == id) == first && actual != null) return true
+            Thread.sleep(250)
+        }
+        return false
     }
 
     private fun waitForChecklistCount(expected: Int): Boolean {
