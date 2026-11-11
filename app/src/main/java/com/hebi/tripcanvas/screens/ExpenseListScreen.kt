@@ -2,6 +2,7 @@ package com.hebi.tripcanvas.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -19,11 +20,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.text.style.TextOverflow
 import com.hebi.tripcanvas.data.ExpenseRepository
 import com.hebi.tripcanvas.data.PlaceRepository
 import com.hebi.tripcanvas.data.TripRepository
 import com.hebi.tripcanvas.data.local.ExpenseEntity
-import com.hebi.tripcanvas.data.local.TripBudgetEntity
 import com.hebi.tripcanvas.designsystem.components.TripConfirmDialog
 import com.hebi.tripcanvas.designsystem.components.TripEmptyState
 import com.hebi.tripcanvas.designsystem.components.TripErrorState
@@ -33,6 +34,8 @@ import com.hebi.tripcanvas.designsystem.components.TripSecondaryButton
 import com.hebi.tripcanvas.designsystem.components.TripSectionHeading
 import com.hebi.tripcanvas.designsystem.components.TripSurfacePanel
 import com.hebi.tripcanvas.designsystem.components.TripTextField
+import com.hebi.tripcanvas.designsystem.responsive.TripAdaptiveContainer
+import com.hebi.tripcanvas.designsystem.responsive.TripWindowWidth
 import com.hebi.tripcanvas.designsystem.theme.TripDesign
 import com.hebi.tripcanvas.designsystem.tokens.TripSpacing
 import com.hebi.tripcanvas.domain.ExpenseCategory
@@ -107,12 +110,6 @@ fun ExpenseListScreen(
     }
 
     TripPageFrame(title = "예산·경비", onBack = onBack) {
-        TripSecondaryButton(
-            label = "동행자 정산", onClick = onSettlement, modifier = Modifier.fillMaxWidth()
-        )
-        TripSecondaryButton(
-            label = "동행자 관리", onClick = onParticipants, modifier = Modifier.fillMaxWidth()
-        )
         val current = trip
         if (current == null) {
             TripLoadingState("여행 정보를 불러오는 중")
@@ -130,43 +127,62 @@ fun ExpenseListScreen(
                 )
                 is ExpenseListState.Ready -> {
                     val totals = calculateExpenseTotals(result.expenses, current.currencyCode)
+                    val activeBudget = budget?.takeIf { it.currencyCode == current.currencyCode }
+                    val remaining = activeBudget?.let {
+                        BigDecimal(it.amountDecimal).subtract(totals.baseSpent)
+                    }
+                    val budgetValue = activeBudget?.let {
+                        displayMoney(it.amountDecimal, current.currencyCode)
+                    } ?: if (budget == null) "미설정" else "통화 불일치"
+                    val spentValue = displayMoney(
+                        totals.baseSpent.toPlainString(), current.currencyCode
+                    )
+                    val remainingValue = when {
+                        remaining == null -> "비교 불가"
+                        remaining.signum() < 0 -> displayMoney(
+                            remaining.abs().toPlainString(), current.currencyCode
+                        ) + " 초과"
+                        else -> displayMoney(remaining.toPlainString(), current.currencyCode) + " 남음"
+                    }
+                    TripSectionHeading(
+                        title = "예산 현황",
+                        supportingText = "기본 통화 ${current.currencyCode} · 환산 가능한 지출만 합산합니다."
+                    )
                     TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
                         Column(
                             modifier = Modifier.padding(TripSpacing.md),
                             verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)
                         ) {
-                            TripSectionHeading(
-                                title = "기본 통화 지출",
-                                supportingText = displayMoney(
-                                    totals.baseSpent.toPlainString(), current.currencyCode
-                                )
-                            )
-                            val activeBudget = budget?.takeIf { it.currencyCode == current.currencyCode }
-                            if (activeBudget == null) {
+                            TripAdaptiveContainer(modifier = Modifier.fillMaxWidth()) { width ->
+                                if (width == TripWindowWidth.Compact) {
+                                    Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)) {
+                                        ExpenseSummaryMetric("총예산", budgetValue)
+                                        ExpenseSummaryMetric("지출 합계", spentValue)
+                                        ExpenseSummaryMetric(
+                                            "잔액", remainingValue, warning = remaining?.signum() == -1
+                                        )
+                                    }
+                                } else {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(TripSpacing.md)
+                                    ) {
+                                        ExpenseSummaryMetric("총예산", budgetValue, Modifier.weight(1f))
+                                        ExpenseSummaryMetric("지출 합계", spentValue, Modifier.weight(1f))
+                                        ExpenseSummaryMetric(
+                                            "잔액", remainingValue, Modifier.weight(1f),
+                                            warning = remaining?.signum() == -1
+                                        )
+                                    }
+                                }
+                            }
+                            if (budget != null && activeBudget == null) {
                                 Text(
-                                    if (budget == null) "예산 미설정"
-                                    else "기존 예산 " + displayMoney(
+                                    "기존 예산 " + displayMoney(
                                         budget!!.amountDecimal, budget!!.currencyCode
                                     ) + " · 현재 기본 통화와 달라 비교하지 않습니다.",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = p.textSecondary
-                                )
-                            } else {
-                                val remaining =
-                                    BigDecimal(activeBudget.amountDecimal).subtract(totals.baseSpent)
-                                Text(
-                                    "예산 " + displayMoney(
-                                        activeBudget.amountDecimal, current.currencyCode
-                                    ),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = p.textPrimary
-                                )
-                                Text(
-                                    "잔여 " + displayMoney(
-                                        remaining.abs().toPlainString(), current.currencyCode
-                                    ) + if (remaining.signum() < 0) " 초과" else " 남음",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = if (remaining.signum() < 0) p.warning else p.textSecondary
                                 )
                             }
                             TripSecondaryButton(
@@ -192,6 +208,11 @@ fun ExpenseListScreen(
                             )
                         }
                     }
+                    TripPrimaryButton(
+                        label = "지출 추가",
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = onNew
+                    )
                     TripSectionHeading(
                         title = "지출 " + result.expenses.size + "건",
                         supportingText = "날짜별 내역 · 환율 스냅샷과 분담 상태는 지출별로 관리합니다."
@@ -200,8 +221,7 @@ fun ExpenseListScreen(
                         TripEmptyState(
                             title = "기록한 지출이 없습니다",
                             description = "첫 지출을 추가해 보세요.",
-                            actionLabel = "지출 추가",
-                            onAction = onNew
+                            actionLabel = null
                         )
                     } else {
                         result.expenses.groupBy { it.occurredAtLocal.substringBefore("T") }
@@ -272,10 +292,19 @@ fun ExpenseListScreen(
                     onRetry = { actionError = null }
                 )
             }
-            TripPrimaryButton(
-                label = "지출 추가",
-                modifier = Modifier.fillMaxWidth(),
-                onClick = onNew
+            TripSectionHeading(
+                title = "동행자·정산",
+                supportingText = "참가자 관리와 비용 정산은 별도로 확인할 수 있습니다."
+            )
+            TripSecondaryButton(
+                label = "동행자 정산",
+                onClick = onSettlement,
+                modifier = Modifier.fillMaxWidth()
+            )
+            TripSecondaryButton(
+                label = "동행자 관리",
+                onClick = onParticipants,
+                modifier = Modifier.fillMaxWidth()
             )
         }
     }
@@ -349,6 +378,33 @@ fun ExpenseListScreen(
                 }
             },
             onDismiss = { if (!working) deleteTarget = null }
+        )
+    }
+}
+
+@Composable
+private fun ExpenseSummaryMetric(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    warning: Boolean = false
+) {
+    val p = TripDesign.palette
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(TripSpacing.xxs)
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = p.textSecondary
+        )
+        Text(
+            value,
+            style = MaterialTheme.typography.titleMedium,
+            color = if (warning) p.warning else p.textPrimary,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
