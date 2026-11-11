@@ -253,7 +253,14 @@ class TripCanvas2CScreenshotTest {
             awaitText("준비물 열기")
 
             openScreen("경비 열기", "예산 설정·변경")
+            awaitText("예산 현황")
+            awaitText("총예산")
+            awaitText("지출 합계")
+            awaitText("잔액")
+            awaitText("KRW 287,500 남음")
             capture("07-expenses-light")
+            awaitText("환산 필요")
+            capture("07a-expenses-unconverted-warning")
             click("예산 설정·변경")
             awaitText("총예산 · KRW")
             capture("08-budget-edit-dialog")
@@ -323,6 +330,7 @@ class TripCanvas2CScreenshotTest {
             device.pressBack()
             awaitText("경비 열기")
             openScreen("경비 열기", "예산 설정·변경")
+            awaitText("예산 현황")
             capture("18-expenses-dark")
             device.pressBack()
             awaitText("경비 열기")
@@ -368,6 +376,7 @@ class TripCanvas2CScreenshotTest {
             device.pressBack()
             awaitText("경비 열기")
             openScreen("경비 열기", "예산 설정·변경")
+            awaitText("예산 현황")
             capture("23-expenses-dark-font160")
         }
     }
