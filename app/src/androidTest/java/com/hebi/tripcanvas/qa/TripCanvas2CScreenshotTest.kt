@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Before
@@ -194,6 +195,12 @@ class TripCanvas2CScreenshotTest {
             capture("03-checklist-light")
             click("미완료")
             capture("04-checklist-incomplete-filter")
+            openChecklistActions("충전기")
+            val moveWhileFiltered = device.wait(Until.findObject(By.text("위로")), 3000)
+                ?: throw AssertionError("필터에서 재정렬 메뉴를 찾지 못했습니다.")
+            assertFalse("미완료 필터에서는 순서 변경이 비활성화되어야 합니다.", moveWhileFiltered.isEnabled)
+            capture("04a-checklist-filter-menu")
+            device.pressBack()
             click("전체")
             click("준비물 추가")
             awaitText("준비물 이름 *")
@@ -205,6 +212,34 @@ class TripCanvas2CScreenshotTest {
             click("저장")
             assertTrue(waitForChecklistCount(4))
             capture("06-checklist-added")
+            openChecklistActions("충전기")
+            awaitText("수정")
+            capture("06a-checklist-actions-menu")
+            click("수정")
+            awaitText("준비물 수정")
+            capture("06b-checklist-edit-dialog")
+            click("취소")
+            openChecklistActions("충전기")
+            click("아래로")
+            assertTrue("아래로 이동 후 정렬 순서가 저장되어야 합니다.", waitForChecklistPosition("qa-check-2", 2))
+            openChecklistActions("충전기")
+            click("위로")
+            assertTrue("위로 이동 후 정렬 순서가 복원되어야 합니다.", waitForChecklistPosition("qa-check-2", 1))
+            val check = device.wait(Until.findObject(By.desc("충전기 준비 여부")), 5000)
+                ?: throw AssertionError("준비물 체크박스의 접근성 이름이 없습니다.")
+            check.click()
+            assertTrue(waitForChecklistChecked("qa-check-2", true))
+            check.click()
+            assertTrue(waitForChecklistChecked("qa-check-2", false))
+            openChecklistActions("멀티탭")
+            click("삭제")
+            awaitText("준비물 삭제")
+            capture("06c-checklist-delete-confirm")
+            click("삭제")
+            assertTrue(waitForChecklistCount(3))
+            click("방금 삭제한 준비물 복구")
+            assertTrue(waitForChecklistCount(4))
+            capture("06d-checklist-restored")
             device.pressBack()
             awaitText("준비물 열기")
 
@@ -318,6 +353,9 @@ class TripCanvas2CScreenshotTest {
             awaitText("준비 완료 1 / 4")
             awaitText("여권")
             capture("22-checklist-dark-font160")
+            openChecklistActions("충전기")
+            capture("22a-checklist-menu-dark-font160")
+            device.pressBack()
             device.pressBack()
             awaitText("경비 열기")
             openScreen("경비 열기", "예산 설정·변경")
@@ -371,6 +409,35 @@ class TripCanvas2CScreenshotTest {
                 database.itineraryDao().getDay("qa-trip", "2026-11-20").firstOrNull()?.id
             }
             if ((actual == id) == first && actual != null) return true
+            Thread.sleep(250)
+        }
+        return false
+    }
+
+    private fun openChecklistActions(itemTitle: String) {
+        awaitText(itemTitle)
+        val action = device.wait(
+            Until.findObject(By.desc("$itemTitle 준비물 메뉴")), 5000
+        ) ?: throw AssertionError("준비물 더보기 버튼을 찾지 못했습니다: $itemTitle")
+        action.click()
+        awaitText("수정")
+    }
+
+    private fun waitForChecklistPosition(id: String, position: Int): Boolean {
+        repeat(20) {
+            val actual = runBlocking {
+                database.checklistDao().ordered("qa-trip").indexOfFirst { it.id == id }
+            }
+            if (actual == position) return true
+            Thread.sleep(250)
+        }
+        return false
+    }
+
+    private fun waitForChecklistChecked(id: String, checked: Boolean): Boolean {
+        repeat(20) {
+            val actual = runBlocking { database.checklistDao().find("qa-trip", id)?.checked }
+            if (actual == checked) return true
             Thread.sleep(250)
         }
         return false
