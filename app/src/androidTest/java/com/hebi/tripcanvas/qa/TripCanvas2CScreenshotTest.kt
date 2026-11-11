@@ -27,7 +27,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Before
@@ -198,9 +197,18 @@ class TripCanvas2CScreenshotTest {
             openChecklistActions("충전기")
             val moveWhileFiltered = device.wait(Until.findObject(By.text("위로")), 3000)
                 ?: throw AssertionError("필터에서 재정렬 메뉴를 찾지 못했습니다.")
-            assertFalse("미완료 필터에서는 순서 변경이 비활성화되어야 합니다.", moveWhileFiltered.isEnabled)
             capture("04a-checklist-filter-menu")
-            device.pressBack()
+            val orderBeforeDisabledMove = runBlocking {
+                database.checklistDao().ordered("qa-trip").map { it.id }
+            }
+            moveWhileFiltered.click()
+            Thread.sleep(350)
+            assertEquals(
+                "미완료 필터에서 이동을 눌러도 저장 순서는 바뀌지 않아야 합니다.",
+                orderBeforeDisabledMove,
+                runBlocking { database.checklistDao().ordered("qa-trip").map { it.id } }
+            )
+            if (device.hasObject(By.text("수정"))) device.pressBack()
             click("전체")
             click("준비물 추가")
             awaitText("준비물 이름 *")
@@ -225,11 +233,12 @@ class TripCanvas2CScreenshotTest {
             openChecklistActions("충전기")
             click("위로")
             assertTrue("위로 이동 후 정렬 순서가 복원되어야 합니다.", waitForChecklistPosition("qa-check-2", 1))
-            val check = device.wait(Until.findObject(By.desc("충전기 준비 여부")), 5000)
-                ?: throw AssertionError("준비물 체크박스의 접근성 이름이 없습니다.")
-            check.click()
+            val checkSelector = By.desc("충전기 준비 여부")
+            device.wait(Until.findObject(checkSelector), 5000)
+                ?.click() ?: throw AssertionError("준비물 체크박스의 접근성 이름이 없습니다.")
             assertTrue(waitForChecklistChecked("qa-check-2", true))
-            check.click()
+            device.wait(Until.findObject(checkSelector), 5000)
+                ?.click() ?: throw AssertionError("변경 후 준비물 체크박스를 찾지 못했습니다.")
             assertTrue(waitForChecklistChecked("qa-check-2", false))
             openChecklistActions("멀티탭")
             click("삭제")
