@@ -72,15 +72,18 @@ fun TripChoiceChip(
     label: String,
     selected: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
 ) {
     val p = TripDesign.palette
     FilterChip(
         selected = selected,
         onClick = onClick,
+        enabled = enabled,
         label = { Text(label, style = MaterialTheme.typography.labelLarge) },
         modifier = modifier.heightIn(min = TripSizes.minimumTouchTarget),
         shape = RectangleShape,
+        border = if (selected) null else BorderStroke(1.dp, p.outline),
         colors = FilterChipDefaults.filterChipColors(
             containerColor = p.surface,
             labelColor = p.textSecondary,

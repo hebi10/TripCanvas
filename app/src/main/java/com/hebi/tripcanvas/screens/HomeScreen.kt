@@ -6,6 +6,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -90,7 +93,17 @@ fun HomeScreen(
     TripPageFrame(
         title = "TripCanvas",
         trailingActions = {
-            TextButton(onClick = onOpenSettings) {
+            TextButton(
+                onClick = onOpenSettings,
+                modifier = Modifier.heightIn(min = TripSizes.minimumTouchTarget)
+            ) {
+                Icon(
+                    imageVector = TripIcons.Settings,
+                    contentDescription = null,
+                    tint = p.textPrimary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(TripSpacing.xxs))
                 Text("설정", color = p.textPrimary)
             }
         }

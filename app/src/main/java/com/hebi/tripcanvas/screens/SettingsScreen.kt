@@ -55,6 +55,7 @@ fun SettingsScreen(
                 TripChoiceChip(
                     label = mode.label,
                     selected = themeMode == mode,
+                    enabled = !themeSaving,
                     onClick = { if (!themeSaving) onThemeModeChange(mode) }
                 )
             }
