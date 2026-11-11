@@ -4,10 +4,12 @@ import android.os.Bundle
 import android.graphics.Color
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Alignment
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -23,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -37,6 +40,8 @@ import com.hebi.tripcanvas.designsystem.components.TripPrimaryButton
 import com.hebi.tripcanvas.designsystem.components.TripSecondaryButton
 import com.hebi.tripcanvas.designsystem.components.TripSectionHeading
 import com.hebi.tripcanvas.designsystem.components.TripSurfacePanel
+import com.hebi.tripcanvas.designsystem.responsive.TripAdaptiveContainer
+import com.hebi.tripcanvas.designsystem.responsive.TripWindowWidth
 import com.hebi.tripcanvas.designsystem.theme.TripDesign
 import com.hebi.tripcanvas.designsystem.tokens.TripSpacing
 import com.hebi.tripcanvas.ui.TripPageFrame
@@ -104,10 +109,9 @@ fun TripMapScreen(
         }
         PlacePin(place, label)
     }
-    val focus = visiblePlaces.firstOrNull { it.id == selectedId }
-        ?: visiblePlaces.firstOrNull()
-    LaunchedEffect(visiblePlaces) {
-        if (focus == null) selectedId = ""
+    val focusedPlace = visiblePlaces.firstOrNull { it.id == selectedId }
+    LaunchedEffect(visiblePlaces, selectedId) {
+        if (selectedId.isNotBlank() && focusedPlace == null) selectedId = ""
     }
 
     TripPageFrame(title = "여행 지도", onBack = onBack) {
@@ -129,68 +133,75 @@ fun TripMapScreen(
                 }
             }
             Text(
-                "핀 구분: 확정 일정 / 후보 일정 / 저장 장소. 좌표가 없는 장소는 목록만 표시됩니다.",
+                "핀 구분: 확정 일정 / 후보 일정 / 저장 장소. 좌표가 없는 장소는 목록에서 확인합니다.",
                 style = MaterialTheme.typography.bodySmall,
                 color = p.textSecondary
             )
-            if (pins.isEmpty()) {
-                TripEmptyState(
-                    title = "표시할 지도 핀이 없습니다",
-                    description = "좌표가 있는 장소를 추가하거나 날짜를 바꿔 주세요."
-                )
-            } else {
-                TripMapCanvas(pins, selectedId, onSelected = onPlace)
-                Text(
-                    "지도: OpenFreeMap · © OpenStreetMap contributors. " +
-                        "지도 타일은 인터넷 연결이 필요합니다. 오프라인에서는 아래 장소 목록을 확인하세요.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = p.textSecondary
-                )
-            }
-            TripPrimaryButton(
-                label = "외부 장소 검색",
-                modifier = Modifier.fillMaxWidth(),
-                onClick = onSearch
-            )
-            TripSectionHeading("장소 " + visiblePlaces.size + "개", "해당 날짜의 연결 장소만 표시합니다.")
-            if (visiblePlaces.isEmpty()) {
-                TripEmptyState("연결된 장소가 없습니다", "날짜를 변경하거나 장소를 새로 등록해 주세요.")
-            }
-            visiblePlaces.forEach { place ->
-                val linked = dateItems.filter { it.placeId == place.id }
-                TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
+            TripAdaptiveContainer(modifier = Modifier.fillMaxWidth()) { width ->
+                if (width == TripWindowWidth.Compact) {
                     Column(
-                        modifier = Modifier.padding(TripSpacing.md),
-                        verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(TripSpacing.md)
                     ) {
-                        Text(
-                            place.name,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = p.textPrimary
+                        TripMapPane(
+                            pins = pins,
+                            selectedId = selectedId,
+                            mapHeight = 340.dp,
+                            onPinClick = onPlace
                         )
-                        Text(
-                            place.address.ifBlank { "주소 미등록" },
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = p.textSecondary
-                        )
-                        if (place.latitude == null || place.longitude == null) {
-                            Text("좌표 없음 · 지도 핀 제외", color = p.textSecondary)
-                        }
-                        if (linked.isNotEmpty()) {
-                            Text(
-                                linked.joinToString(" · ") { if (it.confirmed) "확정" else "후보" } +
-                                    " · 일정 " + linked.size + "개",
-                                color = p.textSecondary
+                        focusedPlace?.let { place ->
+                            TripMapSelectedPlace(
+                                place = place,
+                                onDetail = { onPlace(place.id) }
                             )
                         }
-                        TripSecondaryButton(
-                            label = "장소 상세",
-                            onClick = { onPlace(place.id) }
+                        TripPrimaryButton(
+                            label = "외부 장소 검색",
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = onSearch
                         )
-                        linked.forEach { item ->
-                            TripSecondaryButton(
-                                label = "일정 편집: " + item.title,
-                                onClick = { onSchedule(item.id) }
+                        TripMapPlacesPane(
+                            visiblePlaces = visiblePlaces,
+                            dateItems = dateItems,
+                            selectedId = selectedId,
+                            onFocusPlace = { selectedId = it },
+                            onPlace = onPlace,
+                            onSchedule = onSchedule
+                        )
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.Top,
+                        horizontalArrangement = Arrangement.spacedBy(TripSpacing.md)
+                    ) {
+                        Column(
+                            modifier = Modifier.weight(3f),
+                            verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)
+                        ) {
+                            TripMapPane(
+                                pins = pins,
+                                selectedId = selectedId,
+                                mapHeight = 470.dp,
+                                onPinClick = onPlace
+                            )
+                        }
+                        Column(
+                            modifier = Modifier.weight(2f),
+                            verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)
+                        ) {
+                            TripPrimaryButton(
+                                label = "외부 장소 검색",
+                                modifier = Modifier.fillMaxWidth(),
+                                onClick = onSearch
+                            )
+                            TripMapPlacesPane(
+                                visiblePlaces = visiblePlaces,
+                                dateItems = dateItems,
+                                selectedId = selectedId,
+                                onFocusPlace = { selectedId = it },
+                                onPlace = onPlace,
+                                onSchedule = onSchedule
                             )
                         }
                     }
@@ -206,9 +217,146 @@ fun TripMapScreen(
 }
 
 @Composable
+private fun TripMapPane(
+    pins: List<PlacePin>,
+    selectedId: String,
+    mapHeight: Dp,
+    onPinClick: (String) -> Unit
+) {
+    val p = TripDesign.palette
+    Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
+        if (pins.isEmpty()) {
+            TripEmptyState(
+                title = "표시할 지도 핀이 없습니다",
+                description = "좌표가 있는 장소를 추가하거나 날짜를 바꿔 주세요."
+            )
+        } else {
+            TripMapCanvas(pins, selectedId, mapHeight, onSelected = onPinClick)
+            Text(
+                "지도: OpenFreeMap · © OpenStreetMap contributors. " +
+                    "지도 타일은 인터넷 연결이 필요합니다. 오프라인에서는 장소 목록을 확인하세요.",
+                style = MaterialTheme.typography.bodySmall,
+                color = p.textSecondary
+            )
+        }
+    }
+}
+
+@Composable
+private fun TripMapSelectedPlace(
+    place: PlaceEntity,
+    onDetail: () -> Unit
+) {
+    val p = TripDesign.palette
+    TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(TripSpacing.sm),
+            verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
+        ) {
+            Text(
+                "지도 선택 · " + place.name,
+                style = MaterialTheme.typography.titleMedium,
+                color = p.textPrimary
+            )
+            if (place.address.isNotBlank()) {
+                Text(
+                    place.address,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = p.textSecondary
+                )
+            }
+            TripSecondaryButton(
+                label = "선택 장소 상세",
+                onClick = onDetail
+            )
+        }
+    }
+}
+
+@Composable
+private fun TripMapPlacesPane(
+    visiblePlaces: List<PlaceEntity>,
+    dateItems: List<ItineraryItemEntity>,
+    selectedId: String,
+    onFocusPlace: (String) -> Unit,
+    onPlace: (String) -> Unit,
+    onSchedule: (String) -> Unit
+) {
+    val p = TripDesign.palette
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)
+    ) {
+        TripSectionHeading(
+            title = "장소 " + visiblePlaces.size + "개",
+            supportingText = "해당 날짜의 연결 장소만 표시합니다."
+        )
+        if (visiblePlaces.isEmpty()) {
+            TripEmptyState(
+                "연결된 장소가 없습니다",
+                "날짜를 변경하거나 장소를 새로 등록해 주세요."
+            )
+        }
+        visiblePlaces.forEach { place ->
+            val linked = dateItems.filter { it.placeId == place.id }
+            TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(TripSpacing.sm),
+                    verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
+                ) {
+                    Text(
+                        place.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = p.textPrimary
+                    )
+                    Text(
+                        place.address.ifBlank { "주소 미등록" },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = p.textSecondary
+                    )
+                    if (place.latitude == null || place.longitude == null) {
+                        Text(
+                            "좌표 없음 · 지도 핀 제외",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = p.textSecondary
+                        )
+                    } else {
+                        TripSecondaryButton(
+                            label = if (selectedId == place.id) "지도 선택됨" else "지도에서 선택",
+                            onClick = { onFocusPlace(place.id) },
+                            enabled = selectedId != place.id
+                        )
+                    }
+                    if (linked.isNotEmpty()) {
+                        Text(
+                            linked.joinToString(" · ") {
+                                if (it.confirmed) "확정" else "후보"
+                            } + " · 일정 " + linked.size + "개",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = p.textSecondary
+                        )
+                    }
+                    TripSecondaryButton(
+                        label = "장소 상세",
+                        onClick = { onPlace(place.id) }
+                    )
+                    linked.forEach { item ->
+                        TripSecondaryButton(
+                            label = "일정 편집: " + item.title,
+                            onClick = { onSchedule(item.id) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun TripMapCanvas(
     pins: List<PlacePin>,
     selectedId: String,
+    mapHeight: Dp,
     onSelected: (String) -> Unit
 ) {
     val context = LocalContext.current
@@ -249,7 +397,7 @@ private fun TripMapCanvas(
                 }
             }
         },
-        modifier = Modifier.fillMaxWidth().height(340.dp)
+        modifier = Modifier.fillMaxWidth().height(mapHeight)
     )
     val currentOnSelected by rememberUpdatedState(onSelected)
     DisposableEffect(map) {
