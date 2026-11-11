@@ -12,6 +12,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
+import androidx.test.uiautomator.StaleObjectException
 import androidx.test.uiautomator.Until
 import com.hebi.tripcanvas.MainActivity
 import com.hebi.tripcanvas.data.local.ItineraryItemEntity
@@ -260,15 +261,26 @@ class TripCanvas3AMapTest {
 
     private fun click(text: String) {
         awaitText(text)
-        val node = device.findObject(uiSelector(text))
-            ?: throw AssertionError("Click target missing: $text")
-        var target = node
-        while (!target.isClickable) {
-            target = target.parent ?: break
+        repeat(5) { attempt ->
+            try {
+                val node = device.wait(Until.findObject(uiSelector(text)), 2400)
+                    ?: throw AssertionError("Click target missing: $text")
+                var target = node
+                while (!target.isClickable) {
+                    target = target.parent
+                        ?: throw AssertionError("Clickable parent missing: $text")
+                }
+                target.click()
+                device.waitForIdle()
+                SystemClock.sleep(400)
+                return
+            } catch (stale: StaleObjectException) {
+                if (attempt == 4) {
+                    throw AssertionError("Target changed during click: $text", stale)
+                }
+                SystemClock.sleep(200)
+            }
         }
-        target.click()
-        device.waitForIdle()
-        SystemClock.sleep(400)
     }
 
     private fun evidenceDir(): File =
