@@ -1,0 +1,132 @@
+{
+  "app": "TripCanvas",
+  "package": "com.hebi.tripcanvas",
+  "version_basis": "0.1.0 (versionCode 3)",
+  "created_date": "2026-11-11",
+  "store_locale": "ko-KR",
+  "design": "neutral monochrome editorial, no gradient, no shadow, no rounded frames",
+  "source_note": "8 store screenshots use only verified real Android screenshots; QA fixture names are retained as captured. The 3-A map screenshot comes from GitHub PR #20 Android QA. Promo headers are added outside original capture.",
+  "release_note": "Production/closed/internal Play tracks and listing were NOT changed by making these assets.",
+  "files": [
+    {
+      "order": 0,
+      "name": "store-icon-512.png",
+      "size_bytes": 30613,
+      "sha256": "b523661643cf21c629ff1b405ae2f2bef792069c827c72a2b6d0b7492ec70ec2",
+      "pixels": [
+        512,
+        512
+      ],
+      "mode": "RGBA",
+      "source": "Drive 91_스토어_자료/TripCanvas_icon_512.png"
+    },
+    {
+      "order": 1,
+      "name": "feature-graphic-1024x500.png",
+      "size_bytes": 45513,
+      "sha256": "83b0a12521a7b561a83ae84389a450263d79a848001abab793d72366519ca8cc",
+      "pixels": [
+        1024,
+        500
+      ],
+      "mode": "RGB",
+      "source": "Created from verified icon and verified product features"
+    },
+    {
+      "order": 2,
+      "name": "01-home.png",
+      "size_bytes": 142784,
+      "sha256": "dc419102931f03d1f1a46431f1f1dcf70f381115b4e7e4686c9ddb08d5246987",
+      "pixels": [
+        1350,
+        2400
+      ],
+      "mode": "RGB",
+      "source": "Drive 91_스토어_자료/01_home.png"
+    },
+    {
+      "order": 3,
+      "name": "02-workspace.png",
+      "size_bytes": 206134,
+      "sha256": "9a0c16c32f544344cec00866dbd0abed94f693b4d83a4e0234c78f8b3a1e0014",
+      "pixels": [
+        1350,
+        2400
+      ],
+      "mode": "RGB",
+      "source": "Drive 91_스토어_자료/02_workspace.png"
+    },
+    {
+      "order": 4,
+      "name": "03-schedule.png",
+      "size_bytes": 185183,
+      "sha256": "354cd1654a1495f7b3a8723a6ea93a519ae2f38382626b5131a312fe29deeb33",
+      "pixels": [
+        1350,
+        2400
+      ],
+      "mode": "RGB",
+      "source": "Drive 91_스토어_자료/03_schedule.png"
+    },
+    {
+      "order": 5,
+      "name": "04-map.png",
+      "size_bytes": 437465,
+      "sha256": "4d5b13fac81c615df4d92cc73ff5c6a9c4301905ab228222b65f48a0ceaa3ccb",
+      "pixels": [
+        1350,
+        2400
+      ],
+      "mode": "RGB",
+      "source": "GitHub PR #20 / Android 3-A QA (2026-11-10)"
+    },
+    {
+      "order": 6,
+      "name": "05-checklist.png",
+      "size_bytes": 137473,
+      "sha256": "033fa7d5d1ba6b01387ce2b96f0361de1d3c10f493932ff2b7c1468b745554ab",
+      "pixels": [
+        1350,
+        2400
+      ],
+      "mode": "RGB",
+      "source": "Drive 91_스토어_자료/04_checklist.png"
+    },
+    {
+      "order": 7,
+      "name": "06-expenses.png",
+      "size_bytes": 177629,
+      "sha256": "f6bf00ff1452b69ca55482296530f95f42b60fa2998e4842bbf9fd6ba7b91131",
+      "pixels": [
+        1350,
+        2400
+      ],
+      "mode": "RGB",
+      "source": "Drive 91_스토어_자료/05_expenses.png"
+    },
+    {
+      "order": 8,
+      "name": "07-settlement.png",
+      "size_bytes": 183108,
+      "sha256": "3cba6d3654177dc10c439942bff48c583f59e9a0abc120ab0cc688e689500e54",
+      "pixels": [
+        1350,
+        2400
+      ],
+      "mode": "RGB",
+      "source": "Drive 91_스토어_자료/06_settlement.png"
+    },
+    {
+      "order": 9,
+      "name": "08-bookings.png",
+      "size_bytes": 136056,
+      "sha256": "e746a0932fb7affde6785ae8f47be8f70dcd3a17f364e67591f9e9fc6d92728b",
+      "pixels": [
+        1350,
+        2400
+      ],
+      "mode": "RGB",
+      "source": "Drive 91_스토어_자료/07_bookings.png"
+    }
+  ]
+}
