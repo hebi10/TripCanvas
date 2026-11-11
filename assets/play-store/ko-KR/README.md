@@ -1,34 +1,22 @@
-# TripCanvas | STORE-01 · 한국어 스토어 이미지
+# TripCanvas STORE-03 · 최종 한국어 스토어 이미지 (2026-11-11)
 
-2026-11-11 · `com.hebi.tripcanvas` · 기존 앱 0.1.0 (versionCode 3) 기준
+- 앱: `com.hebi.tripcanvas` · 검증 기준 코드: `TripCanvas STORE-02 commit f41633fe89bde6124c18d0e11a37a534a0bdde4d`
+- Google Play 아이콘 1장 (512×512 RGBA), 대표 그래픽 1장 (1024×500 RGB), 휴대전화 스크린샷 8장 (1350×2400 RGB)
+- 파일 무결성: `manifest.json`의 각 파일 `sha256` · 크기 · 이미지 모드
+- 실 UI 캡처 원본: GitHub Actions [2-C #42952421959](https://github.com/hebi10/TripCanvas/actions/runs/42952421959), [3-A #42952421947](https://github.com/hebi10/TripCanvas/actions/runs/42952421947), [3-B #42952422005](https://github.com/hebi10/TripCanvas/actions/runs/42952422005).
+- Android 테스트에서 `QA 제주 여행` 문구는 `제주 주말 여행`, `제주 장소 여행`, `제주 동행 여행`으로 대체한 후 캡처했습니다. 이미지 내부 UI는 수정하거나 AI로 생성하지 않았습니다.
+- 스토어 레이아웃과 제목·설명은 실제 캡처 외곽에만 배치했습니다.
+- 미구현 실시간 공동편집/실시간 환율/항공권 예약·결제/실제 길찾기를 소개하지 않습니다.
 
-## 결과물
-- Google Play 스토어 아이콘: `store-icon-512.png` / 512×512 / RGBA PNG
-- 대표 그래픽: `feature-graphic-1024x500.png` / 1024×500 / RGB PNG
-- 설명 이미지 8장: `01-home.png` ~ `08-bookings.png` / 각 1350×2400 / RGB PNG
-- `manifest.json`: 파일별 원본·규격·크기·SHA-256
-- `preview-contact-sheet.jpg`: 검수용 미리보기 (Google Play 제출 대상 아님)
+## 스크린샷 순서
+1. `01-home.png` — 여행을 한눈에
+2. `02-workspace.png` — 여행 정보 한곳에
+3. `03-schedule.png` — 날짜별 일정 관리
+4. `04-map.png` — 저장한 장소를 지도에서
+5. `05-checklist.png` — 준비물 체크리스트
+6. `06-expenses.png` — 예산과 지출 관리
+7. `07-settlement.png` — 동행자 비용 정산
+8. `08-bookings.png` — 예약 자료 한곳에
 
-## 소스와 정확성
-- 기본 캡처 원본 7장은 기존 Google Drive `91_스토어_자료`에서 확인한 Android 실기동 QA 결과입니다.
-- 지도 캡처는 2026-11-10 PR #20 3-A 지도 Android 휴대전화 UI QA 압축파일의 `screenshots/qa3a/03-map-all-light.png`를 사용했습니다.
-- Android 화면 내 문구, 기능, 정보, 지도는 이미지 내에서 교체·합성하지 않았습니다. 배경·제목·설명은 앱 UI 바깥에서만 추가했습니다.
-- `QA 제주 여행` 및 `QA 제주 여행 3A`는 **기존 QA 캡처에 실제 포함된 시험용 여행명**이므로 그대로 남아 있습니다. Play 제출 전 일반 사용자 시나리오로 실제 캡처를 다시 찍어 교체하는 개선이 권장됩니다.
-- 실시간 공동 편집, 길찾기, 실시간 자동 환율, 실제 예약·결제 등 미구현 기능을 주장하지 않습니다.
-
-## 업로드 순서
-1. 홈 — 여행을 한눈에
-2. 작업 공간 — 여행 정보 한곳에
-3. 일정 — 날짜별 일정 관리
-4. 지도 — 저장한 장소를 지도에서
-5. 준비물 — 준비물 체크리스트
-6. 경비 — 예산과 지출 관리
-7. 정산 — 동행자 비용 정산
-8. 예약 — 예약 자료 한곳에
-
-## 배포 경계
-- 이 ZIP은 이미지 산출물이며 Google Play 등록정보 업로드·심사·게시가 완료되었다는 의미가 아닙니다.
-- 기존 비공개 테스트 심사·AAB·서명키를 변경하지 않습니다.
-- 다음 단계 STORE-02: Android 런처 적응형 아이콘과 별도 Play 등록정보 업로드 자동화(검증→`ko-KR` 이미지 한정 적용→재조회)를 별도 PR로 구성합니다.
-
-원본 폴더: https://drive.google.com/drive/folders/1SeA4Qj0JhVW-7NDKM4jdPS5HZzaibbmW
+## 배포 구분
+Google Play listing edits API의 이미지 등록 완료 여부와 Play Console 심사·게시 상태는 서로 독립적입니다. 이 산출물 제작만으로 게시된 것은 아닙니다. 기존 앱 서명, 패키지, AAB, 광고 신고, 데이터 보안, 테스트 트랙을 수정하지 않습니다.

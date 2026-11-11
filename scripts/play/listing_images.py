@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import re
 import struct
+import subprocess
 import sys
 import urllib.error
 import urllib.parse
@@ -176,8 +177,17 @@ def main() -> int:
     try:
         assets = validate_assets()
         if args.apply:
-            if os.environ.get('GITHUB_REPOSITORY') != 'hebi10/TripCanvas' or os.environ.get('GITHUB_REF') != 'refs/heads/main' or os.environ.get('GITHUB_EVENT_NAME') != 'workflow_dispatch':
-                raise ListingError('Image upload is permitted only by manual main-branch workflow dispatch')
+            if os.environ.get('GITHUB_REPOSITORY') != 'hebi10/TripCanvas' or os.environ.get('GITHUB_REF') != 'refs/heads/main':
+                raise ListingError('Image upload requires the trusted repository main branch')
+            event_name = os.environ.get('GITHUB_EVENT_NAME')
+            if event_name == 'push':
+                subject = subprocess.run(['git', 'show', '-s', '--format=%s', 'HEAD'],
+                                         capture_output=True, text=True, check=False)
+                if (subject.returncode or subject.stdout.strip() !=
+                    'store: TripCanvas STORE-03 Korean listing [tripcanvas-store03-listing-once]'):
+                    raise ListingError('Automatic upload is restricted to the authorized STORE-03 merge')
+            elif event_name != 'workflow_dispatch':
+                raise ListingError('Image upload requires manual dispatch or the authorized STORE-03 merge')
             print(submit(PlayClient(os.environ.get('PLAY_ACCESS_TOKEN', '')), assets))
         else:
             print('TripCanvas ko-KR: 10 image assets verified; no Play API changes.')

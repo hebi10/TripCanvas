@@ -239,7 +239,10 @@ class Publisher:
                     return {'reviewHoldParameterOmitted': True, 'reason': REVIEW_HOLD_FORBIDDEN_REASON}
             return
         self.request('POST', edit + ':validate', {})
-        query = '?changesNotSentForReview=true' if changes_not_sent_for_review else ''
+        # Never cancel an in-progress Play review on an automatic internal upload or manual alpha promotion.
+        query = '?changesInReviewBehavior=ERROR_IF_IN_REVIEW'
+        if changes_not_sent_for_review:
+            query += '&changesNotSentForReview=true'
         self.request('POST', edit + ':commit' + query, {})
 
     def verify_track(self, track, code, status):
