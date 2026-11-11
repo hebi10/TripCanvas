@@ -7,6 +7,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
+import androidx.test.uiautomator.Direction
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.StaleObjectException
 import androidx.test.uiautomator.UiObject2
@@ -276,7 +277,13 @@ class TripCanvas2CScreenshotTest {
             openScreen("지출 추가", "지출 정보")
             awaitText("지출 일시")
             capture("09-expense-create-form")
-            swipeUp()
+            repeat(12) {
+                if (!device.hasObject(By.text("지출 저장"))) {
+                    val scrollView = device.findObject(By.scrollable(true))
+                        ?: throw AssertionError("지출 입력 화면의 스크롤 영역을 찾지 못했습니다.")
+                    scrollView.scroll(Direction.DOWN, 0.75f)
+                }
+            }
             awaitText("지출 저장")
             capture("09a-expense-form-bottom")
             click("지출 저장")
