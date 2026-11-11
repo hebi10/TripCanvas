@@ -55,9 +55,9 @@ class TripCanvas2CScreenshotTest {
                 TripBackupSnapshot(
                     trips = listOf(
                         TripEntity(
-                            "qa-trip", "QA 제주 여행", "2026-11-20", "2026-11-22",
+                            "qa-trip", "제주 주말 여행", "2026-11-20", "2026-11-22",
                             "대한민국", "제주", "Asia/Seoul", "KRW",
-                            "2박 3일 여행", "실제 Android 화면 검수용 샘플",
+                            "2박 3일 여행", "여행 일정과 지출을 한눈에",
                             1L, 1L
                         )
                     ),
@@ -105,14 +105,14 @@ class TripCanvas2CScreenshotTest {
     @Test
     fun captureRealMainActivityAndExerciseMvp() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            awaitText("QA 제주 여행")
+            awaitText("제주 주말 여행")
             capture("01-home-light")
             assertStatusBarBackground(dark = false)
             click("완료")
             awaitText("완료된 여행이 없습니다")
             capture("01a-home-filter-empty")
             click("전체")
-            awaitText("QA 제주 여행")
+            awaitText("제주 주말 여행")
             openTripActions()
             capture("01b-home-actions-menu")
             click("여행 편집")
@@ -126,7 +126,7 @@ class TripCanvas2CScreenshotTest {
             capture("01d-home-delete-confirm")
             click("취소")
             awaitText("내 여행")
-            click("QA 제주 여행")
+            click("제주 주말 여행")
             awaitText("여행 한눈에")
             capture("02a-workspace-overview-light")
             awaitText("작업 도구")
@@ -230,7 +230,7 @@ class TripCanvas2CScreenshotTest {
             capture("15-home-dark")
             assertStatusBarBackground(dark = true)
 
-            click("QA 제주 여행")
+            click("제주 주말 여행")
             awaitText("여행 한눈에")
             capture("16a-workspace-overview-dark")
             awaitText("작업 도구")
@@ -268,7 +268,7 @@ class TripCanvas2CScreenshotTest {
             Thread.sleep(1200)
             capture("20-home-dark-font160")
             assertStatusBarBackground(dark = true)
-            click("QA 제주 여행")
+            click("제주 주말 여행")
             awaitText("여행 한눈에")
             capture("21a-workspace-overview-dark-font160")
             awaitText("작업 도구")
@@ -308,7 +308,7 @@ class TripCanvas2CScreenshotTest {
 
     private fun openTripActions() {
         val button = device.wait(
-            Until.findObject(By.desc("QA 제주 여행 메뉴")), 5000
+            Until.findObject(By.desc("제주 주말 여행 메뉴")), 5000
         ) ?: throw AssertionError("여행 카드 더보기 버튼을 찾지 못했습니다.")
         button.click()
         awaitText("여행 편집")
