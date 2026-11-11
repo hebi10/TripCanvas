@@ -1,0 +1,96 @@
+name: TripCanvas R09 verified store assets import (one shot)
+on:
+  push:
+    branches:
+      - store/ui-r09-ko-kr-final-20261111
+    paths:
+      - .github/workflows/ui-r09-store-assets-import-once.yml
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  import-verified-screenshots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout store-only branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: true
+      - name: Ensure exact approved main snapshot and genuine capture artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected=5fc89e73137c7e80ce694b808c4d480f06457452
+          actual="$(gh api repos/hebi10/TripCanvas/git/ref/heads/main --jq .object.sha)"
+          test "$actual" = "$expected"
+          test "$(git rev-parse HEAD^)" = "$expected"
+          gh api repos/hebi10/TripCanvas/actions/runs/43001755572 --jq '"\(.head_sha) \(.conclusion)"' | grep -Fx "$expected success"
+          gh api repos/hebi10/TripCanvas/actions/artifacts/13846763210 --jq .digest | grep -Fx 'sha256:760c1d4f416576e54bd60df32b8e000e202d8424cdf34c689b6b6fd0a2591c52'
+      - name: Download real Android screenshot review artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/r09-store-evidence"
+          gh run download 43001755572 --repo hebi10/TripCanvas --name tripcanvas-r09-review-5fc89e73137c7e80ce694b808c4d480f06457452 --dir "$RUNNER_TEMP/r09-store-evidence"
+          test -f "$RUNNER_TEMP/r09-store-evidence/staged-ko-KR/manifest.json"
+          test -f "$RUNNER_TEMP/r09-store-evidence/evidence.json"
+      - name: Validate source, copy eight PNGs, keep icon and feature untouched
+        shell: bash
+        env:
+          STORE_EVIDENCE: ${{ runner.temp }}/r09-store-evidence
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib,shutil
+          src=pathlib.Path(os.environ['STORE_EVIDENCE'])/'staged-ko-KR'
+          dest=pathlib.Path('assets/play-store/ko-KR')
+          manifest=json.loads((src/'manifest.json').read_text(encoding='utf-8'))
+          assert manifest['package']=='com.hebi.tripcanvas'
+          assert manifest['store_locale']=='ko-KR'
+          assert manifest['source_main_sha']=='5fc89e73137c7e80ce694b808c4d480f06457452'
+          expected=['store-icon-512.png','feature-graphic-1024x500.png','01-home.png','02-workspace.png','03-schedule.png','04-map.png','05-checklist.png','06-expenses.png','07-settlement.png','08-bookings.png']
+          assert [entry['name'] for entry in manifest['files']]==expected
+          for entry in manifest['files']:
+              name=entry['name']
+              content=(src/name).read_bytes()
+              assert len(content)==entry['size_bytes']
+              assert hashlib.sha256(content).hexdigest()==entry['sha256']
+              if name in expected[:2]:
+                  assert hashlib.sha256((dest/name).read_bytes()).hexdigest()==entry['sha256'], f'Existing brand image has changed: {name}'
+              else:
+                  shutil.copyfile(src/name,dest/name)
+          shutil.copyfile(src/'manifest.json',dest/'manifest.json')
+          print('Eight exact-main screenshots and manifest validated; existing icon/feature unchanged.')
+          PY
+          python3 scripts/play/verify_listing_assets.py
+          python3 - <<'PY'
+          from scripts.play.listing_images import validate_assets
+          assert len(validate_assets())==10
+          print('Full Play image order, byte lengths and SHA-256 validated.')
+          PY
+      - name: Commit image-only changes and remove temporary workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm -- .github/workflows/ui-r09-store-assets-import-once.yml
+          git add -- assets/play-store/ko-KR/manifest.json assets/play-store/ko-KR/0*.png
+          python3 - <<'PY'
+          import subprocess
+          actual=subprocess.check_output(['git','diff','--cached','--name-only'],text=True).splitlines()
+          expected=[f'assets/play-store/ko-KR/{p}' for p in ['01-home.png','02-workspace.png','03-schedule.png','04-map.png','05-checklist.png','06-expenses.png','07-settlement.png','08-bookings.png','manifest.json']]
+          if sorted(actual)!=sorted(expected):
+              raise SystemExit(f'Image-only diff rejected: {actual!r}')
+          print('Final branch diff restricted to eight PNG files and manifest.')
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "store(r09): final verified main screenshots for ko-KR"
+          git push origin HEAD:refs/heads/store/ui-r09-ko-kr-final-20261111
