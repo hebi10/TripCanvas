@@ -21,9 +21,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import com.hebi.tripcanvas.data.BookingInput
 import com.hebi.tripcanvas.data.BookingRepository
 import com.hebi.tripcanvas.data.BookingType
@@ -35,6 +39,7 @@ import com.hebi.tripcanvas.designsystem.components.TripLoadingState
 import com.hebi.tripcanvas.designsystem.components.TripPrimaryButton
 import com.hebi.tripcanvas.designsystem.components.TripSecondaryButton
 import com.hebi.tripcanvas.designsystem.components.TripSectionHeading
+import com.hebi.tripcanvas.designsystem.components.TripSurfacePanel
 import com.hebi.tripcanvas.designsystem.components.TripTextField
 import com.hebi.tripcanvas.designsystem.theme.TripDesign
 import com.hebi.tripcanvas.designsystem.tokens.TripSpacing
@@ -71,6 +76,7 @@ fun BookingFormScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var showDiscard by remember { mutableStateOf(false) }
     var removingId by remember { mutableStateOf<String?>(null) }
+    var showReference by rememberSaveable(bookingId) { mutableStateOf(false) }
     LaunchedEffect(stored?.id) {
         if (!hydrated && stored != null) {
             input = stored.toInput()
@@ -154,11 +160,33 @@ fun BookingFormScreen(
                 placeholder = "2026-11-20T14:30",
                 supportingText = "선택 사항 · yyyy-MM-ddTHH:mm"
             )
+            if (input.startAtLocal.isNotBlank()) {
+                Text(
+                    "일정 표시 · " + bookingDateLabel(input.startAtLocal),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = palette.textSecondary
+                )
+            }
             TripTextField(
                 value = input.referenceNumber,
                 onValueChange = { input = input.copy(referenceNumber = it); error = null },
                 label = "예약 확인번호",
-                supportingText = "선택 사항 · 목록과 로그에는 표시하지 않습니다."
+                supportingText = "선택 사항 · 목록에서는 표시하지 않습니다.",
+                visualTransformation = if (showReference) {
+                    VisualTransformation.None
+                } else {
+                    PasswordVisualTransformation()
+                }
+            )
+            TripSecondaryButton(
+                label = if (showReference) "확인번호 숨기기" else "확인번호 보기",
+                onClick = { showReference = !showReference }
+            )
+            Text(
+                "확인번호는 이 편집 화면에서만 선택하여 볼 수 있습니다. " +
+                    "JSON 백업에는 예약 확인번호가 포함될 수 있으므로 공유에 주의하세요.",
+                style = MaterialTheme.typography.bodySmall,
+                color = palette.textSecondary
             )
             TripTextField(
                 value = input.note,
@@ -178,38 +206,84 @@ fun BookingFormScreen(
                 color = palette.textSecondary
             )
             if (bookingId != null) {
+                Text(
+                    bookingAttachmentLabel(documents.size),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = palette.textPrimary
+                )
+                if (documents.isEmpty()) {
+                    Text(
+                        "연결된 파일이 없습니다.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = palette.textSecondary
+                    )
+                }
                 documents.forEach { document ->
-                    Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
-                        Text(document.displayName, color = palette.textPrimary)
-                        TripSecondaryButton(
-                            label = "파일 열기",
-                            onClick = {
-                                try {
-                                    val intent = Intent(Intent.ACTION_VIEW).apply {
-                                        setDataAndType(Uri.parse(document.uriString), document.mimeType)
-                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
+                        Column(
+                            modifier = Modifier.padding(TripSpacing.md),
+                            verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
+                        ) {
+                            Text(
+                                document.displayName,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = palette.textPrimary,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                if (document.mimeType == "application/pdf") "PDF 문서" else "이미지",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = palette.textSecondary
+                            )
+                            TripSecondaryButton(
+                                label = "파일 열기",
+                                onClick = {
+                                    error = null
+                                    try {
+                                        val intent = Intent(Intent.ACTION_VIEW).apply {
+                                            setDataAndType(
+                                                Uri.parse(document.uriString),
+                                                document.mimeType
+                                            )
+                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        }
+                                        context.startActivity(intent)
+                                    } catch (failed: ActivityNotFoundException) {
+                                        error = "파일을 열 수 있는 앱이 없습니다. PDF 또는 이미지 뷰어를 확인해 주세요."
+                                    } catch (failed: SecurityException) {
+                                        error = "파일 접근 권한이 만료됐습니다. 연결을 제거하고 다시 첨부해 주세요."
+                                    } catch (failed: Exception) {
+                                        error = "원본 파일이 이동·삭제됐거나 사용할 수 없습니다. 다시 첨부해 주세요."
                                     }
-                                    context.startActivity(intent)
-                                } catch (failed: Exception) {
-                                    error = "파일에 접근할 수 없습니다. 연결을 제거하고 다시 선택해 주세요."
                                 }
-                            }
-                        )
-                        TripSecondaryButton(
-                            label = "파일 연결 제거",
-                            enabled = !saving,
-                            onClick = { removingId = document.id }
-                        )
+                            )
+                            TripSecondaryButton(
+                                label = "파일 연결 제거",
+                                enabled = !saving,
+                                onClick = { removingId = document.id }
+                            )
+                        }
                     }
                 }
                 TripSecondaryButton(
                     label = "PDF·이미지 첨부",
                     modifier = Modifier.fillMaxWidth(),
                     enabled = !saving,
-                    onClick = { documentPicker.launch(arrayOf("application/pdf", "image/*")) }
+                    onClick = {
+                        error = null
+                        try {
+                            documentPicker.launch(arrayOf("application/pdf", "image/*"))
+                        } catch (failed: ActivityNotFoundException) {
+                            error = "기기의 파일 선택기를 열 수 없습니다. 파일 관리 앱을 확인해 주세요."
+                        }
+                    }
                 )
             } else {
-                Text("예약 정보를 저장한 뒤 파일을 첨부할 수 있습니다.", color = palette.textSecondary)
+                Text(
+                    "예약 정보를 저장한 뒤 파일을 첨부할 수 있습니다.",
+                    color = palette.textSecondary
+                )
             }
             if (error != null) {
                 TripErrorState(
