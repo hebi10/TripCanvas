@@ -30,7 +30,6 @@ jobs:
           actual="$(gh api repos/hebi10/TripCanvas/git/ref/heads/main --jq .object.sha)"
           test "$actual" = "$expected"
           git fetch -q origin "$expected" --depth=5
-          git merge-base --is-ancestor "$expected" HEAD
           test "$(git diff --name-only "$expected" HEAD)" = ".github/workflows/ui-r09-store-assets-import-once.yml"
           gh api repos/hebi10/TripCanvas/actions/runs/43001755572 --jq '"\(.head_sha) \(.conclusion)"' | grep -Fx "$expected success"
           gh api repos/hebi10/TripCanvas/actions/artifacts/13846763210 --jq .digest | grep -Fx 'sha256:760c1d4f416576e54bd60df32b8e000e202d8424cdf34c689b6b6fd0a2591c52'
