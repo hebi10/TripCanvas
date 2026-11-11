@@ -17,6 +17,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,6 +26,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import com.hebi.tripcanvas.data.ChecklistRepository
 import com.hebi.tripcanvas.data.ExpenseRepository
 import com.hebi.tripcanvas.data.ItineraryRepository
@@ -223,6 +225,7 @@ private fun WorkspaceContent(
 @Composable
 private fun WorkspaceHeader(trip: TripEntity?, isPreview: Boolean) {
     val p = TripDesign.palette
+    var showTravelDetails by rememberSaveable(trip?.id) { mutableStateOf(false) }
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
@@ -269,11 +272,24 @@ private fun WorkspaceHeader(trip: TripEntity?, isPreview: Boolean) {
                 style = MaterialTheme.typography.bodySmall,
                 color = p.textSecondary
             )
-            if (trip.purpose.isNotBlank()) {
-                Text(trip.purpose, style = MaterialTheme.typography.bodyLarge, color = p.textPrimary)
-            }
-            if (trip.note.isNotBlank()) {
-                Text(trip.note, style = MaterialTheme.typography.bodyMedium, color = p.textSecondary)
+            if (trip.purpose.isNotBlank() || trip.note.isNotBlank()) {
+                TextButton(
+                    onClick = { showTravelDetails = !showTravelDetails },
+                    modifier = Modifier.heightIn(min = TripSizes.minimumTouchTarget)
+                ) {
+                    Text(
+                        text = if (showTravelDetails) "여행 설명 접기" else "여행 설명 보기",
+                        color = p.textPrimary
+                    )
+                }
+                if (showTravelDetails) {
+                    if (trip.purpose.isNotBlank()) {
+                        Text(trip.purpose, style = MaterialTheme.typography.bodyLarge, color = p.textPrimary)
+                    }
+                    if (trip.note.isNotBlank()) {
+                        Text(trip.note, style = MaterialTheme.typography.bodyMedium, color = p.textSecondary)
+                    }
+                }
             }
         }
     }
@@ -347,12 +363,12 @@ private fun WorkspaceOverview(
             TripAdaptiveContainer(modifier = Modifier.fillMaxWidth()) { width ->
                 if (width == TripWindowWidth.Compact) {
                     Column(
-                        modifier = Modifier.padding(TripSpacing.md),
-                        verticalArrangement = Arrangement.spacedBy(TripSpacing.md)
+                        modifier = Modifier.padding(TripSpacing.sm),
+                        verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)
                     ) {
-                        WorkspaceMetric("다음 일정", nextTitle, nextDetail)
-                        WorkspaceMetric("사용 경비", spent, expenseDetail)
-                        WorkspaceMetric("준비물 완료", checklistValue, checklistDetail)
+                        WorkspaceMetric("다음 일정", nextTitle, nextDetail, compact = true)
+                        WorkspaceMetric("사용 경비", spent, expenseDetail, compact = true)
+                        WorkspaceMetric("준비물 완료", checklistValue, checklistDetail, compact = true)
                     }
                 } else {
                     Row(
@@ -374,21 +390,41 @@ private fun WorkspaceMetric(
     label: String,
     value: String,
     supportingText: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    compact: Boolean = false
 ) {
     val p = TripDesign.palette
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(TripSpacing.xxs)
     ) {
-        Text(label, style = MaterialTheme.typography.labelMedium, color = p.textSecondary)
-        Text(
-            value,
-            style = MaterialTheme.typography.titleMedium,
-            color = p.textPrimary,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
+        if (compact) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(TripSpacing.sm)
+            ) {
+                Text(label, style = MaterialTheme.typography.labelMedium, color = p.textSecondary)
+                Text(
+                    value,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = p.textPrimary,
+                    textAlign = TextAlign.End,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        } else {
+            Text(label, style = MaterialTheme.typography.labelMedium, color = p.textSecondary)
+            Text(
+                value,
+                style = MaterialTheme.typography.titleMedium,
+                color = p.textPrimary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
         Text(
             supportingText,
             style = MaterialTheme.typography.bodySmall,
@@ -467,24 +503,37 @@ private fun WorkspaceToolGrid(
             color = p.textPrimary
         )
         TripAdaptiveContainer(modifier = Modifier.fillMaxWidth()) { width ->
-            if (width == TripWindowWidth.Compact) {
-                Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)) {
-                    tools.forEach { tool ->
-                        WorkspaceToolCard(tool, modifier = Modifier.fillMaxWidth())
-                    }
-                }
-            } else {
-                Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)) {
-                    tools.chunked(2).forEach { pair ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(TripSpacing.sm)
-                        ) {
-                            WorkspaceToolCard(pair[0], modifier = Modifier.weight(1f))
-                            if (pair.size == 2) {
-                                WorkspaceToolCard(pair[1], modifier = Modifier.weight(1f))
-                            }
-                        }
+            Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)) {
+                WorkspaceToolRows(tools.take(4), width)
+                Text(
+                    "추가 관리",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = p.textSecondary
+                )
+                WorkspaceToolRows(tools.drop(4), width)
+            }
+        }
+    }
+}
+
+@Composable
+private fun WorkspaceToolRows(tools: List<WorkspaceTool>, width: TripWindowWidth) {
+    if (width == TripWindowWidth.Compact) {
+        Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)) {
+            tools.forEach { tool ->
+                WorkspaceToolCard(tool, modifier = Modifier.fillMaxWidth())
+            }
+        }
+    } else {
+        Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)) {
+            tools.chunked(2).forEach { pair ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(TripSpacing.sm)
+                ) {
+                    WorkspaceToolCard(pair[0], modifier = Modifier.weight(1f))
+                    if (pair.size == 2) {
+                        WorkspaceToolCard(pair[1], modifier = Modifier.weight(1f))
                     }
                 }
             }
