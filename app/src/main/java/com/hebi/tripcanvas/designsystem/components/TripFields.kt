@@ -1,6 +1,7 @@
 package com.hebi.tripcanvas.designsystem.components
 
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.material3.MaterialTheme
@@ -21,7 +22,8 @@ fun TripTextField(
     supportingText: String? = null,
     isError: Boolean = false,
     singleLine: Boolean = true,
-    visualTransformation: VisualTransformation = VisualTransformation.None
+    visualTransformation: VisualTransformation = VisualTransformation.None,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default
 ) {
     val p = TripDesign.palette
     OutlinedTextField(
@@ -40,6 +42,7 @@ fun TripTextField(
         isError = isError,
         singleLine = singleLine,
         visualTransformation = visualTransformation,
+        keyboardOptions = keyboardOptions,
         shape = RectangleShape,
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = p.textPrimary,
