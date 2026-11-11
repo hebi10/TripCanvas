@@ -7,6 +7,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
+import androidx.test.uiautomator.Direction
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.StaleObjectException
 import androidx.test.uiautomator.UiObject2
@@ -253,7 +254,14 @@ class TripCanvas2CScreenshotTest {
             awaitText("준비물 열기")
 
             openScreen("경비 열기", "예산 설정·변경")
+            awaitText("예산 현황")
+            awaitText("총예산")
+            awaitText("지출 합계")
+            awaitText("잔액")
+            awaitText("KRW 287,500 남음")
             capture("07-expenses-light")
+            awaitText("환산 필요")
+            capture("07a-expenses-unconverted-warning")
             click("예산 설정·변경")
             awaitText("총예산 · KRW")
             capture("08-budget-edit-dialog")
@@ -261,7 +269,13 @@ class TripCanvas2CScreenshotTest {
             device.wait(Until.gone(By.text("총예산 · KRW")), 3000)
             openScreen("지출 추가", "지출 정보")
             capture("09-expense-create-form")
-            swipeUp()
+            repeat(12) {
+                if (!device.hasObject(By.text("지출 저장"))) {
+                    val scrollView = device.findObject(By.scrollable(true))
+                        ?: throw AssertionError("지출 입력 화면의 스크롤 영역을 찾지 못했습니다.")
+                    scrollView.scroll(Direction.DOWN, 0.75f)
+                }
+            }
             awaitText("지출 저장")
             capture("09a-expense-form-bottom")
             click("지출 저장")
@@ -335,6 +349,7 @@ class TripCanvas2CScreenshotTest {
             device.pressBack()
             awaitText("경비 열기")
             openScreen("경비 열기", "예산 설정·변경")
+            awaitText("예산 현황")
             capture("18-expenses-dark")
             device.pressBack()
             awaitText("경비 열기")
@@ -393,6 +408,7 @@ class TripCanvas2CScreenshotTest {
             device.pressBack()
             awaitText("경비 열기")
             openScreen("경비 열기", "예산 설정·변경")
+            awaitText("예산 현황")
             capture("23-expenses-dark-font160")
         }
     }
