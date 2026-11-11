@@ -1,12 +1,26 @@
 {
   "app": "TripCanvas",
   "package": "com.hebi.tripcanvas",
-  "version_basis": "0.1.0 (versionCode 3; Android UI build TripCanvas STORE-02 commit f41633fe89bde6124c18d0e11a37a534a0bdde4d)",
+  "version_basis": "Exact integrated main commit 5fc89e73137c7e80ce694b808c4d480f06457452",
   "created_date": "2026-11-11",
   "store_locale": "ko-KR",
-  "design": "neutral monochrome editorial, no gradient, no shadow, no rounded frames",
-  "source_note": "The eight real Android screenshots are taken from successful 2026-11-11 GitHub CI runs for commit f41633f. Travel titles changed in Android QA fixtures before capture. Only the outside framing and captions are added. Screenshot internals remain unchanged.",
-  "release_note": "The creation of these files does not mean that Google Play API updates or app tracks have been modified.",
+  "design": "neutral monochrome editorial; no gradient, shadow or rounded frame",
+  "source_note": "Only framing and captions outside real Android screenshots; no screenshot edits",
+  "source_main_sha": "5fc89e73137c7e80ce694b808c4d480f06457452",
+  "source_workflow_runs": {
+    "2c": {
+      "run_id": 43001755572,
+      "sha256": "a48f3b2cda38cba278d68ec9102bd5a737a0efd4293e68e83dfcb04197080ca6"
+    },
+    "3a": {
+      "run_id": 43001755572,
+      "sha256": "d089c7c0a744539a9350f3c533ad6df605cf434a51bf558233be4693e03c81e5"
+    },
+    "3b": {
+      "run_id": 43001755572,
+      "sha256": "69d54d9a4fbf4591821d4e4034219cd61534b912339ca155ea2a77456bdfb47a"
+    }
+  },
   "files": [
     {
       "order": 0,
@@ -18,7 +32,7 @@
         512
       ],
       "mode": "RGBA",
-      "source": "Verified STORE-01 store icon 512 PNG; unchanged source"
+      "source": "Existing verified TripCanvas icon/feature graphic"
     },
     {
       "order": 1,
@@ -30,103 +44,103 @@
         500
       ],
       "mode": "RGB",
-      "source": "Verified STORE-01 feature graphic 1024x500 PNG; unchanged source"
+      "source": "Existing verified TripCanvas icon/feature graphic"
     },
     {
       "order": 2,
       "name": "01-home.png",
-      "size_bytes": 141549,
-      "sha256": "32ec99567149b7b678656942c0047697ba0b9d995d67ff1f51e18a3c9576af68",
+      "size_bytes": 154287,
+      "sha256": "e04b5c2996c515ba23e4ce1832a8f93564e01e9f6d9e58b624178e51f0c36d0b",
       "pixels": [
         1350,
         2400
       ],
       "mode": "RGB",
-      "source": "TripCanvas 2-C Android Screen QA run 42952421959 / phone ; qa2c/01-home-light.png"
+      "source": "Real Android 2c run 43001755572; 01-home-light.png; original_png_sha256=982ba21b054c9df44521402910e431f19f3a88268b031c021da2bc798a1009a3"
     },
     {
       "order": 3,
       "name": "02-workspace.png",
-      "size_bytes": 203984,
-      "sha256": "e13edb1aa5997213f756930acd9e9a8707e80f51717192c4e259a8d072750b93",
+      "size_bytes": 220267,
+      "sha256": "7a5682ab06a7f58a9e562e41e46b2552604685623af9113bd1ffe977f5c6f4ac",
       "pixels": [
         1350,
         2400
       ],
       "mode": "RGB",
-      "source": "TripCanvas 2-C Android Screen QA run 42952421959 / phone ; qa2c/02a-workspace-overview-light.png"
+      "source": "Real Android 2c run 43001755572; 02a-workspace-overview-light.png; original_png_sha256=f0af974b3962867caa75abb33759502f5c64c53067f70e7a460180a946c559b6"
     },
     {
       "order": 4,
       "name": "03-schedule.png",
-      "size_bytes": 184648,
-      "sha256": "29681eb21b6523122bcc601c2a27d0ea13049de9534ac31f8123221aea5993a4",
+      "size_bytes": 194946,
+      "sha256": "da051b139ffad5c89a36f414015f3dd01059073f6e2ae12454ab4d19b6ce95a4",
       "pixels": [
         1350,
         2400
       ],
       "mode": "RGB",
-      "source": "TripCanvas 2-C Android Screen QA run 42952421959 / phone ; qa2c/02d-workspace-schedule-route.png"
+      "source": "Real Android 2c run 43001755572; 02d-workspace-schedule-route.png; original_png_sha256=a9ef0d526ac826d650c629d8129901a88dc97a5a1fa46c4104c26b7beec07f85"
     },
     {
       "order": 5,
       "name": "04-map.png",
-      "size_bytes": 433664,
-      "sha256": "54df73218af1d54867cd40904110cad0851238de105c35e8ae3b478316fd2e9a",
+      "size_bytes": 506111,
+      "sha256": "ae96e68439de9f51f1ddbbe8211a00839e04595d8cafc278b3256661b30254ae",
       "pixels": [
         1350,
         2400
       ],
       "mode": "RGB",
-      "source": "TripCanvas 3-A Map Screen QA run 42952421947 / phone ; qa3a/03-map-all-light.png"
+      "source": "Real Android 3a run 43001755572; 03-map-all-light.png; original_png_sha256=c08e484da281bf804065e95526e6deeae396047eb3d08ba9a3d78a8be9eebc59"
     },
     {
       "order": 6,
       "name": "05-checklist.png",
-      "size_bytes": 136819,
-      "sha256": "121047b7f5a637ff09106140da05f7153d947dacd16bf29a9ea48dfadcba468f",
+      "size_bytes": 129835,
+      "sha256": "0718007a2180deb74e9fd049e2eff0847b56ac03276ffb75ecd2713c50c3544b",
       "pixels": [
         1350,
         2400
       ],
       "mode": "RGB",
-      "source": "TripCanvas 2-C Android Screen QA run 42952421959 / phone ; qa2c/03-checklist-light.png"
+      "source": "Real Android 2c run 43001755572; 03-checklist-light.png; original_png_sha256=b4e487785dc19250e6e3b05955127568c47b1dc29f9d96947424ed60793f977e"
     },
     {
       "order": 7,
       "name": "06-expenses.png",
-      "size_bytes": 177397,
-      "sha256": "faee0507ee9e1dbc2af609434a519222fbe84f9ffe6f23ae1d356dc8e0e36fa5",
+      "size_bytes": 210733,
+      "sha256": "c4dae6d55c10a3520be8faf0bd60048993bce38c0d9b7f177be88fd79c60d30b",
       "pixels": [
         1350,
         2400
       ],
       "mode": "RGB",
-      "source": "TripCanvas 2-C Android Screen QA run 42952421959 / phone ; qa2c/07-expenses-light.png"
+      "source": "Real Android 2c run 43001755572; 07-expenses-light.png; original_png_sha256=53f7c40c454be88722df544456245043cb7c6958a4cd21a4d62bf3c45fc65eeb"
     },
     {
       "order": 8,
       "name": "07-settlement.png",
-      "size_bytes": 183193,
-      "sha256": "fea2ccd33adfd5379c10cbc1692c501e9b6bcb2eaa6aaaf30771da72a1f3eb82",
+      "size_bytes": 242617,
+      "sha256": "a384e607e6e144a62ec6d5a6e840e6581a9487dd4d69b3c9cf9f9e07706c909a",
       "pixels": [
         1350,
         2400
       ],
       "mode": "RGB",
-      "source": "TripCanvas 3-B Finance Booking Screen QA run 42952422005 / phone ; qa3b/05-settlement-light.png"
+      "source": "Real Android 3b run 43001755572; 05-settlement-light.png; original_png_sha256=c8b540aff854e3821eadad8ebf0790062f2e2e3a7b4e7f75fd5e10c302f098f0"
     },
     {
       "order": 9,
       "name": "08-bookings.png",
-      "size_bytes": 136795,
-      "sha256": "894b153b49cb782bd044d129f2f13e0763acd490cc56e6d9d0f417db1c0f251c",
+      "size_bytes": 154044,
+      "sha256": "81f8ebc14dacbe51743460c5af82fa185422c3cc57a285f6249e36a9193e387b",
       "pixels": [
         1350,
         2400
       ],
       "mode": "RGB",
-      "source": "TripCanvas 3-B Finance Booking Screen QA run 42952422005 / phone ; qa3b/08-bookings-light.png"
+      "source": "Real Android 3b run 43001755572; 08-bookings-light.png; original_png_sha256=1be15477fb6ea094827fced05f6cdc00df27f1057c56665ba76cf17063dfcd58"
     }
   ]
 }
