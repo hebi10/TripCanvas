@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -23,6 +24,7 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
 import com.hebi.tripcanvas.data.TripPeriodConflictException
 import com.hebi.tripcanvas.data.TripRepository
 import com.hebi.tripcanvas.data.local.TripEntity
@@ -64,6 +66,24 @@ private val TripInputSaver = listSaver<TripInput, String>(
         )
     }
 )
+
+internal fun retainTripFormErrors(
+    previous: TripInput,
+    next: TripInput,
+    errors: Map<TripField, String>
+): Map<TripField, String> = errors.filterKeys { field ->
+    when (field) {
+        TripField.Title -> previous.title == next.title
+        TripField.StartDate, TripField.EndDate ->
+            previous.startDate == next.startDate && previous.endDate == next.endDate
+        TripField.Country -> previous.country == next.country
+        TripField.City -> previous.city == next.city
+        TripField.TimeZone -> previous.timeZoneId == next.timeZoneId
+        TripField.Currency -> previous.currencyCode == next.currencyCode
+        TripField.Purpose -> previous.purpose == next.purpose
+        TripField.Note -> previous.note == next.note
+    }
+}
 
 private sealed interface TripFormState {
     data object Loading : TripFormState
@@ -136,14 +156,14 @@ fun TripFormScreen(
             else -> {
                 TripSectionHeading(
                     title = "여행 기본 정보",
-                    supportingText = "여행별 제목·기간·목적지와 현지 시간대, 통화를 저장합니다."
+                    supportingText = "* 표시 항목은 필수입니다. 입력한 내용은 저장을 완료할 때 반영됩니다."
                 )
                 TripFormFields(
                     input = input,
                     errors = errors,
-                    onChange = {
-                        input = it
-                        errors = emptyMap()
+                    onChange = { changed ->
+                        errors = retainTripFormErrors(input, changed, errors)
+                        input = changed
                         saveFailed = false
                         periodWarning = null
                     }
@@ -185,11 +205,11 @@ fun TripFormScreen(
                                         throw error
                                     } catch (error: TripPeriodConflictException) {
                                         val dates = error.affectedDates.distinct()
-                                        periodWarning = "기간 밖 일정 " + error.affectedDates.size +
-                                            "개 (" + dates.take(8).joinToString(", ") +
-                                            if (dates.size > 8) " 외 " + (dates.size - 8) + "개 날짜). " +
-                                                "일정을 기간 안으로 이동하거나 삭제한 뒤 다시 저장해 주세요."
-                                            else "). 일정을 기간 안으로 이동하거나 삭제한 뒤 다시 저장해 주세요."
+                                        val datesText = dates.take(8).joinToString(", ") +
+                                            if (dates.size > 8) " 외 ${dates.size - 8}개 날짜" else ""
+                                        periodWarning = "기간 밖 일정 ${error.affectedDates.size}개 " +
+                                            "($datesText). 일정을 기간 안으로 이동하거나 삭제한 뒤 " +
+                                            "다시 저장해 주세요."
                                     } catch (error: Exception) {
                                         saveFailed = true
                                     } finally {
@@ -230,6 +250,10 @@ private fun TripFormFields(
         supportingText = errors[TripField.Title] ?: "1~80자",
         isError = errors.containsKey(TripField.Title)
     )
+    TripSectionHeading(
+        title = "여행 기간·목적지",
+        supportingText = "시작일·종료일은 필수이며 기존 일정이 기간 밖으로 밀리면 변경이 차단됩니다."
+    )
     TripDateField(
         label = "시작일 *",
         date = input.startDate,
@@ -258,12 +282,17 @@ private fun TripFormFields(
         supportingText = errors[TripField.City],
         isError = errors.containsKey(TripField.City)
     )
+    TripSectionHeading(
+        title = "현지 설정",
+        supportingText = "기기 시간대와 별개로 여행의 현지 시간대·기준 통화를 지정합니다."
+    )
     TripTextField(
         value = input.timeZoneId,
         onValueChange = { onChange(input.copy(timeZoneId = it)) },
         label = "여행 현지 시간대 *",
         supportingText = errors[TripField.TimeZone] ?: "IANA 시간대. 예: Asia/Seoul",
-        isError = errors.containsKey(TripField.TimeZone)
+        isError = errors.containsKey(TripField.TimeZone),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii)
     )
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs),
@@ -282,7 +311,8 @@ private fun TripFormFields(
         onValueChange = { onChange(input.copy(currencyCode = it)) },
         label = "기본 통화 *",
         supportingText = errors[TripField.Currency] ?: "ISO 4217 코드. 예: KRW",
-        isError = errors.containsKey(TripField.Currency)
+        isError = errors.containsKey(TripField.Currency),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii)
     )
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs),
@@ -296,11 +326,15 @@ private fun TripFormFields(
             )
         }
     }
+    TripSectionHeading(
+        title = "추가 정보",
+        supportingText = "여행 목적과 메모는 선택 사항입니다."
+    )
     TripTextField(
         value = input.purpose,
         onValueChange = { onChange(input.copy(purpose = it)) },
         label = "여행 목적",
-        supportingText = errors[TripField.Purpose],
+        supportingText = errors[TripField.Purpose] ?: "최대 120자",
         isError = errors.containsKey(TripField.Purpose)
     )
     TripTextField(
@@ -312,7 +346,7 @@ private fun TripFormFields(
         singleLine = false
     )
     Text(
-        "대표 이미지와 일정·경비·준비물 등록은 후속 단계에서 제공됩니다.",
+        "일정·장소·경비·준비물·예약 자료는 여행 생성 후 작업 공간에서 관리합니다.",
         style = MaterialTheme.typography.bodyMedium,
         color = p.textSecondary
     )
@@ -348,7 +382,9 @@ fun TripDateField(
         DatePickerDialog(
             onDismissRequest = { showPicker = false },
             confirmButton = {
-                TextButton(onClick = {
+                TextButton(
+                    enabled = state.selectedDateMillis != null,
+                    onClick = {
                     state.selectedDateMillis?.let { selectedMillis ->
                         val value = Instant.ofEpochMilli(selectedMillis)
                             .atZone(ZoneOffset.UTC).toLocalDate().toString()
