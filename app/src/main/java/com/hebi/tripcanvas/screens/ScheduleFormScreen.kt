@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -19,6 +20,7 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
 import com.hebi.tripcanvas.data.ItineraryRepository
 import com.hebi.tripcanvas.data.PlaceRepository
 import com.hebi.tripcanvas.data.ScheduleOverlapException
@@ -179,11 +181,11 @@ fun ScheduleFormScreen(
             else -> {
                 TripSectionHeading(
                     title = "일정 정보",
-                    supportingText = "현지 날짜와 시각을 그대로 저장하므로 기기 시간대를 바꿔도 일정이 이동하지 않습니다."
+                    supportingText = "* 표시 항목은 필수입니다. 현지 날짜·시각은 기기 시간대 변경과 무관하게 저장됩니다."
                 )
                 TripTextField(
                     value = input.title,
-                    onValueChange = { input = input.copy(title = it); errors = emptyMap() },
+                    onValueChange = { input = input.copy(title = it); errors = errors - ScheduleField.Title },
                     label = "일정 제목 *",
                     supportingText = errors[ScheduleField.Title] ?: "1~100자",
                     isError = errors.containsKey(ScheduleField.Title)
@@ -192,7 +194,7 @@ fun ScheduleFormScreen(
                     label = "일정 날짜 *",
                     date = input.date,
                     error = errors[ScheduleField.Date],
-                    onDateSelected = { input = input.copy(date = it); errors = emptyMap() }
+                    onDateSelected = { input = input.copy(date = it); errors = errors - ScheduleField.Date }
                 )
                 Text(
                     "여행 기간: " + trip!!.startDate + " ~ " + trip!!.endDate,
@@ -207,24 +209,35 @@ fun ScheduleFormScreen(
                     TripChoiceChip(
                         label = "시간 미정",
                         selected = input.startTime.isEmpty() && input.endTime.isEmpty(),
-                        onClick = { input = input.copy(startTime = "", endTime = ""); errors = emptyMap() }
+                        onClick = {
+                            input = input.copy(startTime = "", endTime = "")
+                            errors = errors - ScheduleField.StartTime - ScheduleField.EndTime
+                        }
                     )
                 }
                 TripTextField(
                     value = input.startTime,
-                    onValueChange = { input = input.copy(startTime = it); errors = emptyMap() },
+                    onValueChange = {
+                        input = input.copy(startTime = it)
+                        errors = errors - ScheduleField.StartTime - ScheduleField.EndTime
+                    },
                     label = "시작 시각",
                     placeholder = "09:30",
                     supportingText = errors[ScheduleField.StartTime],
-                    isError = errors.containsKey(ScheduleField.StartTime)
+                    isError = errors.containsKey(ScheduleField.StartTime),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii)
                 )
                 TripTextField(
                     value = input.endTime,
-                    onValueChange = { input = input.copy(endTime = it); errors = emptyMap() },
+                    onValueChange = {
+                        input = input.copy(endTime = it)
+                        errors = errors - ScheduleField.StartTime - ScheduleField.EndTime
+                    },
                     label = "종료 시각",
                     placeholder = "10:30",
                     supportingText = errors[ScheduleField.EndTime],
-                    isError = errors.containsKey(ScheduleField.EndTime)
+                    isError = errors.containsKey(ScheduleField.EndTime),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii)
                 )
                 TripSectionHeading(title = "장소", supportingText = "기존 장소 연결 또는 수동 등록")
                 val selectedPlace = places.firstOrNull { it.id == input.placeId }
@@ -246,7 +259,7 @@ fun ScheduleFormScreen(
                 }
                 TripTextField(
                     value = input.note,
-                    onValueChange = { input = input.copy(note = it); errors = emptyMap() },
+                    onValueChange = { input = input.copy(note = it); errors = errors - ScheduleField.Note },
                     label = "메모",
                     supportingText = errors[ScheduleField.Note] ?: "최대 2,000자",
                     isError = errors.containsKey(ScheduleField.Note),
