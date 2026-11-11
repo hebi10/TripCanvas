@@ -160,7 +160,8 @@ fun TripSettlementScreen(
                         } finally { busy = false }
                     }
                 }
-            )            if (people.isEmpty()) {
+            )
+            if (people.isEmpty()) {
                 TripEmptyState("등록한 동행자가 없습니다", "로컬 동행자를 먼저 등록해 주세요.")
             }
             TripSectionHeading(
