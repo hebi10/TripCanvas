@@ -224,6 +224,11 @@ private fun TripListCard(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
+                    Text(
+                        text = trip.startDate.replace('-', '.') + " ~ " + trip.endDate.replace('-', '.'),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = p.textPrimary
+                    )
                     if (destination.isNotEmpty()) {
                         Text(
                             text = destination,
@@ -272,11 +277,6 @@ private fun TripListCard(
                     }
                 }
             }
-            Text(
-                text = trip.startDate.replace('-', '.') + " ~ " + trip.endDate.replace('-', '.'),
-                style = MaterialTheme.typography.bodyMedium,
-                color = p.textSecondary
-            )
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
