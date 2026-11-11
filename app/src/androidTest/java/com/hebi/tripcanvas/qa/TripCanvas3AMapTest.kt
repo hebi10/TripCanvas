@@ -5,12 +5,14 @@ import android.graphics.Rect
 import android.view.View
 import android.view.ViewGroup
 import org.maplibre.android.maps.MapView
+import org.maplibre.android.geometry.LatLng
 import android.os.SystemClock
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
+import androidx.test.uiautomator.StaleObjectException
 import androidx.test.uiautomator.Until
 import com.hebi.tripcanvas.MainActivity
 import com.hebi.tripcanvas.data.local.ItineraryItemEntity
@@ -19,8 +21,14 @@ import com.hebi.tripcanvas.data.local.TripBackupSnapshot
 import com.hebi.tripcanvas.data.local.TripDatabase
 import com.hebi.tripcanvas.data.local.TripEntity
 import com.hebi.tripcanvas.data.tripPreferencesRepository
+import com.hebi.tripcanvas.designsystem.responsive.TripWindowWidth
+import com.hebi.tripcanvas.designsystem.responsive.classifyWindowWidth
 import com.hebi.tripcanvas.designsystem.theme.TripThemeMode
 import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
+import kotlin.math.abs
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -57,6 +65,10 @@ class TripCanvas3AMapTest {
                         PlaceEntity(
                             "qa3a-no-coord", "qa3a", "좌표 없는 장소", "", "",
                             null, null, 1L, 1L
+                        ),
+                        PlaceEntity(
+                            "qa3a-alternate", "qa3a", "제주도청", "제주시 문연로 6", "",
+                            33.4888, 126.4975, 1L, 1L
                         )
                     ),
                     itineraries = listOf(
@@ -81,6 +93,23 @@ class TripCanvas3AMapTest {
                 awaitText("여행 지도")
                 SystemClock.sleep(3000)
                 capture("03-map-all-light")
+                val widthDp = (device.displayWidth / context.resources.displayMetrics.density).toInt()
+                if (classifyWindowWidth(widthDp) != TripWindowWidth.Compact) {
+                    val listHeader = device.wait(
+                        Until.findObject(By.text("장소 3개")), 5000
+                    ) ?: throw AssertionError("태블릿 장소 패널 헤더를 찾지 못했습니다.")
+                    val mapBounds = Rect()
+                    scenario.onActivity { activity ->
+                        val mapView = findMapView(activity.window.decorView)
+                            ?: throw AssertionError("태블릿 MapLibre 패널이 없습니다.")
+                        assertTrue("태블릿 지도가 보이지 않습니다.", mapView.getGlobalVisibleRect(mapBounds))
+                    }
+                    assertTrue(
+                        "태블릿 장소 목록이 지도 오른쪽에 표시되지 않았습니다.",
+                        listHeader.visibleBounds.left >= mapBounds.right - 12
+                    )
+                    capture("03a-tablet-two-pane-map-and-list")
+                }
                 click("2026-11-11")
                 SystemClock.sleep(1000)
                 var tapX = 0
@@ -106,8 +135,11 @@ class TripCanvas3AMapTest {
                 device.pressBack()
                 awaitText("여행 지도")
                 awaitText("확정 · 일정 1개")
+                awaitText("장소 1개")
                 awaitText("제주국제공항")
                 capture("04-map-date-filter")
+                click("지도에서 선택: 제주국제공항")
+                capture("04b-map-focus-from-place-list")
                 click("장소 상세")
                 awaitText("공급자: Photon/OSM")
                 capture("05-place-detail")
@@ -118,6 +150,14 @@ class TripCanvas3AMapTest {
                 awaitText("장소 상세")
                 device.pressBack()
                 awaitText("여행 지도")
+                click("전체")
+                awaitText("장소 3개")
+                awaitText("좌표 없는 장소")
+                awaitText("좌표 없음 · 지도 핀 제외")
+                capture("06a-map-places-without-coordinates")
+                click("지도에서 선택: 제주도청")
+                assertMapCentered(scenario, 33.4888, 126.4975)
+                capture("06b-map-second-place-camera-focused")
                 click("외부 장소 검색")
                 awaitText("검색어")
                 capture("07-external-search-input")
@@ -140,6 +180,33 @@ class TripCanvas3AMapTest {
         } finally {
             device.executeShellCommand("settings put system font_scale 1.0")
         }
+    }
+
+    private fun assertMapCentered(
+        scenario: ActivityScenario<MainActivity>,
+        expectedLatitude: Double,
+        expectedLongitude: Double
+    ) {
+        repeat(16) {
+            val latch = CountDownLatch(1)
+            val center = AtomicReference<LatLng?>(null)
+            scenario.onActivity { activity ->
+                val view = findMapView(activity.window.decorView)
+                    ?: throw AssertionError("MapLibre map view is missing")
+                view.getMapAsync { map ->
+                    center.set(map.cameraPosition.target)
+                    latch.countDown()
+                }
+            }
+            assertTrue("MapLibre camera callback timed out", latch.await(5, TimeUnit.SECONDS))
+            val target = center.get()
+            if (target != null &&
+                abs(target.latitude - expectedLatitude) < 0.005 &&
+                abs(target.longitude - expectedLongitude) < 0.005
+            ) return
+            SystemClock.sleep(200)
+        }
+        throw AssertionError("MapLibre camera did not focus the selected saved place")
     }
 
     private fun findMapView(root: View): MapView? {
@@ -194,15 +261,26 @@ class TripCanvas3AMapTest {
 
     private fun click(text: String) {
         awaitText(text)
-        val node = device.findObject(uiSelector(text))
-            ?: throw AssertionError("Click target missing: $text")
-        var target = node
-        while (!target.isClickable) {
-            target = target.parent ?: break
+        repeat(5) { attempt ->
+            try {
+                val node = device.wait(Until.findObject(uiSelector(text)), 2400)
+                    ?: throw AssertionError("Click target missing: $text")
+                var target = node
+                while (!target.isClickable) {
+                    target = target.parent
+                        ?: throw AssertionError("Clickable parent missing: $text")
+                }
+                target.click()
+                device.waitForIdle()
+                SystemClock.sleep(400)
+                return
+            } catch (stale: StaleObjectException) {
+                if (attempt == 4) {
+                    throw AssertionError("Target changed during click: $text", stale)
+                }
+                SystemClock.sleep(200)
+            }
         }
-        target.click()
-        device.waitForIdle()
-        SystemClock.sleep(400)
     }
 
     private fun evidenceDir(): File =
