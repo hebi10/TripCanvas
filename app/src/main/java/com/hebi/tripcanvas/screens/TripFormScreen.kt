@@ -385,13 +385,14 @@ fun TripDateField(
                 TextButton(
                     enabled = state.selectedDateMillis != null,
                     onClick = {
-                    state.selectedDateMillis?.let { selectedMillis ->
-                        val value = Instant.ofEpochMilli(selectedMillis)
-                            .atZone(ZoneOffset.UTC).toLocalDate().toString()
-                        onDateSelected(value)
+                        state.selectedDateMillis?.let { selectedMillis ->
+                            val value = Instant.ofEpochMilli(selectedMillis)
+                                .atZone(ZoneOffset.UTC).toLocalDate().toString()
+                            onDateSelected(value)
+                        }
+                        showPicker = false
                     }
-                    showPicker = false
-                }) {
+                ) {
                     Text("확인")
                 }
             },
