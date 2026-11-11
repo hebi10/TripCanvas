@@ -15,6 +15,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -57,8 +58,8 @@ fun BackupScreen(
         .collectAsState(initial = emptyList())
     var pending by remember { mutableStateOf<TripBackupSnapshot?>(null) }
     var busy by remember { mutableStateOf(false) }
-    var status by remember { mutableStateOf<String?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
+    var status by rememberSaveable { mutableStateOf<String?>(null) }
+    var error by rememberSaveable { mutableStateOf<String?>(null) }
     BackHandler(enabled = busy) {}
 
     val exportPicker = rememberLauncherForActivityResult(
