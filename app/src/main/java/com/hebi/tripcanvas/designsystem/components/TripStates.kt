@@ -35,7 +35,10 @@ fun TripEmptyState(
 ) {
     val p = TripDesign.palette
     Column(
-        modifier = modifier.fillMaxWidth().padding(TripSpacing.lg),
+        modifier = modifier
+            .fillMaxWidth()
+            .semantics { liveRegion = LiveRegionMode.Polite }
+            .padding(TripSpacing.lg),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)
     ) {
@@ -62,7 +65,8 @@ fun TripErrorState(
     title: String,
     description: String,
     onRetry: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    actionLabel: String = "다시 시도"
 ) {
     val p = TripDesign.palette
     Column(
@@ -75,7 +79,7 @@ fun TripErrorState(
         Text(title, style = MaterialTheme.typography.titleMedium, color = p.error)
         Text(description, style = MaterialTheme.typography.bodyMedium, color = p.textSecondary)
         if (onRetry != null) {
-            TripSecondaryButton(label = "다시 시도", onClick = onRetry)
+            TripSecondaryButton(label = actionLabel, onClick = onRetry)
         }
     }
 }
@@ -127,7 +131,8 @@ fun TripConfirmDialog(
     confirmLabel: String,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
-    destructive: Boolean = false
+    destructive: Boolean = false,
+    enabled: Boolean = true
 ) {
     val p = TripDesign.palette
     AlertDialog(
@@ -137,6 +142,7 @@ fun TripConfirmDialog(
         confirmButton = {
             TextButton(
                 onClick = onConfirm,
+                enabled = enabled,
                 modifier = Modifier.heightIn(min = TripSizes.minimumTouchTarget)
             ) {
                 Text(confirmLabel, color = if (destructive) p.error else p.primaryAction)
@@ -145,6 +151,7 @@ fun TripConfirmDialog(
         dismissButton = {
             TextButton(
                 onClick = onDismiss,
+                enabled = enabled,
                 modifier = Modifier.heightIn(min = TripSizes.minimumTouchTarget)
             ) {
                 Text("취소", color = p.textSecondary)

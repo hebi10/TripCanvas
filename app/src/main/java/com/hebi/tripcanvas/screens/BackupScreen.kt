@@ -15,9 +15,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import com.hebi.tripcanvas.data.TripRepository
 import com.hebi.tripcanvas.data.backup.TripBackupCodec
 import com.hebi.tripcanvas.data.backup.TripBackupService
@@ -54,15 +58,16 @@ fun BackupScreen(
         .collectAsState(initial = emptyList())
     var pending by remember { mutableStateOf<TripBackupSnapshot?>(null) }
     var busy by remember { mutableStateOf(false) }
-    var status by remember { mutableStateOf<String?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
+    var status by rememberSaveable { mutableStateOf<String?>(null) }
+    var error by rememberSaveable { mutableStateOf<String?>(null) }
     BackHandler(enabled = busy) {}
 
     val exportPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
     ) { uri ->
         if (uri == null) {
-            status = "파일 저장을 취소했습니다."
+            error = null
+            status = "파일 저장을 취소했습니다. 기존 여행 데이터는 변경되지 않았습니다."
         } else if (!busy) {
             busy = true
             error = null
@@ -89,7 +94,8 @@ fun BackupScreen(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri == null) {
-            status = "파일 선택을 취소했습니다."
+            error = null
+            status = "파일 선택을 취소했습니다. 기존 여행 데이터는 변경되지 않았습니다."
         } else if (!busy) {
             busy = true
             error = null
@@ -121,7 +127,7 @@ fun BackupScreen(
     TripPageFrame(title = "백업·복원", onBack = { if (!busy) onBack() }) {
         TripSectionHeading(
             title = "로컬 데이터 백업",
-            supportingText = "여행·장소·일정·준비물·경비·예산·동행자·정산·예약 정보를 JSON 파일로 저장합니다."
+            supportingText = "1단계 · 여행·장소·일정·준비물·경비·예산·동행자·정산·예약 정보를 JSON 파일로 내보냅니다."
         )
         TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
             Column(
@@ -140,8 +146,8 @@ fun BackupScreen(
                     color = p.textSecondary
                 )
                 Text(
-                    "백업 파일은 암호화되지 않습니다. 개인정보와 지출 메모가 포함될 수 있으므로 " +
-                        "안전한 저장 위치를 선택하고 파일을 타인과 공유하지 마세요.",
+                    "백업 파일은 암호화되지 않습니다. 예약 확인번호·동행자 이름·메모가 " +
+                        "포함될 수 있습니다. 안전하게 보관하고 파일 공유에 주의하세요.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = p.textSecondary
                 )
@@ -159,7 +165,7 @@ fun BackupScreen(
         }
         TripSectionHeading(
             title = "백업 복원",
-            supportingText = "먼저 파일을 읽고 버전·필수 데이터·여행 간 연결 관계를 검증합니다."
+            supportingText = "2단계 · 파일 내용을 미리 검증한 뒤 전체 데이터 교체를 최종 승인합니다."
         )
         TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
             Column(
@@ -173,7 +179,8 @@ fun BackupScreen(
                     color = p.textPrimary
                 )
                 Text(
-                    "앱 테마와 예약 문서 원본 및 파일 URI는 백업에 포함되지 않습니다. 파일은 복원 후 다시 연결해 주세요.",
+                    "파일 선택만으로 기존 데이터가 바뀌지 않습니다. 앱 테마·예약 문서 원본·파일 URI는 " +
+                        "백업에서 제외되므로 복원 후 문서를 다시 연결해 주세요.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = p.textSecondary
                 )
@@ -191,13 +198,19 @@ fun BackupScreen(
         }
         if (busy) TripLoadingState("파일을 처리하는 중")
         status?.let {
-            Text(it, style = MaterialTheme.typography.bodyMedium, color = p.textPrimary)
+            Text(
+                it,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                style = MaterialTheme.typography.bodyMedium,
+                color = p.textPrimary
+            )
         }
         error?.let {
             TripErrorState(
                 title = "백업·복원 오류",
                 description = it,
-                onRetry = { error = null }
+                onRetry = { error = null },
+                actionLabel = "닫기"
             )
         }
     }
@@ -218,7 +231,13 @@ fun BackupScreen(
                 "삭제한 뒤 이 파일로 교체합니다. 기존 백업이 없다면 복구할 수 없습니다. 진행하시겠습니까?",
             confirmLabel = if (busy) "복원 중" else "전체 교체 및 복원",
             destructive = true,
-            onDismiss = { if (!busy) pending = null },
+            enabled = !busy,
+            onDismiss = {
+                if (!busy) {
+                    pending = null
+                    status = "복원을 취소했습니다. 기존 여행 데이터는 유지됩니다."
+                }
+            },
             onConfirm = {
                 if (!busy) {
                     busy = true
