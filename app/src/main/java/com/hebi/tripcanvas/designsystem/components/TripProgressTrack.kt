@@ -27,7 +27,7 @@ fun TripProgressTrack(
         modifier = modifier
             .fillMaxWidth()
             .height(TripSpacing.xs)
-            .background(p.surfaceSubtle)
+            .background(p.outline)
             .semantics {
                 contentDescription = accessibilityLabel
                 progressBarRangeInfo = ProgressBarRangeInfo(value, 0f..1f)
