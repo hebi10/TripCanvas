@@ -39,6 +39,7 @@ class TripCanvas3AMapTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val context: Context = instrumentation.targetContext
     private val device: UiDevice = UiDevice.getInstance(instrumentation)
+    private val navigator = QaUiNavigator(device)
 
     @Test
     fun mapSavedPlaceAndItineraryNavigationUseRealScreens() {
@@ -269,25 +270,13 @@ class TripCanvas3AMapTest {
 
     private fun click(text: String) {
         awaitText(text)
-        repeat(5) { attempt ->
-            try {
-                val node = device.wait(Until.findObject(uiSelector(text)), 2400)
-                    ?: throw AssertionError("Click target missing: $text")
-                var target = node
-                while (!target.isClickable) {
-                    target = target.parent
-                        ?: throw AssertionError("Clickable parent missing: $text")
-                }
-                target.click()
-                device.waitForIdle()
-                SystemClock.sleep(400)
-                return
-            } catch (stale: StaleObjectException) {
-                if (attempt == 4) {
-                    throw AssertionError("Target changed during click: $text", stale)
-                }
-                SystemClock.sleep(200)
-            }
+        try {
+            navigator.clickVisible(uiSelector(text), text)
+        } catch (failure: AssertionError) {
+            val dir = evidenceDir()
+            device.takeScreenshot(File(dir, "99-click-failure.png"))
+            runCatching { device.dumpWindowHierarchy(File(dir, "99-click-hierarchy.xml")) }
+            throw failure
         }
     }
 
