@@ -218,6 +218,10 @@ class TripCanvas2CScreenshotTest {
             openScreen("준비물 열기", "체크 상태와 항목 순서는 기기에 저장됩니다.")
             awaitText("준비 완료 1 / 3")
             awaitText("여권")
+            assertTrue(
+                "준비물 진행률 접근성 설명이 있어야 합니다.",
+                device.wait(Until.hasObject(By.desc("준비 완료 1개 / 전체 3개")), 5000)
+            )
             capture("03-checklist-light")
             click("미완료")
             capture("04-checklist-incomplete-filter")
@@ -285,6 +289,8 @@ class TripCanvas2CScreenshotTest {
             awaitText("지출 합계")
             awaitText("잔액")
             awaitText("KRW 287,500 남음")
+            awaitText("예산 사용률")
+            awaitText("4%")
             capture("07-expenses-light")
             awaitText("환산 필요")
             capture("07a-expenses-unconverted-warning")
