@@ -11,6 +11,11 @@ on:
         type: choice
         default: check
         options: [check, build, initialize, deploy]
+      final_release_confirmed:
+        description: 'Only enable after ALL planned work and QA are complete; allows explicit manual Play deployment'
+        required: true
+        type: boolean
+        default: false
       version_code:
         description: 'Build-only versionCode (minimum/default 1); deploy allocates above all Play artifacts'
         type: string
@@ -53,6 +58,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PLAY_REQUESTED_MODE: ${{ inputs.mode }}
+          PLAY_FINAL_RELEASE_APPROVED: ${{ inputs.final_release_confirmed }}
         run: python3 scripts/play/source.py
 
   gates:
@@ -63,7 +69,7 @@ jobs:
 
   release:
     needs: [source, gates]
-    if: github.event_name == 'workflow_dispatch' && (needs.source.outputs.mode == 'build' || needs.source.outputs.mode == 'deploy' || needs.source.outputs.mode == 'initialize')
+    if: github.event_name == 'workflow_dispatch' && (needs.source.outputs.mode == 'build' || needs.source.outputs.mode == 'deploy' || (needs.source.outputs.mode == 'initialize' && github.ref == 'refs/heads/main'))
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: google-play
