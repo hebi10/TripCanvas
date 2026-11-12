@@ -112,23 +112,33 @@ class TripCanvas3AMapTest {
                 }
                 click("2026-11-11")
                 SystemClock.sleep(1000)
-                var tapX = 0
-                var tapY = 0
+                val pinTap = AtomicReference<Pair<Int, Int>?>(null)
+                val pinBounds = Rect()
+                val pinReady = CountDownLatch(1)
                 scenario.onActivity { activity ->
                     val mapView = findMapView(activity.window.decorView)
                         ?: throw AssertionError("MapLibre view missing from 3-A map screen")
-                    val bounds = Rect()
-                    assertTrue("MapLibre map is not visible", mapView.getGlobalVisibleRect(bounds))
+                    assertTrue("MapLibre map is not visible", mapView.getGlobalVisibleRect(pinBounds))
                     val location = IntArray(2)
                     mapView.getLocationOnScreen(location)
-                    tapX = location[0] + mapView.width / 2
-                    tapY = location[1] + mapView.height / 2
-                    assertTrue("MapLibre pin center is not visible", bounds.contains(tapX, tapY))
-                    File(evidenceDir(), "03a-pin-tap-geometry.txt").writeText(
-                        "Visible map: $bounds\nTap: $tapX,$tapY\n" +
-                            "Full map: ${location[0]},${location[1]} ${mapView.width}x${mapView.height}\n"
-                    )
+                    mapView.getMapAsync { map ->
+                        val screenPoint = map.projection.toScreenLocation(
+                            LatLng(33.5104, 126.4914)
+                        )
+                        pinTap.set(
+                            (location[0] + screenPoint.x.toInt()) to
+                                (location[1] + screenPoint.y.toInt())
+                        )
+                        pinReady.countDown()
+                    }
                 }
+                assertTrue("MapLibre pin projection timed out", pinReady.await(5, TimeUnit.SECONDS))
+                val (tapX, tapY) = requireNotNull(pinTap.get())
+                File(evidenceDir(), "03a-pin-tap-geometry.txt").writeText(
+                    "Visible map: $pinBounds\nTap: $tapX,$tapY\n" +
+                        "Actual pin coordinate: 33.5104,126.4914\n"
+                )
+                assertTrue("MapLibre airport pin is outside the visible map", pinBounds.contains(tapX, tapY))
                 device.click(tapX, tapY)
                 awaitText("공급자: Photon/OSM")
                 capture("04a-pin-tap-detail")
