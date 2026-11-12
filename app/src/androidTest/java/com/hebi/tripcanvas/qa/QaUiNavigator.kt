@@ -63,14 +63,14 @@ internal class QaUiNavigator(private val device: UiDevice) {
 
                 target.click()
                 device.waitForIdle()
-                if (expectedAfter == null ||
-                    device.wait(Until.hasObject(By.text(expectedAfter)), 5000)
+                if (expectedAfter != null &&
+                    !device.wait(Until.hasObject(By.text(expectedAfter)), 5000)
                 ) {
-                    return
+                    throw AssertionError(
+                        "클릭 후 예상 상태가 나타나지 않았습니다: $label → $expectedAfter"
+                    )
                 }
-
-                lastObservation = "클릭 뒤 '$expectedAfter' 화면 상태 미확인"
-                SystemClock.sleep(200)
+                return
             } catch (_: StaleObjectException) {
                 lastObservation = "UI 요소 갱신으로 노드 무효화"
                 SystemClock.sleep(200)
