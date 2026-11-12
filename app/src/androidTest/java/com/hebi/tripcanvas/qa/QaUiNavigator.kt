@@ -3,6 +3,7 @@ package com.hebi.tripcanvas.qa
 import android.os.SystemClock
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.BySelector
+import androidx.test.uiautomator.Direction
 import androidx.test.uiautomator.StaleObjectException
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.Until
@@ -81,6 +82,18 @@ internal class QaUiNavigator(private val device: UiDevice) {
     }
 
     private fun scroll(down: Boolean) {
+        val direction = if (down) Direction.DOWN else Direction.UP
+        val scrollable = device.findObject(By.scrollable(true))
+        if (scrollable != null) {
+            try {
+                scrollable.scroll(direction, 0.55f)
+                device.waitForIdle()
+                return
+            } catch (_: StaleObjectException) {
+                // A recomposition can replace the scroll container between reads.
+            }
+        }
+
         val middle = device.displayWidth / 2
         val height = device.displayHeight
         if (down) {
