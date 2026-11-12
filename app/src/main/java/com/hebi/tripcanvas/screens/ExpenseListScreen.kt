@@ -19,7 +19,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.style.TextOverflow
 import com.hebi.tripcanvas.data.ExpenseRepository
@@ -184,10 +183,10 @@ fun ExpenseListScreen(
                             }
                             if (usage != null) {
                                 Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
-                                    Row(
+                                    FlowRow(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
+                                        verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
                                     ) {
                                         Text(
                                             "예산 사용률",
