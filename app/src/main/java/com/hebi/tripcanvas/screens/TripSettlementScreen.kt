@@ -72,18 +72,6 @@ fun TripSettlementScreen(
                 title = "정산 · " + trip!!.currencyCode,
                 supportingText = "참가자별 지불액과 부담액으로 계산합니다."
             )
-            TripSectionHeading(
-                title = when {
-                    confirmed -> "정산 완료 확인"
-                    confirmation != null -> "내역 변경 · 재확인 필요"
-                    else -> "정산 검토 중"
-                },
-                supportingText = if (confirmed) {
-                    val date = confirmation!!.confirmedAtMillis
-                    "확인 시각 " + DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
-                        .withZone(ZoneId.of("Asia/Seoul")).format(Instant.ofEpochMilli(date))
-                } else "현재 지출 내역을 기준으로 다시 계산했습니다."
-            )
             if (report.unconverted > 0 || report.unallocated > 0) {
                 TripErrorState(
                     title = "정산 보류",
@@ -109,15 +97,46 @@ fun TripSettlementScreen(
             }
             report.transfers.forEach { transfer ->
                 TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        peopleById[transfer.fromParticipantId]?.displayName.orEmpty() +
-                            " → " + peopleById[transfer.toParticipantId]?.displayName.orEmpty() +
-                            " · " + displayMinor(transfer.amountMinor, report.baseCurrencyCode),
+                    Column(
                         modifier = Modifier.padding(TripSpacing.md),
-                        color = palette.textPrimary
-                    )
+                        verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
+                    ) {
+                        Text(
+                            "누가 누구에게",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = palette.textSecondary
+                        )
+                        Text(
+                            peopleById[transfer.fromParticipantId]?.displayName.orEmpty() +
+                                " → " + peopleById[transfer.toParticipantId]?.displayName.orEmpty(),
+                            style = MaterialTheme.typography.titleLarge,
+                            color = palette.textPrimary
+                        )
+                        Text(
+                            displayMinor(transfer.amountMinor, report.baseCurrencyCode),
+                            style = MaterialTheme.typography.headlineMedium,
+                            color = palette.textPrimary
+                        )
+                        Text(
+                            "실제 송금은 진행되지 않습니다.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = palette.textSecondary
+                        )
+                    }
                 }
             }
+            TripSectionHeading(
+                title = when {
+                    confirmed -> "정산 완료 확인"
+                    confirmation != null -> "내역 변경 · 재확인 필요"
+                    else -> "정산 검토 중"
+                },
+                supportingText = if (confirmed) {
+                    val date = confirmation!!.confirmedAtMillis
+                    "확인 시각 " + DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+                        .withZone(ZoneId.of("Asia/Seoul")).format(Instant.ofEpochMilli(date))
+                } else "현재 지출 내역을 기준으로 다시 계산했습니다."
+            )
             if (error != null) {
                 TripErrorState(
                     title = "정산 확인 오류",
