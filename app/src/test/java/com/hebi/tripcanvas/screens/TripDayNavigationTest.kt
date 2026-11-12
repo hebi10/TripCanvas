@@ -20,6 +20,15 @@ class TripDayNavigationTest {
         )
     }
 
+    @Test fun fiveDayTripShowsAllDatesWithoutDatePicker() {
+        val start = LocalDate.parse("2026-11-20")
+        val end = start.plusDays(4)
+        val expected = (0L..4L).map(start::plusDays)
+        assertEquals(expected, visibleScheduleDates(start, end, start))
+        assertEquals(expected, visibleScheduleDates(start, end, end))
+        assertFalse(scheduleUsesDatePicker(start, end))
+    }
+
     @Test fun dateStripKeepsFiveDaysAroundSelectionForLongTrip() {
         val start = LocalDate.parse("2026-11-01")
         val end = LocalDate.parse("2026-11-30")
