@@ -182,6 +182,7 @@ class TripCanvas3BScreenTest {
         if (text.endsWith(" 열기") || text == "저장 장소 관리") By.desc(text) else By.text(text)
 
     private fun clickWorkspaceCard(label: String, expectedScreenTitle: String? = null) {
+        val destination = expectedScreenTitle ?: if (label == "예약 열기") "예약 1건" else null
         repeat(12) {
             dismissSystemAnr()
             try {
@@ -196,8 +197,8 @@ class TripCanvas3BScreenTest {
                         if (label == "예약 열기") capture("07a-bookings-card-before-click")
                         card.click()
                         device.waitForIdle()
-                        if (expectedScreenTitle != null &&
-                            !device.wait(Until.hasObject(By.text(expectedScreenTitle)), 3000)
+                        if (destination != null &&
+                            !device.wait(Until.hasObject(By.text(destination)), 4000)
                         ) {
                             SystemClock.sleep(250)
                             return@repeat
@@ -215,7 +216,7 @@ class TripCanvas3BScreenTest {
         }
         capture("07c-workspace-card-not-centered")
         throw AssertionError("작업 공간 카드를 열지 못했습니다: $label" +
-            (expectedScreenTitle?.let { " · 예상 화면: $it" } ?: ""))
+            (destination?.let { " · 예상 화면: $it" } ?: ""))
     }
 
     private fun click(text: String, expectedAfter: String? = null) {
