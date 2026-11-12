@@ -110,7 +110,7 @@ fun HomeScreen(
     ) {
         TripSectionHeading(
             title = "내 여행",
-            supportingText = "여행을 만들고 일정과 경비를 한곳에서 관리하세요."
+            supportingText = "여행별 일정·준비물·경비를 관리하세요."
         )
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs),
@@ -205,8 +205,8 @@ private fun TripListCard(
         border = BorderStroke(1.dp, p.outline)
     ) {
         Column(
-            modifier = Modifier.padding(TripSpacing.md),
-            verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
+            modifier = Modifier.padding(TripSpacing.sm),
+            verticalArrangement = Arrangement.spacedBy(TripSpacing.xxs)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -224,11 +224,6 @@ private fun TripListCard(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Text(
-                        text = trip.startDate.replace('-', '.') + " ~ " + trip.endDate.replace('-', '.'),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = p.textPrimary
-                    )
                     if (destination.isNotEmpty()) {
                         Text(
                             text = destination,
@@ -238,6 +233,11 @@ private fun TripListCard(
                             overflow = TextOverflow.Ellipsis
                         )
                     }
+                    Text(
+                        text = trip.startDate.replace('-', '.') + " ~ " + trip.endDate.replace('-', '.'),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = p.textPrimary
+                    )
                 }
                 Box {
                     IconButton(
