@@ -55,8 +55,7 @@ jobs:
             set -euo pipefail
             mkdir -p qa-output/a06
             test "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" = 35
-            ANDROID_QA_OUTPUT_DIR=qa-output/a06 bash .github/scripts/run-android-instrumentation.sh \
-              -Pandroid.testInstrumentationRunnerArguments.class=com.hebi.tripcanvas.data.backup.TripCanvasA06BackupIoTest
+            ANDROID_QA_OUTPUT_DIR=qa-output/a06 bash .github/scripts/run-android-instrumentation.sh -Pandroid.testInstrumentationRunnerArguments.class=com.hebi.tripcanvas.data.backup.TripCanvasA06BackupIoTest
             find qa-output/a06 -type f -print | sort > qa-output/a06/files.txt
             test -s qa-output/a06/gradle-connected.txt
 
