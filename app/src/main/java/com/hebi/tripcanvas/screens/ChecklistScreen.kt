@@ -153,14 +153,14 @@ fun ChecklistScreen(
                                 color = p.textSecondary
                             )
                             Text(
-                                "$" + "{percent}% 완료",
+                                "${percent}% 완료",
                                 style = MaterialTheme.typography.labelLarge,
                                 color = p.textPrimary
                             )
                         }
                         TripProgressTrack(
                             fraction = checklistCompletionFraction(completed, total),
-                            accessibilityLabel = "준비물 완료율 $" + "{percent}%"
+                            accessibilityLabel = "준비물 완료율 ${percent}%"
                         )
                     }
                 }
