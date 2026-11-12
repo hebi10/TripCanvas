@@ -12,7 +12,6 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
-import androidx.test.uiautomator.StaleObjectException
 import androidx.test.uiautomator.Until
 import com.hebi.tripcanvas.MainActivity
 import com.hebi.tripcanvas.data.local.ItineraryItemEntity
