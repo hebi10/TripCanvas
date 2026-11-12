@@ -156,7 +156,7 @@ class TripCanvas3BScreenTest {
                 capture("11a-bookings-dark")
                 device.pressBack()
                 awaitText("예약 열기")
-                clickWorkspaceCard("정산 열기", expectedScreenTitle = "동행자 정산")
+                clickWorkspaceCard("정산 열기", expectedScreenTitle = "정산 제안 1건")
                 awaitText("정산 제안 1건")
                 awaitText("현지 → 민재 · KRW 6,600")
                 capture("12-settlement-dark")
