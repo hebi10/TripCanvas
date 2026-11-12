@@ -111,6 +111,7 @@ class TripCanvas3AMapTest {
                     capture("03a-tablet-two-pane-map-and-list")
                 }
                 click("2026-11-11")
+                awaitText("선택 날짜 2026-11-11 · 장소 1개 · 지도 핀 1개")
                 SystemClock.sleep(1000)
                 var tapX = 0
                 var tapY = 0
