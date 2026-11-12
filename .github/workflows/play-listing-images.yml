@@ -119,3 +119,83 @@ jobs:
       - name: Report API status without claiming review approval
         if: success()
         run: echo 'TripCanvas ko-KR image edit committed and fresh readback matched. Console review, publication and tester installability are separate.' >> "$GITHUB_STEP_SUMMARY"
+
+
+  r09-final:
+    needs: validate
+    if: >-
+      github.repository == 'hebi10/TripCanvas' &&
+      github.ref == 'refs/heads/main' &&
+      github.event_name == 'push' &&
+      contains(github.event.head_commit.message, '[tripcanvas-store-r09-final-once]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: google-play
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Require exact approved release source and current main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import sys
+          sys.path.insert(0, 'scripts/play')
+          from listing_images import require_r09_source
+          require_r09_source()
+          PY
+          remote_sha="$(gh api repos/hebi10/TripCanvas/git/ref/heads/main --jq .object.sha)"
+          test "$remote_sha" = "$GITHUB_SHA"
+      - name: Read existing Google Play authentication configuration
+        id: credentials
+        env:
+          PLAY_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.PLAY_WORKLOAD_IDENTITY_PROVIDER }}
+          PLAY_SERVICE_ACCOUNT: ${{ vars.PLAY_SERVICE_ACCOUNT }}
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: python3 scripts/play/preflight.py auth
+      - name: Authenticate with Workload Identity Federation
+        if: steps.credentials.outputs.auth_mode == 'wif'
+        id: wif
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.PLAY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PLAY_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/androidpublisher
+          create_credentials_file: false
+      - name: Authenticate with existing legacy service-account credentials
+        if: steps.credentials.outputs.auth_mode == 'json'
+        id: json
+        uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/androidpublisher
+          create_credentials_file: false
+      - name: Commit ten ko-KR images and promote existing internal v10 atomically
+        env:
+          PLAY_ACCESS_TOKEN: ${{ steps.wif.outputs.access_token || steps.json.outputs.access_token }}
+        run: python3 scripts/play/listing_images.py --r09-final --report output/play-store-r09-final.json
+      - name: Preserve verified non-secret Play response
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tripcanvas-store-r09-final-${{ github.run_id }}
+          path: output/play-store-r09-final.json
+          if-no-files-found: ignore
+          retention-days: 30
+      - name: Distinguish API result from Console publication
+        if: success()
+        run: |
+          echo 'Google Play accepted one edit: 10 ko-KR images + existing internal versionCode 10 promoted to alpha completed; fresh image/alpha readback matched.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Review, publication and tester installation still require Play Console verification. No new AAB or production deployment.' >> "$GITHUB_STEP_SUMMARY"
