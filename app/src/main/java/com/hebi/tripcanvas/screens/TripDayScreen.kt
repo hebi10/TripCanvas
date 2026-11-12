@@ -611,6 +611,10 @@ internal fun visibleScheduleDates(
     if (start.isAfter(end) || selected.isBefore(start) || selected.isAfter(end)) {
         return emptyList()
     }
+    if (!scheduleUsesDatePicker(start, end)) {
+        return (0L..(end.toEpochDay() - start.toEpochDay()))
+            .map(start::plusDays)
+    }
     return (-2L..2L)
         .map { selected.plusDays(it) }
         .filter { !it.isBefore(start) && !it.isAfter(end) }
