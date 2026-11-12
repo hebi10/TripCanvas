@@ -53,13 +53,17 @@ internal class QaUiNavigator(private val device: UiDevice) {
                     scroll(down = true)
                     return@repeat
                 }
-                if (bounds.bottom > safeBottom) {
-                    lastObservation = "하단 안전영역 밖: bounds=$bounds, safeBottom=$safeBottom"
+                // UIAutomator clicks the center of the visible bounds.
+                // A button whose edge extends into the margin remains tappable
+                // when its center is inside the system-bar-safe viewport.
+                val tapY = bounds.centerY()
+                if (tapY > safeBottom) {
+                    lastObservation = "클릭 중심이 하단 안전영역 밖: bounds=$bounds, tapY=$tapY, safeBottom=$safeBottom"
                     scroll(down = true)
                     return@repeat
                 }
-                if (bounds.top < safeTop) {
-                    lastObservation = "상단 안전영역 밖: bounds=$bounds, safeTop=$safeTop"
+                if (tapY < safeTop) {
+                    lastObservation = "클릭 중심이 상단 안전영역 밖: bounds=$bounds, tapY=$tapY, safeTop=$safeTop"
                     scroll(down = false)
                     return@repeat
                 }
