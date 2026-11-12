@@ -1,0 +1,70 @@
+name: TripCanvas QA-A06 Backup and Integrity
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/qa-a06-backup-integrity.yml'
+      - '.github/scripts/run-android-instrumentation.sh'
+      - 'app/src/androidTest/java/com/hebi/tripcanvas/data/backup/**'
+      - 'app/src/main/java/com/hebi/tripcanvas/data/backup/**'
+      - 'app/src/main/java/com/hebi/tripcanvas/data/local/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup-content-uri:
+    name: a06-backup-content-uri-api35
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+
+      - name: Install compile SDK
+        run: sdkmanager --install 'platforms;android-37.1' 'build-tools;36.0.0'
+
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Verify real Android content-URI backup export and restore
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          script: |
+            set -euo pipefail
+            mkdir -p qa-output/a06
+            test "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" = 35
+            ANDROID_QA_OUTPUT_DIR=qa-output/a06 bash .github/scripts/run-android-instrumentation.sh \
+              -Pandroid.testInstrumentationRunnerArguments.class=com.hebi.tripcanvas.data.backup.TripCanvasA06BackupIoTest
+            find qa-output/a06 -type f -print | sort > qa-output/a06/files.txt
+            test -s qa-output/a06/gradle-connected.txt
+
+      - name: Preserve Android instrumentation and environment evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tripcanvas-a06-backup-integrity-api35
+          path: qa-output/a06/
+          retention-days: 14
+          if-no-files-found: warn
