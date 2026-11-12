@@ -138,14 +138,15 @@ class TripCanvas3AMapTest {
                 awaitText("장소 1개")
                 awaitText("제주국제공항")
                 capture("04-map-date-filter")
-                click("지도에서 선택: 제주국제공항")
                 if (classifyWindowWidth(widthDp) == TripWindowWidth.Compact) {
+                    click("지도에서 선택: 제주국제공항")
                     awaitText("지도 선택 · 제주국제공항")
                     capture("04b-map-focus-from-place-list")
                     click("선택 장소 상세")
                 } else {
-                    awaitText("지도 선택됨: 제주국제공항")
-                    capture("04b-map-focus-from-place-list")
+                    // The tablet's two-pane list has its own direct detail action.
+                    // Camera focus is verified separately below with 제주도청.
+                    capture("04b-tablet-place-list-before-detail")
                     click("장소 상세")
                 }
                 awaitText("공급자: Photon/OSM")
