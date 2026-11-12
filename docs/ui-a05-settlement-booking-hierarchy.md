@@ -34,3 +34,11 @@
 - UI-A05는 PR 생성 시 **Draft·미병합** 상태 유지. 선행 [UI-A04 PR #42](https://github.com/hebi10/TripCanvas/pull/42)가 최신 main에 반영되었는지 병합 직전에 검증. 병합 시 GitHub Actions에 따라 내부 테스트 AAB가 자동 게시될 수 있음.
 - 사용자 요청: Actions 작업 시작 후 반복 조회하지 않고 PR Checks 링크 제공. 사용자가 성공을 확인해 다시 대화하면 최신 HEAD 전체 QA 검토→순차 병합→내부 테스트 API 결과 확인.
 - 다음: `QA-A06 — 전체 화면·실기기·접근성 및 데이터 복원 통합 QA`.
+
+## UI-A04 순차 병합 이후 UI-A05 통합 기록 (2026-11-12)
+
+- 선행 UI-A04 PR #42는 Android/JVM/Room, 2-C phone/tablet, 3-A phone/tablet, 3-B phone/tablet, API29/36 전체 통과 및 실제 원본 PNG 검증 후 `main=4c87b95c01916d9808331f8fe26c62c18169275a`로 병합 완료.
+- UI-A05의 이전 검증 HEAD `111577156def909efa8eadd772e3cd12d7071522`은 UI-A04 이전 main에서 검증한 코드. 기존 5종 CI 성공 이력은 유지하지만, **통합 코드의 최종 QA로 대체할 수 없음**.
+- 공통 Android QA 파일 `QaUiNavigator.kt`는 동일한 내용이므로 UI-A04 main 파일을 유지. 충돌 가능한 `TripCanvas3AMapTest.kt`는 UI-A04에서 검증된 최종 최신 파일을 유지해 핀 선택·날짜 필터 검증을 보존.
+- 최신 UI-A04 main 스냅샷에 UI-A05만의 `TripSettlementScreen.kt`, `TripBookingsScreen.kt`, `TripCanvas3BScreenTest.kt`, 이 문서를 합친 안전 통합 커밋을 UI-A05 PR 브랜치에 추가. 이 커밋은 UI-A04 main을 부모로 포함하므로 PR diff는 UI-A05 추가분만 남아야 함.
+- **통합 후 새 HEAD의 GitHub Actions 5개·실제 휴대전화/태블릿 원본 캡처 전부 성공하기 전에는 UI-A05 병합·새 AAB 배포를 하지 않음.**
