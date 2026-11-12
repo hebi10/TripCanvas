@@ -130,6 +130,9 @@ class TripCanvas3AMapTest {
                     )
                 }
                 device.click(tapX, tapY)
+                awaitText("지도 선택 · 제주국제공항")
+                capture("04a-pin-tap-selected")
+                click("선택 장소 상세")
                 awaitText("공급자: Photon/OSM")
                 capture("04a-pin-tap-detail")
                 device.pressBack()
@@ -138,17 +141,9 @@ class TripCanvas3AMapTest {
                 awaitText("장소 1개")
                 awaitText("제주국제공항")
                 capture("04-map-date-filter")
-                if (classifyWindowWidth(widthDp) == TripWindowWidth.Compact) {
-                    click("지도에서 선택: 제주국제공항")
-                    awaitText("지도 선택 · 제주국제공항")
-                    capture("04b-map-focus-from-place-list")
-                    click("선택 장소 상세")
-                } else {
-                    // The tablet's two-pane list has its own direct detail action.
-                    // Camera focus is verified separately below with 제주도청.
-                    capture("04b-tablet-place-list-before-detail")
-                    click("장소 상세")
-                }
+                awaitText("지도 선택 · 제주국제공항")
+                capture("04b-map-focus-from-place-list")
+                click("선택 장소 상세")
                 awaitText("공급자: Photon/OSM")
                 capture("05-place-detail")
                 click("일정 편집")
@@ -159,11 +154,13 @@ class TripCanvas3AMapTest {
                 device.pressBack()
                 awaitText("여행 지도")
                 click("전체")
+                awaitText("선택 날짜 전체 · 장소 3개 · 지도 핀 2개")
                 awaitText("장소 3개")
                 awaitText("좌표 없는 장소")
                 awaitText("좌표 없음 · 지도 핀 제외")
                 capture("06a-map-places-without-coordinates")
                 click("지도에서 선택: 제주도청")
+                awaitText("지도 선택 · 제주도청")
                 assertMapCentered(scenario, 33.4888, 126.4975)
                 capture("06b-map-second-place-camera-focused")
                 click("외부 장소 검색")
