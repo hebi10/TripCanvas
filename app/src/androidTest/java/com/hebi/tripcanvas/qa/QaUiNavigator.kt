@@ -20,8 +20,10 @@ internal class QaUiNavigator(private val device: UiDevice) {
         expectedAfter: String? = null
     ) {
         val height = device.displayHeight
-        val safeTop = height / 10
-        val safeBottom = height * 83 / 100
+        // Keep the system status/navigation bar away from taps, but do not
+        // reject fully visible controls near the bottom of short pages.
+        val safeTop = height * 5 / 100
+        val safeBottom = height * 94 / 100
         var lastObservation = "화면에 클릭 대상이 없습니다"
 
         repeat(16) { attempt ->
@@ -52,12 +54,12 @@ internal class QaUiNavigator(private val device: UiDevice) {
                     return@repeat
                 }
                 if (bounds.bottom > safeBottom) {
-                    lastObservation = "하단에 걸친 대상"
+                    lastObservation = "하단 안전영역 밖: bounds=$bounds, safeBottom=$safeBottom"
                     scroll(down = true)
                     return@repeat
                 }
                 if (bounds.top < safeTop) {
-                    lastObservation = "상단에 걸친 대상"
+                    lastObservation = "상단 안전영역 밖: bounds=$bounds, safeTop=$safeTop"
                     scroll(down = false)
                     return@repeat
                 }
