@@ -28,6 +28,14 @@
 5. **업데이트 시나리오**: 기존 v14 설치본의 여행·준비물·경비·예약 테스트 데이터를 남긴 상태로 Play 스토어에서 v15 업데이트 → 데이터 잔존·Room 마이그레이션·앱 실행 확인. 신규 설치 성공만으로 업데이트/데이터 보존 성공을 주장하지 않습니다.
 6. 네트워크 연결 없이 재실행하여 로컬 여행 목록·편집 기능이 접근 가능한지 확인. 온라인 지도/장소 검색의 연결 오류는 로컬 기능 장애와 구분합니다.
 
+**Windows/ADB 선택형 확인:** Android Studio는 필요하지 않으며 Android platform-tools의 `adb`가 있는 경우에만 다음 읽기 전용 명령을 사용할 수 있습니다. GitHub 저장소의 `scripts/release-a07-device-probe.ps1`를 받아 USB 디버깅 기기 한 대를 연결한 뒤 실행합니다.
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\release-a07-device-probe.ps1 -ExpectedVersionCode 15
+```
+
+`versionCode`와 `installer=com.android.vending` 여부만 진단하며, 결과 JSON에는 테스트 계정/기기 시리얼/앱 내용이 들어가지 않습니다. Play 설치 경로를 최종 인증하거나 테스터 가입/Google 심사 승인까지 확인하는 도구는 아닙니다. `adb`가 없다면 Play Console 화면과 실제 기기 설치 화면을 기준으로 수동 검증하고 해당 코드번호 확인 가능 여부를 구분합니다.
+
 - [ ] A07-PLAY-01 테스터 계정 참여/권한 확인
 - [ ] A07-PLAY-02 Play 스토어 경유 v15 실제 설치/실행
 - [ ] A07-PLAY-03 v14→v15 업데이트 후 로컬 데이터 보존
