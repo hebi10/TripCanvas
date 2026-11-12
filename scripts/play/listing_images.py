@@ -213,13 +213,152 @@ def submit(client: PlayClient, assets: dict) -> str:
     return 'Google Play edit committed and ko-KR images rechecked; review, publishing and installability remain unverified.'
 
 
+
+R09_COMMIT_SUBJECT = 'release: TripCanvas STORE-R09 FINAL [tripcanvas-store-r09-final-once]'
+R09_PARENT_SHA = 'c86f33690f55b5ec31e06cdcf9a725ce39702a89'
+R09_AAB_SHA256 = 'd874c62378b7d2c2bf004e8ca89a5c48b3bd6a9565f05ae784b0ff7927639a60'
+R09_VERSION_CODE = 10
+R09_CHANGED_FILES = {
+    '.github/workflows/play-listing-images.yml',
+    'scripts/play/listing_images.py',
+    'scripts/play/tests/test_listing_images.py',
+    'docs/play-store/store-r09-final-release.md',
+}
+
+
+def require_r09_source() -> None:
+    """Authorize exactly one reviewed main-merge commit, never a generic push."""
+    if (os.environ.get('GITHUB_REPOSITORY') != 'hebi10/TripCanvas'
+            or os.environ.get('GITHUB_REF') != 'refs/heads/main'
+            or os.environ.get('GITHUB_EVENT_NAME') != 'push'):
+        raise ListingError('STORE-R09 requires an authorized main push')
+
+    def git(*arguments: str) -> str:
+        process = subprocess.run(['git', *arguments], capture_output=True, text=True, check=False)
+        if process.returncode:
+            raise ListingError('STORE-R09 release source could not be verified')
+        return process.stdout.strip()
+
+    if git('rev-parse', 'HEAD') != os.environ.get('GITHUB_SHA'):
+        raise ListingError('STORE-R09 workflow commit does not match the checked-out source')
+    if git('show', '-s', '--format=%s', 'HEAD') != R09_COMMIT_SUBJECT:
+        raise ListingError('STORE-R09 requires the exact approved release subject')
+    if git('rev-parse', 'HEAD^1') != R09_PARENT_SHA:
+        raise ListingError('STORE-R09 expected main parent changed; release blocked')
+    actual = set(git('diff', '--name-only', 'HEAD^1', 'HEAD').splitlines())
+    if actual != R09_CHANGED_FILES:
+        raise ListingError('STORE-R09 commit changed unexpected files; release blocked')
+
+
+def publish_r09(client: PlayClient, assets: dict[str, dict]) -> dict:
+    """Atomically submit verified ko-KR images and promote existing internal v10."""
+    edit_id = start_edit(client)
+    committed = False
+    try:
+        bundles = client.request('GET', f'/edits/{edit_id}/bundles', stage='bundle_check')
+        if not any(
+            str(bundle.get('versionCode')) == str(R09_VERSION_CODE)
+            and str(bundle.get('sha256', '')).lower() == R09_AAB_SHA256
+            for bundle in bundles.get('bundles', [])
+        ):
+            raise ListingError('The existing internal v10 AAB hash is not the verified release')
+
+        internal = client.request('GET', f'/edits/{edit_id}/tracks/internal', stage='internal_check')
+        release = next((
+            entry for entry in internal.get('releases', [])
+            if entry.get('status') == 'completed'
+            and str(R09_VERSION_CODE) in [str(code) for code in entry.get('versionCodes', [])]
+        ), None)
+        if release is None:
+            raise ListingError('The exact versionCode 10 is not completed on internal testing')
+
+        listing = client.request('GET', f'/edits/{edit_id}/listings/{LOCALE}', stage='locale_check')
+        if listing.get('language') != LOCALE:
+            raise ListingError('ko-KR listing is absent; refusing a store change')
+
+        for image_type, names in ASSET_TYPES:
+            endpoint = path_for(edit_id, image_type)
+            client.request('DELETE', endpoint, stage='images_replace')
+            for name in names:
+                result = client.request('POST', endpoint + '?uploadType=media',
+                                        assets[name]['data'], media=True, stage='image_upload')
+                if not result.get('image', {}).get('id'):
+                    raise ListingError('Play image upload returned no image id')
+        require_snapshot(client, edit_id, assets, 'uncommitted_edit')
+
+        promotion = {
+            'name': release.get('name', f'0.1.0 ({R09_VERSION_CODE})'),
+            'versionCodes': [str(R09_VERSION_CODE)],
+            'status': 'completed',
+        }
+        if release.get('releaseNotes'):
+            promotion['releaseNotes'] = release['releaseNotes']
+        client.request('PUT', f'/edits/{edit_id}/tracks/alpha',
+                       {'track': 'alpha', 'releases': [promotion]},
+                       stage='alpha_track_update')
+        client.request('POST', f'/edits/{edit_id}:validate', {}, stage='edit_validate')
+        # A single Play edit ensures image upload and alpha promotion share one commit.
+        # Never cancel a review or retry unknown HTTP 400 responses.
+        client.request('POST',
+                       f'/edits/{edit_id}:commit?changesInReviewBehavior=ERROR_IF_IN_REVIEW',
+                       {}, stage='edit_commit')
+        committed = True
+    finally:
+        if not committed:
+            try:
+                client.request('DELETE', f'/edits/{edit_id}', stage='discard_edit')
+            except ListingError:
+                pass
+
+    verification_edit = start_edit(client)
+    try:
+        require_snapshot(client, verification_edit, assets, 'fresh_readback')
+        alpha = client.request('GET', f'/edits/{verification_edit}/tracks/alpha',
+                               stage='alpha_readback')
+        if not any(
+            entry.get('status') == 'completed'
+            and str(R09_VERSION_CODE) in [str(code) for code in entry.get('versionCodes', [])]
+            for entry in alpha.get('releases', [])
+        ):
+            raise ListingError('Play edit committed but alpha v10 fresh readback failed')
+    finally:
+        try:
+            client.request('DELETE', f'/edits/{verification_edit}', stage='discard_readback')
+        except ListingError:
+            pass
+
+    return {
+        'package': PACKAGE,
+        'track': 'alpha',
+        'versionCode': R09_VERSION_CODE,
+        'releaseStatus': 'completed',
+        'status': 'api_committed_and_verified',
+        'imageLocale': LOCALE,
+        'imageCount': 10,
+        'imageStatus': 'committed_and_verified',
+        'existingBundleSHA256': R09_AAB_SHA256,
+        'availability': 'requires_console_review_and_tester_check',
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--apply', action='store_true', help='Change Play Korean images (requires manual workflow dispatch)')
+    parser.add_argument('--r09-final', action='store_true', help='One-time exact v10 alpha promotion and ko-KR images')
+    parser.add_argument('--report', type=Path, help='Write a non-secret Play API verification report')
     args = parser.parse_args()
     try:
         assets = validate_assets()
-        if args.apply:
+        if args.apply and args.r09_final:
+            raise ListingError('Only one Play mutation mode can be selected')
+        if args.r09_final:
+            require_r09_source()
+            result = publish_r09(PlayClient(os.environ.get('PLAY_ACCESS_TOKEN', '')), assets)
+            if args.report:
+                args.report.parent.mkdir(parents=True, exist_ok=True)
+                args.report.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+            print(json.dumps(result, ensure_ascii=False))
+        elif args.apply:
             if os.environ.get('GITHUB_REPOSITORY') != 'hebi10/TripCanvas' or os.environ.get('GITHUB_REF') != 'refs/heads/main':
                 raise ListingError('Image upload requires the trusted repository main branch')
             event_name = os.environ.get('GITHUB_EVENT_NAME')
