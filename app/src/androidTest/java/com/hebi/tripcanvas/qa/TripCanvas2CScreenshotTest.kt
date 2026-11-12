@@ -136,6 +136,15 @@ class TripCanvas2CScreenshotTest {
             awaitText("내 여행")
             click("제주 주말 여행")
             awaitText("여행 한눈에")
+            assertTrue(
+                "첫 화면에서 일정 빠른 실행이 보여야 합니다.",
+                device.wait(Until.hasObject(By.desc("일정 열기")), 3000)
+            )
+            assertTrue(
+                "첫 화면에서 경비 빠른 실행이 보여야 합니다.",
+                device.wait(Until.hasObject(By.desc("경비 열기")), 3000)
+            )
+            capture("02a0-workspace-quick-actions-light")
             capture("02a-workspace-overview-light")
             click("여행 설명 보기")
             awaitText("여행 일정과 지출을 한눈에")
