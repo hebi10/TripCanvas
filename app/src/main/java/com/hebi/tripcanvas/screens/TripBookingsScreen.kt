@@ -152,7 +152,7 @@ private fun BookingListCard(
                         enabled = !busy,
                         modifier = Modifier
                             .size(TripSizes.minimumTouchTarget)
-                            .semantics { contentDescription = "${booking.title} 예약 관리" }
+                            .semantics { contentDescription = "예약 관리: ${booking.title}" }
                     ) {
                         Icon(
                             imageVector = TripIcons.MoreVert,
