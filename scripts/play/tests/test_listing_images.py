@@ -139,5 +139,95 @@ class ListingImagesTest(unittest.TestCase):
                 self.assertNotIn('private-test-token', str(ctx.exception))
 
 
+class FinalReleasePlay(FakePlay):
+    """In-memory two-track + listing edit API, including atomic commit failure."""
+    def __init__(self, *, wrong_bundle=False, missing_internal=False, refuse_commit=False):
+        super().__init__(refuse_commit=refuse_commit)
+        self.wrong_bundle = wrong_bundle
+        self.missing_internal = missing_internal
+        self.alpha = {'releases': [{'status': 'completed', 'versionCodes': ['3']}]}
+        self.pending_alpha = {}
+
+    def request(self, method, path, payload=None, *, media=False, stage='request'):
+        if method == 'POST' and path == '/edits':
+            result = super().request(method, path, payload, media=media, stage=stage)
+            self.pending_alpha[result['id']] = json.loads(json.dumps(self.alpha))
+            return result
+
+        parts = path.split('/')
+        if len(parts) >= 3 and parts[1] == 'edits':
+            edit = parts[2].split(':')[0]
+            if method == 'GET' and path == f'/edits/{edit}/bundles':
+                self.calls.append((method, path, media))
+                return {'bundles': [{
+                    'versionCode': 10,
+                    'sha256': '0' * 64 if self.wrong_bundle else listing.R09_AAB_SHA256,
+                }]}
+            if method == 'GET' and path == f'/edits/{edit}/tracks/internal':
+                self.calls.append((method, path, media))
+                return {'releases': [] if self.missing_internal else [{
+                    'name': '0.1.0 (10)', 'status': 'completed', 'versionCodes': ['10'],
+                }]}
+            if method == 'PUT' and path == f'/edits/{edit}/tracks/alpha':
+                self.calls.append((method, path, media))
+                self.pending_alpha[edit] = json.loads(json.dumps(payload))
+                return payload
+            if method == 'GET' and path == f'/edits/{edit}/tracks/alpha':
+                self.calls.append((method, path, media))
+                return json.loads(json.dumps(self.pending_alpha[edit]))
+            if method == 'POST' and ':commit?' in path:
+                pending = json.loads(json.dumps(self.pending_alpha[edit]))
+                result = super().request(method, path, payload, media=media, stage=stage)
+                self.alpha = pending
+                return result
+            if method == 'DELETE' and path == f'/edits/{edit}':
+                self.pending_alpha.pop(edit, None)
+
+        return super().request(method, path, payload, media=media, stage=stage)
+
+
+class FinalReleaseTest(unittest.TestCase):
+    def setUp(self):
+        self.assets = listing.validate_assets()
+
+    def test_one_edit_atomically_updates_images_and_existing_v10_alpha(self):
+        client = FinalReleasePlay()
+        result = listing.publish_r09(client, self.assets)
+        self.assertEqual((result['track'], result['versionCode'], result['status']),
+                         ('alpha', 10, 'api_committed_and_verified'))
+        for image_type, names in listing.ASSET_TYPES:
+            self.assertEqual(client.remote[image_type],
+                             [self.assets[name]['sha256'] for name in names])
+        self.assertEqual(client.alpha['releases'][0]['versionCodes'], ['10'])
+        commits = [p for method, p, _ in client.calls if ':commit?' in p]
+        self.assertEqual(len(commits), 1)
+        self.assertIn('changesInReviewBehavior=ERROR_IF_IN_REVIEW', commits[0])
+        self.assertNotIn('CANCEL_IN_REVIEW', commits[0])
+        self.assertFalse(any(method == 'POST' and '/bundles' in path
+                             for method, path, _ in client.calls))
+        self.assertFalse(any('/tracks/production' in path for _, path, _ in client.calls))
+        self.assertFalse(client.working)
+
+    def test_wrong_aab_fails_before_any_upload(self):
+        for client in (FinalReleasePlay(wrong_bundle=True),
+                       FinalReleasePlay(missing_internal=True)):
+            with self.assertRaises(listing.ListingError):
+                listing.publish_r09(client, self.assets)
+            self.assertFalse(any(media for _, _, media in client.calls))
+            self.assertFalse(any(':commit?' in path for _, path, _ in client.calls))
+            self.assertFalse(client.working)
+
+    def test_review_in_progress_preserves_both_existing_tracks_and_images(self):
+        client = FinalReleasePlay(refuse_commit=True)
+        original_alpha = json.loads(json.dumps(client.alpha))
+        original_images = {t: list(values) for t, values in client.remote.items()}
+        with self.assertRaisesRegex(listing.ListingError, 'HTTP 400'):
+            listing.publish_r09(client, self.assets)
+        self.assertEqual(client.remote, original_images)
+        self.assertEqual(client.alpha, original_alpha)
+        self.assertEqual(sum(':commit?' in path for _, path, _ in client.calls), 1)
+        self.assertFalse(client.working)
+
+
 if __name__ == '__main__':
     unittest.main()
