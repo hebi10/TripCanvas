@@ -1,10 +1,8 @@
 name: Play internal release
 
+# FINAL-RELEASE-FREEZE: do not upload an AAB after each main merge.
+# Re-enable automated releases only after an explicit new user authorization.
 on:
-  workflow_run:
-    workflows: ["TripCanvas Android CI"]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
     inputs:
       mode:
@@ -36,7 +34,7 @@ concurrency:
 
 jobs:
   source:
-    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_repository.full_name == github.repository)
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -65,7 +63,7 @@ jobs:
 
   release:
     needs: [source, gates]
-    if: needs.source.outputs.mode == 'build' || needs.source.outputs.mode == 'deploy' || (needs.source.outputs.mode == 'initialize' && github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_run'))
+    if: github.event_name == 'workflow_dispatch' && (needs.source.outputs.mode == 'build' || needs.source.outputs.mode == 'deploy' || needs.source.outputs.mode == 'initialize')
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: google-play
@@ -216,7 +214,7 @@ jobs:
           python3 scripts/play/publisher.py --report output/play-release.json deploy --bundle app/build/outputs/bundle/release/app-release.aab --version-code "$VERSION_CODE" --status "$RELEASE_STATUS" "${args[@]}"
           echo 'Play API commit and fresh readback passed. Console review, publication and tester installability still require confirmation.' >> "$GITHUB_STEP_SUMMARY"
       - name: Promote this exact internal code to closed alpha only for authorized one-time release
-        if: needs.source.outputs.mode == 'deploy' && github.event_name == 'workflow_run'
+        if: false # Frozen: use separately approved manual play-promote workflow after final QA
         env:
           PLAY_CONSOLE_INITIALIZED: ${{ steps.readiness.outputs.initialized }}
           PLAY_ACCESS_TOKEN: ${{ steps.wif.outputs.access_token || steps.json.outputs.access_token }}
