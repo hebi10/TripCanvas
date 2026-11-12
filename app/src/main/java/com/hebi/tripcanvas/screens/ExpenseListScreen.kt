@@ -30,6 +30,7 @@ import com.hebi.tripcanvas.designsystem.components.TripEmptyState
 import com.hebi.tripcanvas.designsystem.components.TripErrorState
 import com.hebi.tripcanvas.designsystem.components.TripLoadingState
 import com.hebi.tripcanvas.designsystem.components.TripPrimaryButton
+import com.hebi.tripcanvas.designsystem.components.TripProgressTrack
 import com.hebi.tripcanvas.designsystem.components.TripSecondaryButton
 import com.hebi.tripcanvas.designsystem.components.TripSectionHeading
 import com.hebi.tripcanvas.designsystem.components.TripSurfacePanel
@@ -137,6 +138,9 @@ fun ExpenseListScreen(
                     val spentValue = displayMoney(
                         totals.baseSpent.toPlainString(), current.currencyCode
                     )
+                    val budgetUsage = budgetUsageVisual(
+                        totals.baseSpent, activeBudget?.let { BigDecimal(it.amountDecimal) }
+                    )
                     val remainingValue = when {
                         remaining == null -> "비교 불가"
                         remaining.signum() < 0 -> displayMoney(
@@ -175,6 +179,56 @@ fun ExpenseListScreen(
                                         )
                                     }
                                 }
+                            }
+                            if (budgetUsage != null) {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            "예산 사용률",
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = p.textSecondary
+                                        )
+                                        Text(
+                                            budgetUsage.percentageLabel,
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = if (budgetUsage.overBudget) p.warning else p.textPrimary,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    TripProgressTrack(
+                                        fraction = budgetUsage.fraction,
+                                        accessibilityLabel = "예산 사용률 " + budgetUsage.percentageLabel,
+                                        warning = budgetUsage.overBudget
+                                    )
+                                    Text(
+                                        text = if (budgetUsage.overBudget) {
+                                            "예산 초과 · 환산 가능한 지출 기준"
+                                        } else if (totals.unconvertedByCurrency.isNotEmpty()) {
+                                            "환산 가능한 지출 기준 · 미환산 외화 제외"
+                                        } else {
+                                            "환산 가능한 지출 기준"
+                                        },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (budgetUsage.overBudget) p.warning else p.textSecondary
+                                    )
+                                }
+                            } else {
+                                Text(
+                                    text = when {
+                                        budget == null -> "예산을 설정하면 사용률을 확인할 수 있습니다."
+                                        activeBudget == null -> "예산 통화가 달라 사용률을 표시하지 않습니다."
+                                        else -> "0 이하의 예산은 사용률을 계산할 수 없습니다."
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = p.textSecondary
+                                )
                             }
                             if (budget != null && activeBudget == null) {
                                 Text(
