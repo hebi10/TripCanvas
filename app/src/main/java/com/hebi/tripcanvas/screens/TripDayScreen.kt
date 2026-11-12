@@ -162,7 +162,6 @@ fun TripDayScreen(
                     " · " + current.timeZoneId
             )
             if (selected != null) {
-                Text("날짜 선택", style = MaterialTheme.typography.titleMedium, color = p.textPrimary)
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs),
                     verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
@@ -430,7 +429,12 @@ private fun ScheduleTimelineRow(
             )
             item.endTime?.let { end ->
                 Text(
-                    text = "~ " + end,
+                    text = "종료",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = p.textSecondary
+                )
+                Text(
+                    text = end,
                     style = MaterialTheme.typography.labelSmall,
                     color = p.textSecondary,
                     maxLines = 1,
