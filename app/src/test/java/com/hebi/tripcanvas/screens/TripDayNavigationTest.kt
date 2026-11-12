@@ -2,6 +2,7 @@ package com.hebi.tripcanvas.screens
 
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -27,6 +28,16 @@ class TripDayNavigationTest {
             listOf(-2L, -1L, 0L, 1L, 2L).map(selected::plusDays),
             visibleScheduleDates(start, end, selected)
         )
+    }
+
+    @Test fun shortTripsUseOnlyDateChipsWhileLongTripsKeepDatePicker() {
+        val start = LocalDate.parse("2026-11-20")
+        assertFalse(scheduleUsesDatePicker(start, start))
+        assertFalse(scheduleUsesDatePicker(start, start.plusDays(2)))
+        assertFalse(scheduleUsesDatePicker(start, start.plusDays(4)))
+        assertTrue(scheduleUsesDatePicker(start, start.plusDays(5)))
+        assertTrue(scheduleUsesDatePicker(start, start.plusDays(30)))
+        assertFalse(scheduleUsesDatePicker(start.plusDays(1), start))
     }
 
     @Test fun invalidDateRangeOrSelectionDoesNotEscapeTrip() {
