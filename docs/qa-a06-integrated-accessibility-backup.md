@@ -8,8 +8,8 @@
 - UI-A01 PR #38 / A02 PR #39 / A03 PR #41 / A04 PR #42 / A05 PR #43 **순차 main 병합 완료**. UI-A05 main SHA `a86e5d27b167a4a0e04889d5eebb9049889f7e76`.
 - UI-A05 통합 PR HEAD `ac4b272334312507cddf1ca1f1f1b52aa5531670`의 5개 필수 워크플로 **전체 success**: Android/JVM/Room [#43176951460](https://github.com/hebi10/TripCanvas/actions/runs/43176951460), 2-C phone/tablet [#43176951281](https://github.com/hebi10/TripCanvas/actions/runs/43176951281), 3-A MapLibre phone/tablet [#43176951372](https://github.com/hebi10/TripCanvas/actions/runs/43176951372), 3-B 정산·예약 phone/tablet [#43176951243](https://github.com/hebi10/TripCanvas/actions/runs/43176951243), API29/36·정책 [#43176951264](https://github.com/hebi10/TripCanvas/actions/runs/43176951264).
 - UI-A05 통합 HEAD의 원본 Android PNG **201장** SHA-256 manifest 대조 성공. 휴대전화·태블릿 라이트/다크·160% 원본 검수, 2-C 계측 XML 실패 0건.
-- [main CI #43179301621](https://github.com/hebi10/TripCanvas/actions/runs/43179301621): 2026-11-12 최초 조회 시 빌드 성공, Room API35 계측 진행 중. **이 통합 QA 시작 시 Play internal release의 신규 실행/버전 확인 불가**. 사용자가 완료했다고 안내했더라도 Google Play API 신규 `versionCode`·`internal completed` 및 fresh readback 증거 없이 게시 성공이라 기록하지 않음.
-- 이전 **마지막 검증된 Play internal v0.1.0 (14)**: [#43177564452](https://github.com/hebi10/TripCanvas/actions/runs/43177564452), `track=internal`, `status=api_committed_and_verified`; 새 UI-A05 AAB와 구별. 비공개 Alpha·프로덕션 자동 승격 없음.
+- [main CI #43179301621](https://github.com/hebi10/TripCanvas/actions/runs/43179301621): 2026-11-12 최초 조회 시 빌드 성공, Room API35 계측 진행 중. **UI-A05 Play internal v0.1.0(15) 릴리스 검증 완료**. 사용자가 완료했다고 안내했더라도 Google Play API 신규 `versionCode`·`internal completed` 및 fresh readback 증거 없이 게시 성공이라 기록하지 않음.
+- **현재 최신 검증된 Play internal v0.1.0 (15)**: [#43180204475](https://github.com/hebi10/TripCanvas/actions/runs/43180204475), `track=internal`, `status=api_committed_and_verified`; 이번 QA-A06 변경은 Play에 업로드하지 않음. 비공개 Alpha·프로덕션 자동 승격 없음.
 - Google Play Console의 Google 검토 결과/테스터 opt-in/실제 기기 설치는 API 등록 성공과 별도로 확인.
 
 ## 2. 전체 화면·기능 자동 QA 추적
@@ -58,3 +58,8 @@
 ## 다음 단계
 
 `RELEASE-A07 — 최신 internal 테스터 설치·실기기/접근성 최종 확인 및 Google Play 출시 게이트`.
+
+## 2026-11-12 동결 통합
+
+- 사용자 지시: 모든 P1~P4 개발·QA를 완료하기 전에는 Google Play에 다시 업로드하지 않음. RELEASE-FREEZE #47 merge `adac3298d37e96964404e2a892aeaeecfa57b7e4`에서 자동 Play 업로드·자동 스토어 편집 중단.
+- 기존 QA-A06 HEAD `36ecc588b6c68d0d0f5afdee5b85a3099c2ad3ff`은 Android CI, 2-C/3-A/3-B 휴대전화·태블릿, API29/36, 실제 백업 content URI 2건 모두 success. 동결 main 위 통합 HEAD를 별도로 생성하므로 해당 HEAD의 CI는 다시 확인해야 함.
