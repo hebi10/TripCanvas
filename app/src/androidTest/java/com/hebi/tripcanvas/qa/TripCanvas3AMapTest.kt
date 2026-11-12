@@ -195,6 +195,13 @@ class TripCanvas3AMapTest {
                 device.executeShellCommand("settings put system font_scale 1.6")
                 SystemClock.sleep(2000)
                 capture("09-map-font160")
+                awaitText("이동 경로 비교")
+                awaitText("선택 교통수단: 차량")
+                capture("10-route-compare-dark-font160")
+                click("도보")
+                awaitText("선택 교통수단: 도보")
+                awaitText("이동을 비교할 여행 날짜를 선택해 주세요.")
+                capture("11-route-mode-dark-font160")
             }
         } finally {
             device.executeShellCommand("settings put system font_scale 1.0")
