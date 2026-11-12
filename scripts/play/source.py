@@ -25,12 +25,7 @@ def resolve(env, event):
             raise SourceError('Manual Play workflows must run from main')
         sha = env.get('GITHUB_SHA', '')
     elif env.get('GITHUB_EVENT_NAME') == 'workflow_run':
-        run = event.get('workflow_run', {})
-        if (run.get('name') != 'TripCanvas Android CI' or run.get('path') != WORKFLOW or run.get('event') != 'push'
-                or run.get('conclusion') != 'success' or run.get('head_branch') != 'main'
-                or run.get('head_repository', {}).get('full_name') != REPO):
-            raise SourceError('Automatic deploy requires a successful same-repository main push verification')
-        sha = run.get('head_sha', '')
+        raise SourceError('Automatic Play upload is frozen until final planned work and explicit manual approval')
     else:
         raise SourceError('Unsupported release event')
     if not re.fullmatch(r'[a-f0-9]{40}', sha):
@@ -45,14 +40,12 @@ def require_current_main(sha, current_main):
 
 def release_mode(env, event, commit_subject):
     resolve(env, event)
-    if env.get('GITHUB_EVENT_NAME') == 'workflow_dispatch':
-        mode = env.get('PLAY_REQUESTED_MODE', 'check')
-        if mode not in ('check', 'build', 'deploy', 'initialize'):
-            raise SourceError('Unsupported Play release mode')
-        return mode
-    subject = commit_subject.splitlines()[0] if commit_subject else ''
-    return 'initialize' if re.search(r'(?<!\S)\[initialize-play\](?!\S)', subject) else 'deploy'
-
+    mode = env.get('PLAY_REQUESTED_MODE', 'check')
+    if mode not in ('check', 'build', 'deploy', 'initialize'):
+        raise SourceError('Unsupported Play release mode')
+    if mode in ('deploy', 'initialize') and env.get('PLAY_FINAL_RELEASE_APPROVED') != 'true':
+        raise SourceError('Final release frozen: explicit manual final_release_confirmed required')
+    return mode
 
 def verify_ci(sha, run, jobs):
     if (run.get('head_sha') != sha or run.get('head_branch') != 'main' or run.get('conclusion') != 'success'
