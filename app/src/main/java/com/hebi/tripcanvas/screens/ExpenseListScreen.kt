@@ -19,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.style.TextOverflow
 import com.hebi.tripcanvas.data.ExpenseRepository
@@ -30,6 +31,7 @@ import com.hebi.tripcanvas.designsystem.components.TripEmptyState
 import com.hebi.tripcanvas.designsystem.components.TripErrorState
 import com.hebi.tripcanvas.designsystem.components.TripLoadingState
 import com.hebi.tripcanvas.designsystem.components.TripPrimaryButton
+import com.hebi.tripcanvas.designsystem.components.TripProgressIndicator
 import com.hebi.tripcanvas.designsystem.components.TripSecondaryButton
 import com.hebi.tripcanvas.designsystem.components.TripSectionHeading
 import com.hebi.tripcanvas.designsystem.components.TripSurfacePanel
@@ -40,6 +42,7 @@ import com.hebi.tripcanvas.designsystem.theme.TripDesign
 import com.hebi.tripcanvas.designsystem.tokens.TripSpacing
 import com.hebi.tripcanvas.domain.ExpenseCategory
 import com.hebi.tripcanvas.domain.calculateExpenseTotals
+import com.hebi.tripcanvas.domain.budgetUsageProgress
 import com.hebi.tripcanvas.domain.displayMoney
 import com.hebi.tripcanvas.domain.validateMoney
 import com.hebi.tripcanvas.ui.TripPageFrame
@@ -131,6 +134,9 @@ fun ExpenseListScreen(
                     val remaining = activeBudget?.let {
                         BigDecimal(it.amountDecimal).subtract(totals.baseSpent)
                     }
+                    val usage = activeBudget?.let {
+                        budgetUsageProgress(totals.baseSpent, BigDecimal(it.amountDecimal))
+                    }
                     val budgetValue = activeBudget?.let {
                         displayMoney(it.amountDecimal, current.currencyCode)
                     } ?: if (budget == null) "미설정" else "통화 불일치"
@@ -175,6 +181,43 @@ fun ExpenseListScreen(
                                         )
                                     }
                                 }
+                            }
+                            if (usage != null) {
+                                Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            "예산 사용률",
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = p.textSecondary
+                                        )
+                                        Text(
+                                            usage.percentage +
+                                                if (usage.overBudget) " · 예산 초과" else "",
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = if (usage.overBudget) p.warning else p.textPrimary
+                                        )
+                                    }
+                                    TripProgressIndicator(
+                                        progress = usage.fraction,
+                                        description = "예산 사용률 ${usage.percentage}" +
+                                            if (usage.overBudget) " · 예산 초과" else "",
+                                        warning = usage.overBudget
+                                    )
+                                }
+                            } else {
+                                Text(
+                                    text = when {
+                                        budget == null -> "예산 미설정 · 사용률 표시 불가"
+                                        activeBudget == null -> "예산 통화 불일치 · 사용률 표시 불가"
+                                        else -> "예산 금액 확인 필요 · 사용률 표시 불가"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = p.textSecondary
+                                )
                             }
                             if (budget != null && activeBudget == null) {
                                 Text(
