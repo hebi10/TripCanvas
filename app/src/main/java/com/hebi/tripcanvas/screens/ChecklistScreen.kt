@@ -44,6 +44,7 @@ import com.hebi.tripcanvas.designsystem.components.TripEmptyState
 import com.hebi.tripcanvas.designsystem.components.TripErrorState
 import com.hebi.tripcanvas.designsystem.components.TripLoadingState
 import com.hebi.tripcanvas.designsystem.components.TripPrimaryButton
+import com.hebi.tripcanvas.designsystem.components.TripProgressTrack
 import com.hebi.tripcanvas.designsystem.components.TripSecondaryButton
 import com.hebi.tripcanvas.designsystem.components.TripSectionHeading
 import com.hebi.tripcanvas.designsystem.components.TripSurfacePanel
@@ -136,8 +137,33 @@ fun ChecklistScreen(
                 TripSectionHeading(
                     title = "준비 완료 " + completed + " / " + total,
                     supportingText = if (total == 0) "여행에 필요한 준비물을 추가해 보세요."
-                        else "남은 준비물 ${total - completed}개 · 완료율 ${completed * 100 / total}%"
+                        else "남은 준비물 ${total - completed}개"
                 )
+                if (total > 0) {
+                    val percent = completed * 100 / total
+                    Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "준비 진행률",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = p.textSecondary
+                            )
+                            Text(
+                                "$" + "{percent}% 완료",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = p.textPrimary
+                            )
+                        }
+                        TripProgressTrack(
+                            fraction = checklistCompletionFraction(completed, total),
+                            accessibilityLabel = "준비물 완료율 $" + "{percent}%"
+                        )
+                    }
+                }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
                     TripChoiceChip(
                         label = "전체",
