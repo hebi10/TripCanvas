@@ -34,6 +34,7 @@ class TripCanvas3BScreenTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val context: Context = instrumentation.targetContext
     private val device = UiDevice.getInstance(instrumentation)
+    private val navigator = QaUiNavigator(device)
 
     @Test
     fun financeParticipantsAndBookingScreensAreNavigable() {
@@ -120,10 +121,10 @@ class TripCanvas3BScreenTest {
                 awaitText("첨부 1개")
                 awaitText("숙소 예약 확인서.pdf")
                 capture("09-booking-edit")
-                click("확인번호 보기")
+                click("확인번호 보기", expectedAfter = "확인번호 숨기기")
                 awaitText("확인번호 숨기기")
                 capture("09a-booking-reference-visible")
-                click("확인번호 숨기기")
+                click("확인번호 숨기기", expectedAfter = "확인번호 보기")
                 awaitText("확인번호 보기")
                 click("파일 연결 제거")
                 awaitText("문서 연결 제거")
@@ -217,18 +218,15 @@ class TripCanvas3BScreenTest {
             (expectedScreenTitle?.let { " · 예상 화면: $it" } ?: ""))
     }
 
-    private fun click(text: String) {
+    private fun click(text: String, expectedAfter: String? = null) {
         awaitText(text)
-        SystemClock.sleep(300)
-        val node = device.findObject(uiSelector(text))
-            ?: throw AssertionError("Missing click target: " + text)
-        var target = node
-        while (!target.isClickable) {
-            target = target.parent ?: break
+        try {
+            navigator.clickVisible(uiSelector(text), text, expectedAfter)
+        } catch (failure: AssertionError) {
+            capture("99-click-failure")
+            runCatching { device.dumpWindowHierarchy(File(output(), "99-click-hierarchy.xml")) }
+            throw failure
         }
-        target.click()
-        device.waitForIdle()
-        SystemClock.sleep(300)
     }
 
     private fun dismissSystemAnr() {
