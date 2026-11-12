@@ -117,22 +117,26 @@ class InitializeTests(unittest.TestCase):
                     self.assertEqual(publisher.main(), 1)
                     transport.assert_not_called()
 
-    def test_initialize_marker_context_requires_matching_verified_sha_and_producer(self):
+    def test_automatic_initialization_is_frozen_and_manual_main_is_still_supported(self):
         import subprocess
-        run = {'name': 'TripCanvas Android CI', 'path': '.github/workflows/android-ci.yml', 'event': 'push', 'conclusion': 'success', 'head_branch': 'main', 'head_sha': 'a' * 40, 'head_repository': {'full_name': REQUEST_ENV['GITHUB_REPOSITORY']}}
+        run = {'name': 'TripCanvas Android CI', 'path': '.github/workflows/android-ci.yml',
+               'event': 'push', 'conclusion': 'success', 'head_branch': 'main',
+               'head_sha': 'a' * 40,
+               'head_repository': {'full_name': REQUEST_ENV['GITHUB_REPOSITORY']}}
         with tempfile.TemporaryDirectory() as directory:
             event_path = Path(directory) / 'event.json'
             event_path.write_text(json.dumps({'workflow_run': run}))
-            env = dict(REQUEST_ENV, GITHUB_EVENT_NAME='workflow_run', GITHUB_EVENT_PATH=str(event_path))
-            git = subprocess.CompletedProcess([], 0, '[initialize-play]\n', '')
+            env = dict(REQUEST_ENV, GITHUB_EVENT_NAME='workflow_run',
+                       GITHUB_EVENT_PATH=str(event_path))
+            git = subprocess.CompletedProcess([], 0, '[initialize-play]\\n', '')
             with mock.patch.object(publisher.subprocess, 'run', return_value=git):
-                publisher.require_initialization_request(env)
-                for invalid in (dict(env, SOURCE_SHA='b' * 40), dict(env, GITHUB_REF='refs/tags/v1')):
-                    with self.assertRaises(publisher.ReleaseError):
-                        publisher.require_initialization_request(invalid)
-            with mock.patch.object(publisher.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, 'ordinary\n', '')):
                 with self.assertRaises(publisher.ReleaseError):
                     publisher.require_initialization_request(env)
+        publisher.require_initialization_request(REQUEST_ENV)
+        for invalid in (dict(REQUEST_ENV, SOURCE_SHA='b' * 40),
+                        dict(REQUEST_ENV, GITHUB_REF='refs/tags/v1')):
+            with self.assertRaises(publisher.ReleaseError):
+                publisher.require_initialization_request(invalid)
 
     def test_initialize_cli_never_changes_initialization_flag(self):
         server = FirstUploadServer()
