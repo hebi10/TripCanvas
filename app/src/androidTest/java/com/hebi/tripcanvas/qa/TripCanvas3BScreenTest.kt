@@ -200,7 +200,7 @@ class TripCanvas3BScreenTest {
                             !device.wait(Until.hasObject(By.text(expectedScreenTitle)), 3000)
                         ) {
                             SystemClock.sleep(250)
-                            continue
+                            return@repeat
                         }
                         if (label == "예약 열기") capture("07b-bookings-card-after-click")
                         return
