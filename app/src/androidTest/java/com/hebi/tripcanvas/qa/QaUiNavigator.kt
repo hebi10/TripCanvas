@@ -25,11 +25,20 @@ internal class QaUiNavigator(private val device: UiDevice) {
         val safeTop = height * 5 / 100
         val safeBottom = height * 94 / 100
         var lastObservation = "화면에 클릭 대상이 없습니다"
+        var deliveredTaps = 0
 
         repeat(16) { attempt ->
             try {
+                if (expectedAfter != null && device.hasObject(By.text(expectedAfter))) return
+
                 val node = device.wait(Until.findObject(selector), 1200)
                 if (node == null) {
+                    if (deliveredTaps > 0 && expectedAfter != null) {
+                        throw AssertionError(
+                            "클릭 대상이 사라졌지만 예상 화면은 확인되지 않았습니다: " +
+                                "$label → $expectedAfter"
+                        )
+                    }
                     lastObservation = "대상 미발견"
                     scroll(down = attempt < 10)
                     return@repeat
@@ -68,16 +77,27 @@ internal class QaUiNavigator(private val device: UiDevice) {
                     return@repeat
                 }
 
-                target.click()
-                device.waitForIdle()
-                if (expectedAfter != null &&
-                    !device.wait(Until.hasObject(By.text(expectedAfter)), 5000)
-                ) {
-                    throw AssertionError(
-                        "클릭 후 예상 상태가 나타나지 않았습니다: $label → $expectedAfter"
-                    )
+                val injected = device.click(bounds.centerX(), bounds.centerY())
+                if (!injected) {
+                    lastObservation = "터치 이벤트 전송 실패: bounds=$bounds"
+                    SystemClock.sleep(200)
+                    return@repeat
                 }
-                return
+                deliveredTaps++
+                device.waitForIdle()
+                if (expectedAfter == null ||
+                    device.wait(Until.hasObject(By.text(expectedAfter)), 4000)
+                ) return
+
+                // Retry only while the same action is still visible. Checking
+                // the post-state before each retry prevents double toggles.
+                lastObservation = "클릭 후 예상 상태 미확인 ($deliveredTaps/3): " +
+                    "$label → $expectedAfter"
+                if (deliveredTaps >= 3 || !device.hasObject(selector)) {
+                    throw AssertionError(lastObservation)
+                }
+                SystemClock.sleep(300)
+                return@repeat
             } catch (_: StaleObjectException) {
                 lastObservation = "UI 요소 갱신으로 노드 무효화"
                 SystemClock.sleep(200)
