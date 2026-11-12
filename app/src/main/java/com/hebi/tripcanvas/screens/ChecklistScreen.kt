@@ -44,6 +44,7 @@ import com.hebi.tripcanvas.designsystem.components.TripEmptyState
 import com.hebi.tripcanvas.designsystem.components.TripErrorState
 import com.hebi.tripcanvas.designsystem.components.TripLoadingState
 import com.hebi.tripcanvas.designsystem.components.TripPrimaryButton
+import com.hebi.tripcanvas.designsystem.components.TripProgressIndicator
 import com.hebi.tripcanvas.designsystem.components.TripSecondaryButton
 import com.hebi.tripcanvas.designsystem.components.TripSectionHeading
 import com.hebi.tripcanvas.designsystem.components.TripSurfacePanel
@@ -52,6 +53,7 @@ import com.hebi.tripcanvas.designsystem.icons.TripIcons
 import com.hebi.tripcanvas.designsystem.theme.TripDesign
 import com.hebi.tripcanvas.designsystem.tokens.TripSizes
 import com.hebi.tripcanvas.designsystem.tokens.TripSpacing
+import com.hebi.tripcanvas.domain.checklistCompletionFraction
 import com.hebi.tripcanvas.ui.TripPageFrame
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.catch
@@ -138,6 +140,12 @@ fun ChecklistScreen(
                     supportingText = if (total == 0) "여행에 필요한 준비물을 추가해 보세요."
                         else "남은 준비물 ${total - completed}개 · 완료율 ${completed * 100 / total}%"
                 )
+                if (total > 0) {
+                    TripProgressIndicator(
+                        progress = checklistCompletionFraction(completed, total),
+                        description = "준비 완료 ${completed}개 / 전체 ${total}개"
+                    )
+                }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
                     TripChoiceChip(
                         label = "전체",
