@@ -91,7 +91,7 @@ class TripCanvas3AMapTest {
                 capture("02-workspace-light")
                 click("지도 열기")
                 awaitText("여행 지도")
-                SystemClock.sleep(3000)
+                awaitRenderedMapPins(scenario)
                 capture("03-map-all-light")
                 val widthDp = (device.displayWidth / context.resources.displayMetrics.density).toInt()
                 if (classifyWindowWidth(widthDp) != TripWindowWidth.Compact) {
@@ -188,6 +188,35 @@ class TripCanvas3AMapTest {
         } finally {
             device.executeShellCommand("settings put system font_scale 1.0")
         }
+    }
+
+    private fun awaitRenderedMapPins(scenario: ActivityScenario<MainActivity>) {
+        repeat(30) {
+            val loaded = AtomicReference(false)
+            val latch = CountDownLatch(1)
+            scenario.onActivity { activity ->
+                val view = findMapView(activity.window.decorView)
+                if (view == null) {
+                    latch.countDown()
+                } else {
+                    view.getMapAsync { map ->
+                        loaded.set(
+                            map.style?.getSource("tripcanvas-place-source") != null &&
+                                map.style?.getLayer("tripcanvas-place-confirmed") != null
+                        )
+                        latch.countDown()
+                    }
+                }
+            }
+            latch.await(3, TimeUnit.SECONDS)
+            if (loaded.get()) {
+                SystemClock.sleep(500)
+                return
+            }
+            SystemClock.sleep(500)
+        }
+        capture("99-map-pin-layer-not-ready")
+        throw AssertionError("MapLibre style and actual place-pin layer did not become ready")
     }
 
     private fun assertMapCentered(
