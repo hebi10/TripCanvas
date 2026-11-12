@@ -1,0 +1,104 @@
+name: TripCanvas RELEASE-A07 Final Verification
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/release-a07-verification.yml'
+      - 'scripts/play/check_a07_readonly.py'
+      - 'scripts/play/tests/test_a07_readonly.py'
+      - 'docs/release-a07-device-tester-signoff.md'
+  workflow_dispatch:
+    inputs:
+      version_code:
+        description: 'Existing completed internal versionCode to verify (no upload)'
+        required: true
+        type: string
+        default: '15'
+      bundle_sha256:
+        description: 'Expected signed AAB SHA-256 from verified release report'
+        required: true
+        type: string
+        default: '3a25d3c4bf9c9e8963c976f814f66ca6bcc65706a8c07da1e139af18e0b247dc'
+
+permissions:
+  contents: read
+
+jobs:
+  offline-gates:
+    name: release-a07-offline-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Unit-test read-only Play release gate and false-success prevention
+        run: python3 -m unittest discover -s scripts/play/tests -p 'test_a07_readonly.py' -v
+      - name: Document physical device limitations
+        run: |
+          echo 'Offline checks only. Physical foldable, TalkBack, third-party SAF, and real Play tester install are NOT verified by this job.' >> "$GITHUB_STEP_SUMMARY"
+
+  play-internal-readonly:
+    name: play-a07-verify-existing-internal
+    needs: offline-gates
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: google-play
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check existing Play authentication configuration
+        id: credentials
+        env:
+          PLAY_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.PLAY_WORKLOAD_IDENTITY_PROVIDER }}
+          PLAY_SERVICE_ACCOUNT: ${{ vars.PLAY_SERVICE_ACCOUNT }}
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: python3 scripts/play/preflight.py auth
+      - name: Authenticate using existing Workload Identity Federation
+        id: wif
+        if: steps.credentials.outputs.auth_mode == 'wif'
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.PLAY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PLAY_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/androidpublisher
+          create_credentials_file: false
+      - name: Authenticate using existing legacy service account
+        id: json
+        if: steps.credentials.outputs.auth_mode == 'json'
+        uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/androidpublisher
+          create_credentials_file: false
+      - name: Verify existing internal release without a new AAB or track commit
+        env:
+          PLAY_ACCESS_TOKEN: ${{ steps.wif.outputs.access_token || steps.json.outputs.access_token }}
+          EXPECTED_CODE: ${{ inputs.version_code }}
+          EXPECTED_SHA256: ${{ inputs.bundle_sha256 }}
+        run: |
+          python3 scripts/play/check_a07_readonly.py --version-code "$EXPECTED_CODE" --sha256 "$EXPECTED_SHA256" --report output/release-a07-readonly.json
+      - name: Preserve non-secret API verification and physical-install disclaimer
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tripcanvas-release-a07-readonly-${{ github.run_id }}
+          path: output/release-a07-readonly.json
+          retention-days: 30
+          if-no-files-found: ignore
+      - name: Explain Play API versus actual tester install
+        if: success()
+        run: |
+          echo 'Existing internal versionCode and uploaded AAB SHA matched Play API in a discarded edit. No upload, commit, tester enrollment, or production/alpha change.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Console release visibility, tester opt-in, physical install, TalkBack and third-party SAF rights require separate manual evidence.' >> "$GITHUB_STEP_SUMMARY"
