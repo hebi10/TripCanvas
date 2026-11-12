@@ -116,7 +116,10 @@ fun TripMapScreen(
     }
     val focusedPlace = visiblePlaces.firstOrNull { it.id == selectedId }
     LaunchedEffect(visiblePlaces, selectedId) {
-        if (selectedId.isNotBlank() && focusedPlace == null) selectedId = ""
+        val retained = retainedMapPlaceSelection(
+            selectedId, visiblePlaces.map { it.id }
+        )
+        if (retained != selectedId) selectedId = retained
     }
 
     TripPageFrame(title = "여행 지도", onBack = onBack) {
@@ -535,3 +538,8 @@ private fun TripMapCanvas(
         }
     }
 }
+
+internal fun retainedMapPlaceSelection(
+    selectedId: String,
+    visiblePlaceIds: Collection<String>
+): String = selectedId.takeIf { it.isNotBlank() && it in visiblePlaceIds }.orEmpty()
