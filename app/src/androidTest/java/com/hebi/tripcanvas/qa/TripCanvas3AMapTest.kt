@@ -139,9 +139,15 @@ class TripCanvas3AMapTest {
                 awaitText("제주국제공항")
                 capture("04-map-date-filter")
                 click("지도에서 선택: 제주국제공항")
-                awaitText("지도 선택 · 제주국제공항")
-                capture("04b-map-focus-from-place-list")
-                click("선택 장소 상세")
+                if (classifyWindowWidth(widthDp) == TripWindowWidth.Compact) {
+                    awaitText("지도 선택 · 제주국제공항")
+                    capture("04b-map-focus-from-place-list")
+                    click("선택 장소 상세")
+                } else {
+                    awaitText("지도 선택됨: 제주국제공항")
+                    capture("04b-map-focus-from-place-list")
+                    click("장소 상세")
+                }
                 awaitText("공급자: Photon/OSM")
                 capture("05-place-detail")
                 click("일정 편집")
