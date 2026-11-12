@@ -6,6 +6,7 @@ on:
       - '.github/workflows/release-a07-verification.yml'
       - 'scripts/play/check_a07_readonly.py'
       - 'scripts/play/tests/test_a07_readonly.py'
+      - 'scripts/release-a07-device-probe.ps1'
       - 'docs/release-a07-device-tester-signoff.md'
   workflow_dispatch:
     inputs:
