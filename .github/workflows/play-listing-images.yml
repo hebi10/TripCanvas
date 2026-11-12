@@ -17,6 +17,11 @@ on:
         required: true
         default: check
         options: [check, upload]
+      final_release_confirmed:
+        description: 'Only after all planned changes and final release approval'
+        type: boolean
+        required: true
+        default: false
 
 permissions:
   contents: read
@@ -47,7 +52,7 @@ jobs:
     needs: validate
     if: >-
       github.repository == 'hebi10/TripCanvas' && github.ref == 'refs/heads/main' &&
-      github.event_name == 'workflow_dispatch' && inputs.mode == 'upload'
+      github.event_name == 'workflow_dispatch' && inputs.mode == 'upload' && inputs.final_release_confirmed == true
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment: google-play
