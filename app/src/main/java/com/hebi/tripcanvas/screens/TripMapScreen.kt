@@ -2,6 +2,7 @@ package com.hebi.tripcanvas.screens
 
 import android.os.Bundle
 import android.graphics.Color
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Alignment
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -22,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
@@ -40,6 +43,7 @@ import com.hebi.tripcanvas.designsystem.components.TripPrimaryButton
 import com.hebi.tripcanvas.designsystem.components.TripSecondaryButton
 import com.hebi.tripcanvas.designsystem.components.TripSectionHeading
 import com.hebi.tripcanvas.designsystem.components.TripSurfacePanel
+import com.hebi.tripcanvas.designsystem.components.TripStatusTag
 import com.hebi.tripcanvas.designsystem.responsive.TripAdaptiveContainer
 import com.hebi.tripcanvas.designsystem.responsive.TripWindowWidth
 import com.hebi.tripcanvas.designsystem.theme.TripDesign
@@ -67,6 +71,7 @@ private const val PIN_SOURCE = "tripcanvas-place-source"
 private const val PIN_CONFIRMED = "tripcanvas-place-confirmed"
 private const val PIN_CANDIDATE = "tripcanvas-place-candidate"
 private const val PIN_SAVED = "tripcanvas-place-saved"
+private const val PIN_SELECTED = "tripcanvas-place-selected"
 private val PIN_LAYERS = arrayOf(PIN_CONFIRMED, PIN_CANDIDATE, PIN_SAVED)
 
 @Composable
@@ -137,6 +142,12 @@ fun TripMapScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = p.textSecondary
             )
+            Text(
+                "선택 날짜 " + (if (selectedDate == "all") "전체" else selectedDate) +
+                    " · 장소 ${visiblePlaces.size}개 · 지도 핀 ${pins.size}개",
+                style = MaterialTheme.typography.labelMedium,
+                color = p.textSecondary
+            )
             TripAdaptiveContainer(modifier = Modifier.fillMaxWidth()) { width ->
                 if (width == TripWindowWidth.Compact) {
                     Column(
@@ -147,7 +158,7 @@ fun TripMapScreen(
                             pins = pins,
                             selectedId = selectedId,
                             mapHeight = 340.dp,
-                            onPinClick = onPlace
+                            onPinClick = { selectedId = it }
                         )
                         focusedPlace?.let { place ->
                             TripMapSelectedPlace(
@@ -183,7 +194,7 @@ fun TripMapScreen(
                                 pins = pins,
                                 selectedId = selectedId,
                                 mapHeight = 470.dp,
-                                onPinClick = onPlace
+                                onPinClick = { selectedId = it }
                             )
                         }
                         Column(
@@ -195,6 +206,12 @@ fun TripMapScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 onClick = onSearch
                             )
+                            focusedPlace?.let { place ->
+                                TripMapSelectedPlace(
+                                    place = place,
+                                    onDetail = { onPlace(place.id) }
+                                )
+                            }
                             TripMapPlacesPane(
                                 visiblePlaces = visiblePlaces,
                                 dateItems = dateItems,
@@ -253,6 +270,7 @@ private fun TripMapSelectedPlace(
             modifier = Modifier.padding(TripSpacing.sm),
             verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
         ) {
+            TripStatusTag("선택한 장소")
             Text(
                 "지도 선택 · " + place.name,
                 style = MaterialTheme.typography.titleMedium,
@@ -299,11 +317,24 @@ private fun TripMapPlacesPane(
         }
         visiblePlaces.forEach { place ->
             val linked = dateItems.filter { it.placeId == place.id }
-            TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RectangleShape,
+                color = p.surface,
+                border = BorderStroke(
+                    if (selectedId == place.id) 2.dp else 1.dp,
+                    if (selectedId == place.id) p.primaryAction else p.outline
+                ),
+                tonalElevation = 0.dp,
+                shadowElevation = 0.dp
+            ) {
                 Column(
                     modifier = Modifier.padding(TripSpacing.sm),
                     verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
                 ) {
+                    if (selectedId == place.id) {
+                        TripStatusTag("선택한 장소")
+                    }
                     Text(
                         place.name,
                         style = MaterialTheme.typography.titleMedium,
@@ -446,6 +477,25 @@ private fun TripMapCanvas(
             style.addSource(GeoJsonSource(PIN_SOURCE, collection))
         } else {
             source.setGeoJson(collection)
+        }
+        val selectedFilter = Expression.eq(
+            Expression.get("placeId"),
+            Expression.literal(selectedId)
+        )
+        val selectedLayer = style.getLayer(PIN_SELECTED) as? CircleLayer
+        if (selectedLayer == null) {
+            style.addLayer(
+                CircleLayer(PIN_SELECTED, PIN_SOURCE)
+                    .withFilter(selectedFilter)
+                    .withProperties(
+                        PropertyFactory.circleColor(Color.WHITE),
+                        PropertyFactory.circleRadius(16f),
+                        PropertyFactory.circleStrokeWidth(3f),
+                        PropertyFactory.circleStrokeColor(Color.BLACK)
+                    )
+            )
+        } else {
+            selectedLayer.setFilter(selectedFilter)
         }
         listOf(
             Triple(PIN_CONFIRMED, "확정", Color.rgb(44, 112, 73)),
