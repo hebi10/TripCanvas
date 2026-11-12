@@ -159,12 +159,21 @@ class TripCanvas2CScreenshotTest {
             capture("02d-schedule-after-click")
             awaitText("여행 일정")
             awaitText("날짜 선택")
+            awaitText("11월 20일 · 금요일")
             awaitText("공항 도착")
+            awaitText("10:00")
+            assertTrue(
+                "짧은 여행에서 중복 날짜 선택기를 노출하면 안 됩니다.",
+                !device.hasObject(By.text("다른 날짜 선택"))
+            )
             capture("02d-workspace-schedule-route")
+            capture("02d1-schedule-timeline-light")
             click("11/21 토")
+            awaitText("11월 21일 · 토요일")
             awaitText("이 날짜에는 일정이 없습니다")
             capture("02f-schedule-empty-date")
             click("11/20 금")
+            awaitText("11월 20일 · 금요일")
             awaitText("공항 도착")
             val scheduleMenu = device.wait(
                 Until.findObject(By.desc("공항 도착 일정 메뉴")), 5000
