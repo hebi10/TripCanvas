@@ -7,12 +7,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -173,7 +176,7 @@ fun TripDayScreen(
                         )
                     }
                 }
-                TripDateField(
+                if (scheduleUsesDatePicker(start, end)) TripDateField(
                     label = "다른 날짜 선택",
                     date = selectedDate,
                     error = null,
@@ -185,6 +188,12 @@ fun TripDayScreen(
                             failedAction = true
                         }
                     }
+                )
+                Text(
+                    text = "${selected.monthValue}월 ${selected.dayOfMonth}일 · " +
+                        selected.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.KOREAN),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = p.textPrimary
                 )
             }
             if (failedAction) {
@@ -220,11 +229,13 @@ fun TripDayScreen(
                         if (timed.isNotEmpty()) {
                             TripSectionHeading(
                                 title = "시간 지정 일정",
-                                supportingText = "손잡이를 길게 끌거나 일정 메뉴에서 순서를 변경할 수 있습니다."
+                                supportingText = "손잡이를 길게 끌거나 더보기 메뉴에서 순서를 변경하세요."
                             )
                         }
                         timed.forEachIndexed { index, item ->
-                            ScheduleRow(
+                            ScheduleTimelineRow(
+                                isFirst = index == 0,
+                                isLast = index == timed.lastIndex,
                                 item = item,
                                 placeName = item.placeId?.let(placeNames::get),
                                 disabled = busy,
@@ -371,6 +382,80 @@ fun TripDayScreen(
     }
 }
 
+
+@Composable
+private fun ScheduleTimelineRow(
+    isFirst: Boolean,
+    isLast: Boolean,
+    item: ItineraryItemEntity,
+    placeName: String?,
+    disabled: Boolean,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+    hasConflict: Boolean,
+    onEdit: () -> Unit,
+    onDuplicate: () -> Unit,
+    onDelete: () -> Unit,
+    onMove: (Int) -> Unit
+) {
+    val p = TripDesign.palette
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .drawBehind {
+                val axisX = 76.dp.toPx()
+                val dotY = 24.dp.toPx()
+                val lineWidth = 1.dp.toPx()
+                if (!isFirst) {
+                    drawLine(p.outline, Offset(axisX, 0f), Offset(axisX, dotY), lineWidth)
+                }
+                if (!isLast) {
+                    drawLine(p.outline, Offset(axisX, dotY), Offset(axisX, size.height), lineWidth)
+                }
+                drawCircle(p.textPrimary, radius = 4.dp.toPx(), center = Offset(axisX, dotY))
+            }
+            .padding(bottom = if (isLast) 0.dp else TripSpacing.sm),
+        verticalAlignment = Alignment.Top
+    ) {
+        Column(
+            modifier = Modifier.width(64.dp).padding(top = TripSpacing.sm),
+            verticalArrangement = Arrangement.spacedBy(TripSpacing.xxs)
+        ) {
+            Text(
+                text = requireNotNull(item.startTime),
+                style = MaterialTheme.typography.labelLarge,
+                color = p.textPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            item.endTime?.let { end ->
+                Text(
+                    text = "~ " + end,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = p.textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+        Spacer(Modifier.width(24.dp))
+        ScheduleRow(
+            item = item,
+            placeName = placeName,
+            disabled = disabled,
+            canMoveUp = canMoveUp,
+            canMoveDown = canMoveDown,
+            hasConflict = hasConflict,
+            onEdit = onEdit,
+            onDuplicate = onDuplicate,
+            onDelete = onDelete,
+            onMove = onMove,
+            modifier = Modifier.weight(1f),
+            showTimeInCard = false
+        )
+    }
+}
+
 @Composable
 private fun ScheduleRow(
     item: ItineraryItemEntity,
@@ -382,7 +467,9 @@ private fun ScheduleRow(
     onEdit: () -> Unit,
     onDuplicate: () -> Unit,
     onDelete: () -> Unit,
-    onMove: (Int) -> Unit
+    onMove: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    showTimeInCard: Boolean = true
 ) {
     val p = TripDesign.palette
     var dragY by remember(item.id) { mutableFloatStateOf(0f) }
@@ -409,7 +496,7 @@ private fun ScheduleRow(
             }
         }
     TripSurfacePanel(
-        modifier = Modifier.fillMaxWidth()
+        modifier = modifier.fillMaxWidth()
             .onSizeChanged { heightPx = it.height }
             .offset { IntOffset(0, dragY.roundToInt()) }
             .zIndex(if (dragY == 0f) 0f else 1f)
@@ -428,11 +515,13 @@ private fun ScheduleRow(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(TripSpacing.xxs)
                 ) {
-                    Text(
-                        item.startTime?.let { it + " ~ " + item.endTime } ?: "시간 미정",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = p.textPrimary
-                    )
+                    if (showTimeInCard) {
+                        Text(
+                            item.startTime?.let { it + " ~ " + item.endTime } ?: "시간 미정",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = p.textPrimary
+                        )
+                    }
                     Text(
                         item.title,
                         style = MaterialTheme.typography.titleMedium,
@@ -526,3 +615,6 @@ internal fun visibleScheduleDates(
         .map { selected.plusDays(it) }
         .filter { !it.isBefore(start) && !it.isAfter(end) }
 }
+
+internal fun scheduleUsesDatePicker(start: LocalDate, end: LocalDate): Boolean =
+    !start.isAfter(end) && start.plusDays(4).isBefore(end)
