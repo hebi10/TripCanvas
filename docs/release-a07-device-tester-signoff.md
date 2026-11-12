@@ -99,3 +99,12 @@ MediaStore 테스트는 파일 I/O/Room 복원을 검증하지만 제삼자 문�
 - QA-A06와 A07은 각각 독립 Draft PR에서 자동 검증하며, **QA-A06 최신 HEAD 전체 성공→병합→A07 브랜치 최신 main 정합화→A07 Checks 성공→PR 병합** 순서.
 - A07 PR 병합 후 Google Play 재조회 워크플로는 `workflow_dispatch`에서 **최신 main만** 대상으로 실행. 업로드·배포·테스터 등록 작업이 아니며, 실행 성공도 실제 설치 완료를 뜻하지 않음.
 - 새 Actions는 사용자가 요청한 대로 반복 조회 없이 링크만 제공. 실기기 미검증이 남아 있는 동안 최종 릴리스 통과를 주장하지 않습니다.
+
+## 2026-11-12 최종 일괄 배포 동결·QA-A06 통합
+
+- 사용자 확정 운영 정책: 기능 개발·QA PR마다 Google Play 업로드 금지. 모든 P1~P4 기능·실기기·보안 QA를 완료하고 별도 승인받은 뒤 **한 번만** 수동 내부 테스트·필요한 이미지/비공개 트랙 게시.
+- RELEASE-FREEZE PR #47 `main=adac3298d37e96964404e2a892aeaeecfa57b7e4` 병합: 자동 AAB 및 스토어 업로드 트리거 제거, 수동 최종 승인 요구.
+- QA-A06 PR #44 `main=d9e91d06a06246efa18633abbf2e7c2e32445878` 병합 완료: 동결 main 통합 HEAD에서 Android/JVM/Room, 2-C/3-A/3-B phone/tablet, API29/36, 실제 Android API35 content URI 백업·복원 CI **6개 전부 성공**.
+- RELEASE-A07은 위 검증된 main을 보존하고 이 PR의 read-only Play 검증/기기 진단/수동 승인 문서만 재적용. 신규 통합 HEAD Android CI+offline test 재성공이 필요.
+- 원본 v0.1.0(15)의 internal Play API 등록 근거는 유지. 이번 PR 자체로 새 versionCode, 배포, Google Play 테스트 승인, TalkBack/폴더블 실기기 완료를 뜻하지 않음.
+- 전체 남은 업무: [FINAL-BATCH-ROADMAP #48](https://github.com/hebi10/TripCanvas/issues/48). 실기기 수동 결과는 [RELEASE-A07 기기 체크리스트 #46](https://github.com/hebi10/TripCanvas/issues/46)에 별도 기록.

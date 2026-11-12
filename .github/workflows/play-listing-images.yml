@@ -8,13 +8,7 @@ on:
       - 'scripts/play/verify_listing_assets.py'
       - 'scripts/play/tests/test_listing_images.py'
       - '.github/workflows/play-listing-images.yml'
-  # STORE-03 initial merge and a single guarded diagnostic retry; otherwise manual dispatch.
-  push:
-    branches: [main]
-    paths:
-      - 'assets/play-store/ko-KR/**'
-      - 'scripts/play/listing_images.py'
-      - '.github/workflows/play-listing-images.yml'
+  # FINAL-RELEASE-FREEZE: validation may run on PR; uploads require explicit manual request.
   workflow_dispatch:
     inputs:
       mode:
@@ -23,6 +17,11 @@ on:
         required: true
         default: check
         options: [check, upload]
+      final_release_confirmed:
+        description: 'Only after all planned changes and final release approval'
+        type: boolean
+        required: true
+        default: false
 
 permissions:
   contents: read
@@ -53,10 +52,7 @@ jobs:
     needs: validate
     if: >-
       github.repository == 'hebi10/TripCanvas' && github.ref == 'refs/heads/main' &&
-      ((github.event_name == 'workflow_dispatch' && inputs.mode == 'upload') ||
-       (github.event_name == 'push' &&
-        (contains(github.event.head_commit.message, '[tripcanvas-store03-listing-once]') ||
-         contains(github.event.head_commit.message, '[tripcanvas-store03-retry-once]'))))
+      github.event_name == 'workflow_dispatch' && inputs.mode == 'upload' && inputs.final_release_confirmed == true
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment: google-play
@@ -123,11 +119,7 @@ jobs:
 
   r09-final:
     needs: validate
-    if: >-
-      github.repository == 'hebi10/TripCanvas' &&
-      github.ref == 'refs/heads/main' &&
-      github.event_name == 'push' &&
-      contains(github.event.head_commit.message, '[tripcanvas-store-r09-final-once]')
+    if: false # Historical one-time path frozen; no push trigger remains.
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: google-play
