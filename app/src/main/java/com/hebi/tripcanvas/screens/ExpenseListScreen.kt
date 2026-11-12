@@ -20,6 +20,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import com.hebi.tripcanvas.data.ExpenseRepository
 import com.hebi.tripcanvas.data.PlaceRepository
@@ -191,11 +192,14 @@ fun ExpenseListScreen(
                                     ) {
                                         Text(
                                             "예산 사용률",
+                                            modifier = Modifier.weight(1f),
                                             style = MaterialTheme.typography.labelLarge,
                                             color = p.textSecondary
                                         )
                                         Text(
                                             budgetUsage.percentageLabel,
+                                            modifier = Modifier.weight(1f),
+                                            textAlign = TextAlign.End,
                                             style = MaterialTheme.typography.labelLarge,
                                             color = if (budgetUsage.overBudget) p.warning else p.textPrimary,
                                             maxLines = 2,
