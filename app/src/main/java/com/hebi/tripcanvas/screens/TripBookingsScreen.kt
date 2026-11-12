@@ -2,9 +2,17 @@ package com.hebi.tripcanvas.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -15,6 +23,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.style.TextOverflow
 import com.hebi.tripcanvas.data.BookingRepository
 import com.hebi.tripcanvas.data.BookingType
@@ -26,6 +39,9 @@ import com.hebi.tripcanvas.designsystem.components.TripPrimaryButton
 import com.hebi.tripcanvas.designsystem.components.TripSecondaryButton
 import com.hebi.tripcanvas.designsystem.components.TripSectionHeading
 import com.hebi.tripcanvas.designsystem.components.TripSurfacePanel
+import com.hebi.tripcanvas.designsystem.components.TripStatusTag
+import com.hebi.tripcanvas.designsystem.icons.TripIcons
+import com.hebi.tripcanvas.designsystem.tokens.TripSizes
 import com.hebi.tripcanvas.designsystem.theme.TripDesign
 import com.hebi.tripcanvas.designsystem.tokens.TripSpacing
 import com.hebi.tripcanvas.ui.TripPageFrame
@@ -54,11 +70,6 @@ fun TripBookingsScreen(
             title = "예약 " + bookings.size + "건",
             supportingText = "항공·숙소·교통·입장권 예약 정보를 보관합니다. 실제 예약·결제는 제공하지 않습니다."
         )
-        TripPrimaryButton(
-            label = "예약 추가",
-            modifier = Modifier.fillMaxWidth(),
-            onClick = onCreate
-        )
         if (bookings.isEmpty()) {
             TripEmptyState("등록된 예약이 없습니다", "예약 정보를 직접 추가해 주세요.")
         }
@@ -73,6 +84,11 @@ fun TripBookingsScreen(
                 )
             }
         }
+        TripPrimaryButton(
+            label = "예약 추가",
+            modifier = Modifier.fillMaxWidth(),
+            onClick = onCreate
+        )
         if (error != null) {
             TripErrorState("예약 작업 오류", requireNotNull(error), onRetry = { error = null })
         }
@@ -116,20 +132,52 @@ private fun BookingListCard(
     val attachments by remember(repository, booking.id) {
         repository.attachments(booking.id)
     }.collectAsState(initial = emptyList())
+    var menuExpanded by remember(booking.id) { mutableStateOf(false) }
 
     TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(TripSpacing.md),
             verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
         ) {
-            Text(
-                BookingType.valueOf(booking.type).label,
-                style = MaterialTheme.typography.labelLarge,
-                color = palette.textSecondary
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs)
+            ) {
+                TripStatusTag(BookingType.valueOf(booking.type).label)
+                Spacer(modifier = Modifier.weight(1f))
+                Box {
+                    IconButton(
+                        onClick = { menuExpanded = true },
+                        enabled = !busy,
+                        modifier = Modifier
+                            .size(TripSizes.minimumTouchTarget)
+                            .semantics { contentDescription = "${booking.title} 예약 관리" }
+                    ) {
+                        Icon(
+                            imageVector = TripIcons.MoreVert,
+                            contentDescription = null,
+                            tint = palette.textPrimary
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = menuExpanded && !busy,
+                        onDismissRequest = { menuExpanded = false },
+                        containerColor = palette.surface,
+                        tonalElevation = 0.dp,
+                        shadowElevation = 0.dp,
+                        border = BorderStroke(1.dp, palette.outline)
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("예약 삭제", color = palette.error) },
+                            onClick = { menuExpanded = false; onDelete() }
+                        )
+                    }
+                }
+            }
             Text(
                 booking.title,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleLarge,
                 color = palette.textPrimary,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
@@ -153,12 +201,8 @@ private fun BookingListCard(
             }
             TripSecondaryButton(
                 label = "예약 상세·편집",
+                modifier = Modifier.fillMaxWidth(),
                 onClick = onEdit
-            )
-            TripSecondaryButton(
-                label = "예약 삭제",
-                enabled = !busy,
-                onClick = onDelete
             )
         }
     }
