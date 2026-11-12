@@ -156,7 +156,7 @@ class TripCanvas3BScreenTest {
                 capture("11a-bookings-dark")
                 device.pressBack()
                 awaitText("예약 열기")
-                click("정산 열기")
+                clickWorkspaceCard("정산 열기", expectedScreenTitle = "동행자 정산")
                 awaitText("정산 제안 1건")
                 awaitText("현지 → 민재 · KRW 6,600")
                 capture("12-settlement-dark")
@@ -181,7 +181,7 @@ class TripCanvas3BScreenTest {
     private fun uiSelector(text: String) =
         if (text.endsWith(" 열기") || text == "저장 장소 관리") By.desc(text) else By.text(text)
 
-    private fun clickWorkspaceCard(label: String) {
+    private fun clickWorkspaceCard(label: String, expectedScreenTitle: String? = null) {
         repeat(12) {
             dismissSystemAnr()
             try {
@@ -193,11 +193,16 @@ class TripCanvas3BScreenTest {
                         bounds.top >= height / 6 &&
                         bounds.bottom <= height * 5 / 6
                     if (completelyInside) {
-                        capture("07a-bookings-card-before-click")
+                        if (label == "예약 열기") capture("07a-bookings-card-before-click")
                         card.click()
                         device.waitForIdle()
-                        SystemClock.sleep(300)
-                        capture("07b-bookings-card-after-click")
+                        if (expectedScreenTitle != null &&
+                            !device.wait(Until.hasObject(By.text(expectedScreenTitle)), 3000)
+                        ) {
+                            SystemClock.sleep(250)
+                            continue
+                        }
+                        if (label == "예약 열기") capture("07b-bookings-card-after-click")
                         return
                     }
                     if (bounds.centerY() > height / 2) swipeUp() else swipeDown()
@@ -208,8 +213,9 @@ class TripCanvas3BScreenTest {
                 SystemClock.sleep(250)
             }
         }
-        capture("07c-bookings-card-not-centered")
-        throw AssertionError("예약 카드가 화면 중앙의 클릭 가능한 영역에 표시되지 않았습니다: $label")
+        capture("07c-workspace-card-not-centered")
+        throw AssertionError("작업 공간 카드를 열지 못했습니다: $label" +
+            (expectedScreenTitle?.let { " · 예상 화면: $it" } ?: ""))
     }
 
     private fun click(text: String) {
