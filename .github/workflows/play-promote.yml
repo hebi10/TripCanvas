@@ -8,12 +8,12 @@ on:
         type: choice
         default: check
         options: [check, promote]
+        required: true
       final_release_confirmed:
         description: 'Only after all planned changes and final release approval'
         type: boolean
         required: true
         default: false
-        required: true
       version_code:
         description: 'Existing completed internal versionCode; never rebuilt or uploaded'
         type: string
