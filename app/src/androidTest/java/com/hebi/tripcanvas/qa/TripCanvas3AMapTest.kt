@@ -11,6 +11,8 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
+import androidx.test.uiautomator.Direction
+import androidx.test.uiautomator.StaleObjectException
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.Until
 import com.hebi.tripcanvas.MainActivity
@@ -142,6 +144,7 @@ class TripCanvas3AMapTest {
                 awaitText("장소 1개")
                 awaitText("제주국제공항")
                 capture("04-map-date-filter")
+                selectMapPlaceFromList("제주국제공항")
                 awaitText("지도 선택 · 제주국제공항")
                 capture("04b-map-focus-from-place-list")
                 click("선택 장소 상세")
@@ -160,7 +163,7 @@ class TripCanvas3AMapTest {
                 awaitText("좌표 없는 장소")
                 awaitText("좌표 없음 · 지도 핀 제외")
                 capture("06a-map-places-without-coordinates")
-                click("지도에서 선택: 제주도청")
+                selectMapPlaceFromList("제주도청")
                 awaitText("지도 선택 · 제주도청")
                 assertMapCentered(scenario, 33.4888, 126.4975)
                 capture("06b-map-second-place-camera-focused")
@@ -237,24 +240,50 @@ class TripCanvas3AMapTest {
         SystemClock.sleep(500)
     }
 
+    private fun scrollPage(direction: Direction): Boolean {
+        val node = device.findObject(By.scrollable(true)) ?: return false
+        return try {
+            node.scroll(direction, 0.55f)
+            device.waitForIdle()
+            true
+        } catch (_: StaleObjectException) {
+            true
+        }
+    }
+
+    private fun selectMapPlaceFromList(placeName: String) {
+        val options = listOf(
+            "지도에서 선택: $placeName",
+            "지도 선택됨: $placeName"
+        )
+        repeat(12) {
+            dismissLauncherAnr()
+            for (label in options) {
+                if (device.hasObject(By.text(label))) {
+                    navigator.clickVisible(By.text(label), label)
+                    return
+                }
+            }
+            if (!scrollPage(Direction.DOWN)) return@repeat
+        }
+        val dir = evidenceDir()
+        device.takeScreenshot(File(dir, "99-selection-failure.png"))
+        runCatching { device.dumpWindowHierarchy(File(dir, "99-selection-hierarchy.xml")) }
+        throw AssertionError("장소 목록에서 선택 버튼을 찾지 못했습니다: $placeName")
+    }
+
     private fun awaitText(text: String) {
         dismissLauncherAnr()
         if (device.wait(Until.hasObject(uiSelector(text)), 8000)) return
-        repeat(5) {
-            dismissLauncherAnr()
-            device.swipe(
-                device.displayWidth / 2, device.displayHeight * 3 / 4,
-                device.displayWidth / 2, device.displayHeight / 3, 25
-            )
-            if (device.wait(Until.hasObject(uiSelector(text)), 1500)) return
-        }
         repeat(6) {
             dismissLauncherAnr()
-            device.swipe(
-                device.displayWidth / 2, device.displayHeight / 3,
-                device.displayWidth / 2, device.displayHeight * 3 / 4, 25
-            )
-            if (device.wait(Until.hasObject(uiSelector(text)), 1500)) return
+            if (!scrollPage(Direction.DOWN)) return@repeat
+            if (device.wait(Until.hasObject(uiSelector(text)), 1200)) return
+        }
+        repeat(7) {
+            dismissLauncherAnr()
+            if (!scrollPage(Direction.UP)) return@repeat
+            if (device.wait(Until.hasObject(uiSelector(text)), 1200)) return
         }
         val dir = evidenceDir()
         device.takeScreenshot(File(dir, "99-failure.png"))
