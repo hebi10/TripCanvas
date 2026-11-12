@@ -8,6 +8,11 @@ on:
         type: choice
         default: check
         options: [check, promote]
+      final_release_confirmed:
+        description: 'Only after all planned changes and final release approval'
+        type: boolean
+        required: true
+        default: false
         required: true
       version_code:
         description: 'Existing completed internal versionCode; never rebuilt or uploaded'
@@ -63,7 +68,7 @@ jobs:
 
   promote:
     needs: [source, gates]
-    if: inputs.mode == 'promote'
+    if: inputs.mode == 'promote' && inputs.final_release_confirmed == true
     runs-on: ubuntu-latest
     environment: google-play
     permissions:
