@@ -39,8 +39,8 @@ jobs:
       - name: Set up Gradle Wrapper caching
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Compile and test
-        run: ./gradlew :app:assembleDebug :app:testDebugUnitTest --stacktrace
+      - name: Compile app, instrumentation tests and run JVM tests
+        run: ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest :app:testDebugUnitTest --stacktrace
 
       - name: Archive debug APK
         if: success()

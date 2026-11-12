@@ -12,7 +12,6 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
-import androidx.test.uiautomator.StaleObjectException
 import androidx.test.uiautomator.Until
 import com.hebi.tripcanvas.MainActivity
 import com.hebi.tripcanvas.data.local.ItineraryItemEntity
@@ -39,6 +38,7 @@ class TripCanvas3AMapTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val context: Context = instrumentation.targetContext
     private val device: UiDevice = UiDevice.getInstance(instrumentation)
+    private val navigator = QaUiNavigator(device)
 
     @Test
     fun mapSavedPlaceAndItineraryNavigationUseRealScreens() {
@@ -138,9 +138,17 @@ class TripCanvas3AMapTest {
                 awaitText("장소 1개")
                 awaitText("제주국제공항")
                 capture("04-map-date-filter")
-                click("지도에서 선택: 제주국제공항")
-                capture("04b-map-focus-from-place-list")
-                click("장소 상세")
+                if (classifyWindowWidth(widthDp) == TripWindowWidth.Compact) {
+                    click("지도에서 선택: 제주국제공항")
+                    awaitText("지도 선택 · 제주국제공항")
+                    capture("04b-map-focus-from-place-list")
+                    click("선택 장소 상세")
+                } else {
+                    // The tablet's two-pane list has its own direct detail action.
+                    // Camera focus is verified separately below with 제주도청.
+                    capture("04b-tablet-place-list-before-detail")
+                    click("장소 상세")
+                }
                 awaitText("공급자: Photon/OSM")
                 capture("05-place-detail")
                 click("일정 편집")
@@ -261,25 +269,13 @@ class TripCanvas3AMapTest {
 
     private fun click(text: String) {
         awaitText(text)
-        repeat(5) { attempt ->
-            try {
-                val node = device.wait(Until.findObject(uiSelector(text)), 2400)
-                    ?: throw AssertionError("Click target missing: $text")
-                var target = node
-                while (!target.isClickable) {
-                    target = target.parent
-                        ?: throw AssertionError("Clickable parent missing: $text")
-                }
-                target.click()
-                device.waitForIdle()
-                SystemClock.sleep(400)
-                return
-            } catch (stale: StaleObjectException) {
-                if (attempt == 4) {
-                    throw AssertionError("Target changed during click: $text", stale)
-                }
-                SystemClock.sleep(200)
-            }
+        try {
+            navigator.clickVisible(uiSelector(text), text)
+        } catch (failure: AssertionError) {
+            val dir = evidenceDir()
+            device.takeScreenshot(File(dir, "99-click-failure.png"))
+            runCatching { device.dumpWindowHierarchy(File(dir, "99-click-hierarchy.xml")) }
+            throw failure
         }
     }
 

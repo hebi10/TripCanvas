@@ -34,6 +34,7 @@ class TripCanvas3BScreenTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val context: Context = instrumentation.targetContext
     private val device = UiDevice.getInstance(instrumentation)
+    private val navigator = QaUiNavigator(device)
 
     @Test
     fun financeParticipantsAndBookingScreensAreNavigable() {
@@ -92,8 +93,7 @@ class TripCanvas3BScreenTest {
                 capture("04-participant-editor")
                 click("취소")
                 device.pressBack()
-                awaitText("정산 열기")
-                click("정산 열기")
+                clickWorkspaceCard("정산 열기", expectedScreenTitle = "정산 제안 1건")
                 awaitText("정산 제안 1건")
                 awaitText("현지 → 민재 · KRW 6,600")
                 capture("05-settlement-light")
@@ -121,10 +121,10 @@ class TripCanvas3BScreenTest {
                 awaitText("첨부 1개")
                 awaitText("숙소 예약 확인서.pdf")
                 capture("09-booking-edit")
-                click("확인번호 보기")
+                click("확인번호 보기", expectedAfter = "확인번호 숨기기")
                 awaitText("확인번호 숨기기")
                 capture("09a-booking-reference-visible")
-                click("확인번호 숨기기")
+                click("확인번호 숨기기", expectedAfter = "확인번호 보기")
                 awaitText("확인번호 보기")
                 click("파일 연결 제거")
                 awaitText("문서 연결 제거")
@@ -156,7 +156,7 @@ class TripCanvas3BScreenTest {
                 capture("11a-bookings-dark")
                 device.pressBack()
                 awaitText("예약 열기")
-                click("정산 열기")
+                clickWorkspaceCard("정산 열기", expectedScreenTitle = "정산 제안 1건")
                 awaitText("정산 제안 1건")
                 awaitText("현지 → 민재 · KRW 6,600")
                 capture("12-settlement-dark")
@@ -181,7 +181,8 @@ class TripCanvas3BScreenTest {
     private fun uiSelector(text: String) =
         if (text.endsWith(" 열기") || text == "저장 장소 관리") By.desc(text) else By.text(text)
 
-    private fun clickWorkspaceCard(label: String) {
+    private fun clickWorkspaceCard(label: String, expectedScreenTitle: String? = null) {
+        val destination = expectedScreenTitle ?: if (label == "예약 열기") "예약 1건" else null
         repeat(12) {
             dismissSystemAnr()
             try {
@@ -193,11 +194,16 @@ class TripCanvas3BScreenTest {
                         bounds.top >= height / 6 &&
                         bounds.bottom <= height * 5 / 6
                     if (completelyInside) {
-                        capture("07a-bookings-card-before-click")
+                        if (label == "예약 열기") capture("07a-bookings-card-before-click")
                         card.click()
                         device.waitForIdle()
-                        SystemClock.sleep(300)
-                        capture("07b-bookings-card-after-click")
+                        if (destination != null &&
+                            !device.wait(Until.hasObject(By.text(destination)), 4000)
+                        ) {
+                            SystemClock.sleep(250)
+                            return@repeat
+                        }
+                        if (label == "예약 열기") capture("07b-bookings-card-after-click")
                         return
                     }
                     if (bounds.centerY() > height / 2) swipeUp() else swipeDown()
@@ -208,22 +214,20 @@ class TripCanvas3BScreenTest {
                 SystemClock.sleep(250)
             }
         }
-        capture("07c-bookings-card-not-centered")
-        throw AssertionError("예약 카드가 화면 중앙의 클릭 가능한 영역에 표시되지 않았습니다: $label")
+        capture("07c-workspace-card-not-centered")
+        throw AssertionError("작업 공간 카드를 열지 못했습니다: $label" +
+            (destination?.let { " · 예상 화면: $it" } ?: ""))
     }
 
-    private fun click(text: String) {
+    private fun click(text: String, expectedAfter: String? = null) {
         awaitText(text)
-        SystemClock.sleep(300)
-        val node = device.findObject(uiSelector(text))
-            ?: throw AssertionError("Missing click target: " + text)
-        var target = node
-        while (!target.isClickable) {
-            target = target.parent ?: break
+        try {
+            navigator.clickVisible(uiSelector(text), text, expectedAfter)
+        } catch (failure: AssertionError) {
+            capture("99-click-failure")
+            runCatching { device.dumpWindowHierarchy(File(output(), "99-click-hierarchy.xml")) }
+            throw failure
         }
-        target.click()
-        device.waitForIdle()
-        SystemClock.sleep(300)
     }
 
     private fun dismissSystemAnr() {
