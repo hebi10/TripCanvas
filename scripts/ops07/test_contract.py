@@ -134,6 +134,27 @@ class AppContracts(unittest.TestCase):
                 self.assertTrue(any("APPROVAL_BINDING: OPS-03" in item
                                     for item in blockers), blockers)
 
+    def test_ops03_preflight_cannot_be_skipped_or_ignored(self):
+        source_path = ".github/workflows/release-build.yml"
+        original_read = audit.read
+        source = original_read(source_path)
+        gate = "      - name: Gate release batch, main SHA and required CI\n"
+        self.assertIn(gate, source)
+        variants = (
+            ("skipped", source.replace(gate, gate + "        if: false\n", 1)),
+            ("failure_tolerant", source.replace(
+                gate, gate + "        continue-on-error: true\n", 1)),
+            ("removed", source.replace(
+                gate, "      - name: Unrelated diagnostic\n", 1)),
+        )
+        for name, changed in variants:
+            with self.subTest(name=name):
+                with patch.object(audit, "read", side_effect=lambda path:
+                                  changed if path == source_path else original_read(path)):
+                    blockers = audit.findings()
+                self.assertTrue(any("OPS03_PREFLIGHT:" in item for item in blockers),
+                                blockers)
+
     def test_approved_ops03_values_must_be_in_request_job_env(self):
         source_path = ".github/workflows/release-build.yml"
         source = audit.read(source_path)
