@@ -312,5 +312,37 @@ class InterpreterOptionsRegressionTests(unittest.TestCase):
         self.assertTrue(any("STORE_GUARD" in item for item in issues), issues)
 
 
+
+class RunFirstApprovalRegressionTests(unittest.TestCase):
+    def test_run_first_executable_guard_is_valid(self):
+        base = store_workflow()
+        source = base.replace(
+            "      - name: Verify immutable approved batch\n"
+            "        run: python3 scripts/ops06/store_gate.py apply\n",
+            "      - run: python3 scripts/ops06/store_gate.py apply\n")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            folder = root / ".github/workflows"
+            folder.mkdir(parents=True)
+            (folder / "play-listing-images.yml").write_text(source, encoding="utf-8")
+            with patch.object(audit, "ROOT", root):
+                issues = audit.store_guard_findings()
+        self.assertEqual(issues, [])
+
+    def test_run_first_guard_pipeline_failure_cannot_be_ignored(self):
+        source = store_workflow().replace(
+            "      - name: Verify immutable approved batch\n"
+            "        run: python3 scripts/ops06/store_gate.py apply\n",
+            "      - run: python3 scripts/ops06/store_gate.py apply | tee ignored.log\n")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            folder = root / ".github/workflows"
+            folder.mkdir(parents=True)
+            (folder / "play-listing-images.yml").write_text(source, encoding="utf-8")
+            with patch.object(audit, "ROOT", root):
+                issues = audit.store_guard_findings()
+        self.assertTrue(any("STORE_OPTIONAL" in issue for issue in issues), issues)
+
+
 if __name__ == "__main__":
     unittest.main()
