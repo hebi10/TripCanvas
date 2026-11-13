@@ -443,7 +443,8 @@ def findings():
         elif file == "play-internal-release.yml":
             problems.extend(_release_input_binding_findings(
                 source, (("FINAL_RELEASE_APPROVED", "final_release_approved"),
-                         ("APPROVAL_PHRASE", "approval_phrase")), "OPS-04"))
+                         ("APPROVAL_PHRASE", "approval_phrase"),
+                         ("AAB_SHA256", "aab_sha256")), "OPS-04"))
             if not all(k in source for k in ("PUBLISH_VERIFIED_INTERNAL_AAB",
                                              "ops04/internal.py verify", "inputs.mode == 'publish'")):
                 problems.append("INTERNAL: explicit approval, SHA256 recheck or publish mode missing")
