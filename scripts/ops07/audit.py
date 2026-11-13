@@ -393,6 +393,31 @@ def store_guard_findings():
     return problems
 
 
+def _release_input_binding_findings(source, bindings, stage):
+    """The manual approval must come from caller input, not a constant or an override."""
+    lines = source.splitlines()
+    start = next((i for i, line in enumerate(lines) if line.strip() == "env:"
+                  and not line.startswith((" ", "\t"))), None)
+    if start is None:
+        return ["APPROVAL_BINDING: " + stage + " has no workflow-level environment"]
+    block = []
+    for line in lines[start + 1:]:
+        if line.strip() and not line.startswith((" ", "\t")):
+            break
+        block.append(line)
+    env = "\n".join(block)
+    problems = []
+    for name, field in bindings:
+        expected = (r"(?m)^  " + re.escape(name)
+                    + r":[ \t]*\$\{\{[ \t]*inputs\." + re.escape(field)
+                    + r"[ \t]*\}\}[ \t]*(?:#.*)?$")
+        occurrences = re.findall(r"(?m)^[ \t]+" + re.escape(name) + r":[^\n]*", source)
+        if not re.search(expected, env) or len(occurrences) != 1:
+            problems.append("APPROVAL_BINDING: " + stage + " must bind " + name
+                            + " uniquely to manual input " + field)
+    return problems
+
+
 def findings():
     problems = []
     for path, label in REQUIRED.items():
@@ -416,12 +441,18 @@ def findings():
                     problems.append("BUILD: build-only workflow contains a direct Play mutation")
                     break
         elif file == "play-internal-release.yml":
+            problems.extend(_release_input_binding_findings(
+                source, (("FINAL_RELEASE_APPROVED", "final_release_approved"),
+                         ("APPROVAL_PHRASE", "approval_phrase")), "OPS-04"))
             if not all(k in source for k in ("PUBLISH_VERIFIED_INTERNAL_AAB",
                                              "ops04/internal.py verify", "inputs.mode == 'publish'")):
                 problems.append("INTERNAL: explicit approval, SHA256 recheck or publish mode missing")
             if any(k in source for k in ("bundleRelease", "assembleRelease")):
                 problems.append("INTERNAL: must use existing AAB, not rebuild it")
         elif file == "play-closed-release.yml":
+            problems.extend(_release_input_binding_findings(
+                source, (("FINAL_BATCH_APPROVED", "final_batch_approved"),
+                         ("APPROVAL_PHRASE", "approval_phrase")), "OPS-05"))
             if not all(k in source for k in ("PROMOTE_VERIFIED_INTERNAL_VERSION",
                                              "inputs.mode == 'promote'")):
                 problems.append("CLOSED: separate approved same-version promotion missing")
