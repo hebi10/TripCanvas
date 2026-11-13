@@ -490,6 +490,9 @@ def findings():
             problems.append("APPROVAL: TripCanvas legacy closed promotion lacks mandatory final approval")
         legacy = read(".github/workflows/play-internal.yml")
         if legacy is not None:
+            binding = r"(?m)^[ \t]+PLAY_FINAL_RELEASE_APPROVED:[ \t]*\$\{\{[ \t]*inputs\.final_release_confirmed[ \t]*\}\}[ \t]*(?:#.*)?$"
+            if not re.search(binding, legacy):
+                problems.append("APPROVAL: TripCanvas legacy internal publisher must bind user final approval")
             release = jobs(legacy).get("release")
             for step in _workflow_steps(release or ""):
                 normalized_step = re.sub(r"\\\s*\n\s*", " ", step)
