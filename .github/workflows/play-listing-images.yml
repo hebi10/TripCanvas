@@ -146,7 +146,8 @@ jobs:
 
   r09-final:
     needs: validate
-    if: false # Historical one-time path frozen; no push trigger remains.
+    # Historical one-time path frozen; no push trigger remains.
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: google-play
