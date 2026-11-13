@@ -122,7 +122,7 @@ class AppContracts(unittest.TestCase):
             (".github/workflows/play-internal-release.yml", "OPS-04",
              "APPROVAL_PHRASE", "approval_phrase", "PUBLISH_VERIFIED_INTERNAL_AAB"),
             (".github/workflows/play-internal-release.yml", "OPS-04",
-             "AAB_SHA256", "aab_sha256", "'" + "0".repeat(64) + "'"),
+             "AAB_SHA256", "aab_sha256", "'" + "0" * 64 + "'"),
             (".github/workflows/play-closed-release.yml", "OPS-05",
              "FINAL_BATCH_APPROVED", "final_batch_approved", "'true'"),
             (".github/workflows/play-closed-release.yml", "OPS-05",
