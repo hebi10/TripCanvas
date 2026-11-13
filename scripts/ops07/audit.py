@@ -444,6 +444,7 @@ def findings():
             problems.extend(_release_input_binding_findings(
                 source, (("FINAL_RELEASE_APPROVED", "final_release_approved"),
                          ("APPROVAL_PHRASE", "approval_phrase"),
+                         ("EXPECTED_MAIN_SHA", "expected_main_sha"),
                          ("AAB_SHA256", "aab_sha256")), "OPS-04"))
             if not all(k in source for k in ("PUBLISH_VERIFIED_INTERNAL_AAB",
                                              "ops04/internal.py verify", "inputs.mode == 'publish'")):
@@ -453,7 +454,10 @@ def findings():
         elif file == "play-closed-release.yml":
             problems.extend(_release_input_binding_findings(
                 source, (("FINAL_BATCH_APPROVED", "final_batch_approved"),
-                         ("APPROVAL_PHRASE", "approval_phrase")), "OPS-05"))
+                         ("APPROVAL_PHRASE", "approval_phrase"),
+                         ("EXPECTED_MAIN_SHA", "expected_main_sha"),
+                         ("CLOSED_TRACK", "closed_track"),
+                         ("AAB_SHA256", "aab_sha256")), "OPS-05"))
             if not all(k in source for k in ("PROMOTE_VERIFIED_INTERNAL_VERSION",
                                              "inputs.mode == 'promote'")):
                 problems.append("CLOSED: separate approved same-version promotion missing")
