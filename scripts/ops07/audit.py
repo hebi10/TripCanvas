@@ -443,6 +443,21 @@ def findings():
         if "github.ref" not in source and "GITHUB_REF" not in source:
             problems.append("SOURCE: " + file + " missing main ref gate")
         if file == "release-build.yml":
+            request = jobs(source).get("request") or ""
+            header = re.search(r"(?m)^    env:[ \t]*(?:#.*)?$", request)
+            scoped_env = ""
+            if header:
+                for line in request[header.end():].splitlines():
+                    if line.strip() and len(line) - len(line.lstrip()) <= 4:
+                        break
+                    scoped_env += line + "\n"
+            for name, field in (("FINAL_BATCH_APPROVED", "final_batch_approved"),
+                                ("EXPECTED_MAIN_SHA", "expected_main_sha")):
+                expr = r"(?m)^      " + name + r":[ \t]*\$\{\{[ \t]*inputs\." + field + r"[ \t]*\}\}[ \t]*(?:#.*)?$"
+                occurrences = re.findall(r"(?m)^[ \t]+" + name + r":", request)
+                if len(occurrences) != 1 or not re.search(expr, scoped_env):
+                    problems.append("APPROVAL_BINDING: OPS-03 build request must bind " + name
+                                    + " to caller-approved dispatch input")
             if re.search(r"(?i)inputs\[(?:mode|deploy)\]\s*=\s*(?:deploy|initialize|publish|promote|apply|upload|true)\b", source):
                 problems.append("BUILD: Play publishing mode is forbidden in build-only dispatch")
             for body in jobs(source).values():
