@@ -64,8 +64,8 @@ env:
   APPROVAL_PHRASE: ${{ inputs.approval_phrase }}
   APP_PACKAGE: com.hebi.tripcanvas
   BUILD_WORKFLOW_FILE: .github/workflows/play-internal.yml
-  PINNED_UPLOAD_CERT: ${{ vars.ANDROID_RELEASE_CERT_SHA256 }}
-  ANDROID_RELEASE_CERT_SHA256: ${{ vars.ANDROID_RELEASE_CERT_SHA256 }}
+  PINNED_UPLOAD_CERT: ${{ secrets.ANDROID_RELEASE_CERT_SHA256 }}
+  ANDROID_RELEASE_CERT_SHA256: ${{ secrets.ANDROID_RELEASE_CERT_SHA256 }}
 jobs:
   verify:
     if: github.repository == 'hebi10/TripCanvas' && github.ref == 'refs/heads/main'
