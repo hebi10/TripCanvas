@@ -158,11 +158,11 @@ class FailClosedRegressionTests(unittest.TestCase):
         self.assertEqual(issues, [])
 
     def test_provenance_guard_must_be_an_executable_failing_command(self):
-        workflow = ("on:\\n  workflow_dispatch:\\njobs:\\n"
-                    "  verify:\\n    steps:\\n"
-                    "      - run: python3 scripts/ops04/internal.py guard\\n"
-                    "  publish:\\n    steps:\\n"
-                    "      - run: python3 scripts/ops04/internal.py guard\\n")
+        workflow = ("on:\n  workflow_dispatch:\njobs:\n"
+                    "  verify:\n    steps:\n"
+                    "      - run: python3 scripts/ops04/internal.py guard\n"
+                    "  publish:\n    steps:\n"
+                    "      - run: python3 scripts/ops04/internal.py guard\n")
         for replacement in (
             'echo "python3 scripts/ops04/internal.py guard"',
             "python3 scripts/ops04/internal.py guard || true",
@@ -178,11 +178,11 @@ class FailClosedRegressionTests(unittest.TestCase):
                 self.assertTrue(any("PROVENANCE" in item for item in issues), issues)
 
     def test_frozen_legacy_closed_promotion_requires_disabled_step(self):
-        prefix = ("on:\\n  workflow_dispatch:\\njobs:\\n"
-                  "  release:\\n    steps:\\n"
-                  "      - name: Legacy closed promotion\\n")
+        prefix = ("on:\n  workflow_dispatch:\njobs:\n"
+                  "  release:\n    steps:\n"
+                  "      - name: Legacy closed promotion\n")
         command = ("        run: python3 scripts/play/publisher.py "
-                   "--report report.json promote --track alpha\\n")
+                   "--report report.json promote --track alpha\n")
         def issues_for(condition):
             workflow = prefix + condition + command
             with patch.object(audit, "read", side_effect=lambda path:
@@ -190,9 +190,9 @@ class FailClosedRegressionTests(unittest.TestCase):
                               else None):
                 return audit.findings()
         self.assertFalse(any("FROZEN" in item for item in
-                             issues_for("        if: false # Frozen one-time path\\n")))
-        for unsafe in ("", "        if: true\\n",
-                       "        if: false || true\\n"):
+                             issues_for("        if: false # Frozen one-time path\n")))
+        for unsafe in ("", "        if: true\n",
+                       "        if: false || true\n"):
             with self.subTest(condition=unsafe):
                 self.assertTrue(any("FROZEN" in item for item in
                                     issues_for(unsafe)))
