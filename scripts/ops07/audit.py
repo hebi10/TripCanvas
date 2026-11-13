@@ -274,6 +274,7 @@ def automatic_mutations(filename, source):
 
 def _store_mutating_command(body):
     normalized = re.sub(r"\\\s*\n\s*", " ", body)
+    normalized = re.sub(r"\s*(?:&&|\|\||;)\s*", "\n", normalized)
     for line in normalized.splitlines():
         if line.lstrip().startswith(("- name:", "name:", "#")):
             continue
@@ -495,6 +496,15 @@ def findings():
         promote = jobs(read(".github/workflows/play-promote.yml")).get("promote")
         if not promote or "inputs.final_release_confirmed == true" not in _guaranteed_atoms(job_condition(promote)):
             problems.append("APPROVAL: TripCanvas legacy closed promotion lacks mandatory final approval")
+        store = read(".github/workflows/play-listing-images.yml")
+        if store is not None:
+            for field, input_key in (("OPS06_STORE_APPROVED", "ops06_store_approved"),
+                                     ("OPS06_CONFIRMATION", "ops06_confirmation"),
+                                     ("OPS06_EXPECTED_MAIN_SHA", "ops06_expected_main_sha"),
+                                     ("OPS06_BATCH_ID", "ops06_batch_id")):
+                expression = r"(?m)^[ \t]+" + field + r":[ \t]*\$\{\{[ \t]*inputs\." + input_key + r"[ \t]*\}\}[ \t]*(?:#.*)?$"
+                if not re.search(expression, store):
+                    problems.append("STORE_BINDING: TripCanvas " + field + " must use approved manual input")
         legacy = read(".github/workflows/play-internal.yml")
         if legacy is not None:
             binding = r"(?m)^[ \t]+PLAY_FINAL_RELEASE_APPROVED:[ \t]*\$\{\{[ \t]*inputs\.final_release_confirmed[ \t]*\}\}[ \t]*(?:#.*)?$"
