@@ -69,8 +69,9 @@ jobs:
     needs: validate
     if: >-
       github.repository == 'hebi10/TripCanvas' && github.ref == 'refs/heads/main' &&
-      github.event_name == 'workflow_dispatch' && inputs.mode == 'upload' &&
-      inputs.final_release_confirmed == true && inputs.ops06_store_approved == true
+      github.event_name == 'workflow_dispatch' &&
+      inputs.mode == 'upload' && inputs.final_release_confirmed == true &&
+      inputs.ops06_store_approved == true
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment: google-play
