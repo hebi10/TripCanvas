@@ -311,7 +311,7 @@ def _workflow_steps(body):
 
 
 def _step_condition(body):
-    match = re.search(r"(?m)^\s+if:\s*([^\n]+)", body)
+    match = re.search(r"(?m)^[ \t]+(?:-[ \t]+)?if:[ \t]*([^\n]+)", body)
     if not match:
         return ""
     return match.group(1).strip()
@@ -492,7 +492,8 @@ def findings():
         if legacy is not None:
             release = jobs(legacy).get("release")
             for step in _workflow_steps(release or ""):
-                if re.search(r"\bpython3\s+scripts/play/publisher\.py\b[^\n]*\bpromote\b", step):
+                normalized_step = re.sub(r"\\\s*\n\s*", " ", step)
+                if re.search(r"\bpython3\s+scripts/play/publisher\.py\b[^\n]*\bpromote\b", normalized_step):
                     if not re.fullmatch(r"false(?:\s*#.*)?", _step_condition(step)):
                         problems.append("FROZEN: TripCanvas legacy internal closed-alpha promotion must remain disabled")
     if REPOSITORY == "hebi10/PetWorld":
