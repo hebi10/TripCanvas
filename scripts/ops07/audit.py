@@ -458,6 +458,27 @@ def findings():
                 if len(occurrences) != 1 or not re.search(expr, scoped_env):
                     problems.append("APPROVAL_BINDING: OPS-03 build request must bind " + name
                                     + " to caller-approved dispatch input")
+            request_steps = _workflow_steps(request)
+            gates = [(i, step) for i, step in enumerate(request_steps)
+                     if re.search(r"(?m)^[ \t]*-[ \t]+name:[ \t]*"
+                                  r"Gate release batch, main SHA and required CI[ \t]*(?:#.*)?$", step)]
+            dispatches = [i for i, step in enumerate(request_steps)
+                          if "gh api --method POST" in step and "/dispatches" in step]
+            if len(gates) != 1 or len(dispatches) != 1 or gates[0][0] >= dispatches[0]:
+                problems.append("OPS03_PREFLIGHT: release build approval must precede build dispatch")
+            else:
+                gate = gates[0][1]
+                required_checks = (
+                    "python3 - <<'PY'",
+                    'if os.environ["FINAL_BATCH_APPROVED"]!="true"',
+                    'sha!=os.environ["GITHUB_SHA"]',
+                    'api("repos/"+repo+"/git/ref/heads/main")',
+                )
+                if (_step_condition(gate)
+                        or re.search(r"(?m)^[ \t]*(?:-[ \t]+)?continue-on-error[ \t]*:", gate)
+                        or not re.search(r"(?m)^[ \t]*(?:-[ \t]+)?run:[ \t]*\|[ \t]*(?:#.*)?$", gate)
+                        or not all(check in gate for check in required_checks)):
+                    problems.append("OPS03_PREFLIGHT: release approval gate must execute and fail closed")
             if re.search(r"(?i)inputs\[(?:mode|deploy)\]\s*=\s*(?:deploy|initialize|publish|promote|apply|upload|true)\b", source):
                 problems.append("BUILD: Play publishing mode is forbidden in build-only dispatch")
             for body in jobs(source).values():
