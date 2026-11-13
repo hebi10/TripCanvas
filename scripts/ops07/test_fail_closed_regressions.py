@@ -157,6 +157,46 @@ class FailClosedRegressionTests(unittest.TestCase):
                 issues = audit.store_guard_findings()
         self.assertEqual(issues, [])
 
+    def test_provenance_guard_must_be_an_executable_failing_command(self):
+        workflow = ("on:\\n  workflow_dispatch:\\njobs:\\n"
+                    "  verify:\\n    steps:\\n"
+                    "      - run: python3 scripts/ops04/internal.py guard\\n"
+                    "  publish:\\n    steps:\\n"
+                    "      - run: python3 scripts/ops04/internal.py guard\\n")
+        for replacement in (
+            'echo "python3 scripts/ops04/internal.py guard"',
+            "python3 scripts/ops04/internal.py guard || true",
+        ):
+            with self.subTest(replacement=replacement):
+                modified = workflow.replace(
+                    "run: python3 scripts/ops04/internal.py guard",
+                    "run: " + replacement)
+                with patch.object(audit, "read", side_effect=lambda path:
+                                  modified if path == ".github/workflows/play-internal-release.yml"
+                                  else None):
+                    issues = audit.findings()
+                self.assertTrue(any("PROVENANCE" in item for item in issues), issues)
+
+    def test_frozen_legacy_closed_promotion_requires_disabled_step(self):
+        prefix = ("on:\\n  workflow_dispatch:\\njobs:\\n"
+                  "  release:\\n    steps:\\n"
+                  "      - name: Legacy closed promotion\\n")
+        command = ("        run: python3 scripts/play/publisher.py "
+                   "--report report.json promote --track alpha\\n")
+        def issues_for(condition):
+            workflow = prefix + condition + command
+            with patch.object(audit, "read", side_effect=lambda path:
+                              workflow if path == ".github/workflows/play-internal.yml"
+                              else None):
+                return audit.findings()
+        self.assertFalse(any("FROZEN" in item for item in
+                             issues_for("        if: false # Frozen one-time path\\n")))
+        for unsafe in ("", "        if: true\\n",
+                       "        if: false || true\\n"):
+            with self.subTest(condition=unsafe):
+                self.assertTrue(any("FROZEN" in item for item in
+                                    issues_for(unsafe)))
+
     def test_removing_both_internal_provenance_guards_fails(self):
         workflow = ("on:\n  workflow_dispatch:\njobs:\n"
                     "  verify:\n    runs-on: ubuntu-latest\n    steps:\n"
