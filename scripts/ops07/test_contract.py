@@ -115,6 +115,41 @@ class AppContracts(unittest.TestCase):
                     mod.verify()
                 tool.assert_not_called()
 
+    def test_release_approval_inputs_cannot_be_fabricated(self):
+        for path, stage, key, field, value in (
+            (".github/workflows/play-internal-release.yml", "OPS-04",
+             "FINAL_RELEASE_APPROVED", "final_release_approved", "'true'"),
+            (".github/workflows/play-internal-release.yml", "OPS-04",
+             "APPROVAL_PHRASE", "approval_phrase", "PUBLISH_VERIFIED_INTERNAL_AAB"),
+            (".github/workflows/play-closed-release.yml", "OPS-05",
+             "FINAL_BATCH_APPROVED", "final_batch_approved", "'true'"),
+            (".github/workflows/play-closed-release.yml", "OPS-05",
+             "APPROVAL_PHRASE", "approval_phrase", "PROMOTE_VERIFIED_INTERNAL_VERSION"),
+        ):
+            with self.subTest(path=path, key=key):
+                original = audit.read(path)
+                expected = key + ": ${{ inputs." + field + " }}"
+                self.assertIn(expected, original)
+                altered = original.replace(expected, key + ": " + value)
+                with patch.object(audit, "read", side_effect=lambda name:
+                                  altered if name == path else (Path(audit.ROOT) / name).read_text(
+                                      encoding="utf-8") if (Path(audit.ROOT) / name).is_file()
+                                      else None):
+                    issues = audit.findings()
+                self.assertTrue(any("APPROVAL_BINDING: " + stage in issue
+                                    for issue in issues), issues)
+
+    def test_release_approval_cannot_be_overridden_in_job_environment(self):
+        source = audit.read(".github/workflows/play-internal-release.yml")
+        self.assertIn("          GH_TOKEN: ${{ github.token }}", source)
+        altered = source.replace(
+            "          GH_TOKEN: ${{ github.token }}",
+            "          GH_TOKEN: ${{ github.token }}\n"
+            "          FINAL_RELEASE_APPROVED: 'true'", 1)
+        issues = audit._release_input_binding_findings(
+            altered, (("FINAL_RELEASE_APPROVED", "final_release_approved"),), "OPS-04")
+        self.assertTrue(any("APPROVAL_BINDING: OPS-04" in issue for issue in issues), issues)
+
     def test_missing_existing_aab_cannot_be_published(self):
         mod=module("scripts/ops04/internal.py")
         self.assertIsNotNone(mod, "OPS-04 immutable AAB guard missing")
