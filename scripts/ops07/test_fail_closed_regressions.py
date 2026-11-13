@@ -227,6 +227,23 @@ class FailClosedRegressionTests(unittest.TestCase):
                              issues_for("        if: false # frozen\n")))
         self.assertTrue(any("FROZEN" in issue for issue in issues_for("")))
 
+    def test_legacy_internal_release_must_bind_final_approval_input(self):
+        source = ("on:\n  workflow_dispatch:\njobs:\n"
+                  "  release:\n    env:\n"
+                  "      PLAY_FINAL_RELEASE_APPROVED: ${{ inputs.final_release_confirmed }}\n"
+                  "    steps:\n      - run: echo check\n")
+        def check(workflow):
+            with patch.object(audit, "read", side_effect=lambda path:
+                              workflow if path == ".github/workflows/play-internal.yml"
+                              else None):
+                return audit.findings()
+        self.assertFalse(any("legacy internal publisher" in issue for issue in check(source)))
+        bypass = source.replace(
+            "PLAY_FINAL_RELEASE_APPROVED: ${{ inputs.final_release_confirmed }}",
+            "PLAY_FINAL_RELEASE_APPROVED: 'true'")
+        self.assertTrue(any("legacy internal publisher" in issue
+                            for issue in check(bypass)))
+
     def test_removing_both_internal_provenance_guards_fails(self):
         workflow = ("on:\n  workflow_dispatch:\njobs:\n"
                     "  verify:\n    runs-on: ubuntu-latest\n    steps:\n"
