@@ -312,10 +312,21 @@ def _workflow_steps(body):
 
 
 def _step_condition(body):
-    match = re.search(r"(?m)^[ \t]+(?:-[ \t]+)?if:[ \t]*([^\n]+)", body)
+    match = re.search(r"""(?m)^([ \t]+)(-[ \t]+)?(?:if|["']if["']):[ \t]*([^\n]*)""", body)
     if not match:
         return ""
-    return match.group(1).strip()
+    value = match.group(3).split(" #", 1)[0].strip()
+    if value not in (">", ">-", ">+", "|", "|-", "|+"):
+        return value
+    indentation = len(match.group(1)) + len(match.group(2) or "")
+    lines = []
+    for line in body[match.end():].splitlines():
+        if not line.strip():
+            continue
+        if len(line) - len(line.lstrip()) <= indentation:
+            break
+        lines.append(line.strip())
+    return " ".join(lines) if lines else "__unparsed_condition__"
 
 
 def _safe_store_step(guard_step, mutation_steps, body, filename):
