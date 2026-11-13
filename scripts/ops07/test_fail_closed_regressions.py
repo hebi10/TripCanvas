@@ -375,5 +375,31 @@ class TripCanvasStoreBindingsRegressionTests(unittest.TestCase):
         self.assertTrue(any("STORE_BINDING: TripCanvas" in item for item in issues), issues)
 
 
+class FoldedStoreStepConditionRegressionTests(unittest.TestCase):
+    def test_folded_false_approval_cannot_cover_true_publisher(self):
+        read_file = audit.read
+        path = ".github/workflows/play-listing-images.yml"
+        original = read_file(path)
+        approval = "        run: python3 scripts/ops06/store_gate.py apply"
+        publisher = "        run: python3 scripts/play/listing_images.py --apply"
+        self.assertIn(approval, original)
+        self.assertIn(publisher, original)
+        altered = original.replace(
+            approval, "        if: >-\n"
+                      "          false\n" + approval, 1)
+        altered = altered.replace(
+            publisher, "        if: >-\n"
+                       "          true\n" + publisher, 1)
+        self.assertEqual(audit._step_condition(
+            "      - if: >-\n          false\n        run: echo skipped\n"), "false")
+        self.assertEqual(audit._step_condition(
+            "      - if: >-\n          true\n        run: echo publish\n"), "true")
+        with patch.object(audit, "read", side_effect=lambda name:
+                          altered if name == path else read_file(name)):
+            findings = audit.findings()
+        self.assertTrue(any("STORE_OPTIONAL: play-listing-images.yml" in issue
+                            for issue in findings), findings)
+
+
 if __name__ == "__main__":
     unittest.main()
