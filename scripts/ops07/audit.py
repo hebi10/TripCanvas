@@ -472,17 +472,29 @@ def findings():
     if internal is not None:
         for stage in ("verify", "publish"):
             body = jobs(internal).get(stage)
-            guards = [step for step in _workflow_steps(body or "")
-                      if "scripts/ops04/internal.py guard" in step]
+            steps = _workflow_steps(body or "")
+            guards = [(index, step) for index, step in enumerate(steps)
+                      if re.search(r"(?m)^\s*run:\s*python3\s+scripts/ops04/internal\.py\s+guard\s*(?:#.*)?$", step)]
             if len(guards) != 1:
-                problems.append("PROVENANCE: OPS-04 " + stage + " requires a signed-source guard")
+                problems.append("PROVENANCE: OPS-04 " + stage + " requires an executable signed-source guard")
                 continue
-            if _step_condition(guards[0]) or re.search(r"(?m)^\s+continue-on-error\s*:", guards[0]):
+            index, guard = guards[0]
+            if _step_condition(guard) or re.search(r"(?m)^\s+continue-on-error\s*:", guard):
                 problems.append("PROVENANCE: OPS-04 " + stage + " guard must run and stop on failure")
+            if any("actions/download-artifact@" in step or "google-github-actions/auth@" in step
+                   for step in steps[:index]):
+                problems.append("PROVENANCE: OPS-04 " + stage + " guard must precede artifact access")
     if REPOSITORY == "hebi10/TripCanvas":
         promote = jobs(read(".github/workflows/play-promote.yml")).get("promote")
         if not promote or "inputs.final_release_confirmed == true" not in _guaranteed_atoms(job_condition(promote)):
             problems.append("APPROVAL: TripCanvas legacy closed promotion lacks mandatory final approval")
+        legacy = read(".github/workflows/play-internal.yml")
+        if legacy is not None:
+            release = jobs(legacy).get("release")
+            for step in _workflow_steps(release or ""):
+                if re.search(r"\bpython3\s+scripts/play/publisher\.py\b[^\n]*\bpromote\b", step):
+                    if not re.fullmatch(r"false(?:\s*#.*)?", _step_condition(step)):
+                        problems.append("FROZEN: TripCanvas legacy internal closed-alpha promotion must remain disabled")
     if REPOSITORY == "hebi10/PetWorld":
         closed = read(".github/workflows/play-closed-release.yml") or ""
         if re.search(r"(?i)publisher[.]py\s+deploy[^\n]*--bundle", closed):
