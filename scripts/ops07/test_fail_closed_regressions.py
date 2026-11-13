@@ -344,5 +344,36 @@ class RunFirstApprovalRegressionTests(unittest.TestCase):
         self.assertTrue(any("STORE_OPTIONAL" in issue for issue in issues), issues)
 
 
+
+class TripCanvasStoreBindingsRegressionTests(unittest.TestCase):
+    def test_chained_store_publisher_requires_separate_approval(self):
+        source = store_workflow(guard=False).replace(
+            "python3 scripts/play/listing_images.py --mode upload",
+            "python3 scripts/play/preflight.py auth && python3 scripts/play/listing_images.py --mode upload")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            workflows = root / ".github/workflows"
+            workflows.mkdir(parents=True)
+            (workflows / "play-listing-images.yml").write_text(source, encoding="utf-8")
+            with patch.object(audit, "ROOT", root):
+                issues = audit.store_guard_findings()
+        self.assertTrue(any("STORE_GUARD" in item for item in issues), issues)
+
+    def test_store_inputs_must_not_be_forged(self):
+        read_file = audit.read
+        path = ".github/workflows/play-listing-images.yml"
+        source = read_file(path)
+        self.assertIn("OPS06_CONFIRMATION: ${{ inputs.ops06_confirmation }}", source)
+        forged = source.replace(
+            "OPS06_CONFIRMATION: ${{ inputs.ops06_confirmation }}",
+            "OPS06_CONFIRMATION: APPLY_VERIFIED_PLAY_STORE_ASSETS").replace(
+            "OPS06_EXPECTED_MAIN_SHA: ${{ inputs.ops06_expected_main_sha }}",
+            "OPS06_EXPECTED_MAIN_SHA: ${{ github.sha }}")
+        with patch.object(audit, "read", side_effect=lambda p:
+                          forged if p == path else read_file(p)):
+            issues = audit.findings()
+        self.assertTrue(any("STORE_BINDING: TripCanvas" in item for item in issues), issues)
+
+
 if __name__ == "__main__":
     unittest.main()
