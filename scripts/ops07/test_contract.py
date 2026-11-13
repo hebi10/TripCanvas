@@ -115,6 +115,45 @@ class AppContracts(unittest.TestCase):
                     mod.verify()
                 tool.assert_not_called()
 
+    def test_build_request_approval_and_source_cannot_be_self_authorized(self):
+        source_path = ".github/workflows/release-build.yml"
+        source = audit.read(source_path)
+        read_file = audit.read
+        variants = (
+            ("FINAL_BATCH_APPROVED", "final_batch_approved", "'true'"),
+            ("EXPECTED_MAIN_SHA", "expected_main_sha", "${{ github.sha }}"),
+        )
+        for key, field, value in variants:
+            with self.subTest(key=key):
+                expected = key + ": " + "$" + "{{ inputs." + field + " }}"
+                self.assertIn(expected, source)
+                changed = source.replace(expected, key + ": " + value, 1)
+                with patch.object(audit, "read", side_effect=lambda path:
+                                  changed if path == source_path else read_file(path)):
+                    blockers = audit.findings()
+                self.assertTrue(any("APPROVAL_BINDING: OPS-03" in item
+                                    for item in blockers), blockers)
+
+    def test_approved_ops03_values_must_be_in_request_job_env(self):
+        source_path = ".github/workflows/release-build.yml"
+        source = audit.read(source_path)
+        expected = "FINAL_BATCH_APPROVED: " + "$" + "{{ inputs.final_batch_approved }}"
+        self.assertIn(expected, source)
+        changed = source.replace(expected, "FINAL_BATCH_APPROVED: 'true'", 1)
+        changed = changed.replace(
+            "      - name: Gate release batch, main SHA and required CI",
+            "      - name: Unrelated diagnostic\n"
+            "        env:\n"
+            "          FINAL_BATCH_APPROVED: " + "$" + "{{ inputs.final_batch_approved }}\n"
+            "        run: echo preflight\n"
+            "      - name: Gate release batch, main SHA and required CI", 1)
+        read_file = audit.read
+        with patch.object(audit, "read", side_effect=lambda path:
+                          changed if path == source_path else read_file(path)):
+            blockers = audit.findings()
+        self.assertTrue(any("APPROVAL_BINDING: OPS-03" in item
+                            for item in blockers), blockers)
+
     def test_release_approval_inputs_cannot_be_fabricated(self):
         for path, stage, key, field, value in (
             (".github/workflows/play-internal-release.yml", "OPS-04",
