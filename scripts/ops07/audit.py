@@ -474,7 +474,7 @@ def findings():
             body = jobs(internal).get(stage)
             steps = _workflow_steps(body or "")
             guards = [(index, step) for index, step in enumerate(steps)
-                      if re.search(r"(?m)^\s*run:\s*python3\s+scripts/ops04/internal\.py\s+guard\s*(?:#.*)?$", step)]
+                      if re.search(r"(?m)^[ \t]*(?:-[ \t]+)?run:[ \t]*python3\s+scripts/ops04/internal\.py\s+guard[ \t]*(?:#.*)?$", step)]
             if len(guards) != 1:
                 problems.append("PROVENANCE: OPS-04 " + stage + " requires an executable signed-source guard")
                 continue
