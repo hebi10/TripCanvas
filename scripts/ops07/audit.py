@@ -464,6 +464,11 @@ def findings():
                                   r"Gate release batch, main SHA and required CI[ \t]*(?:#.*)?$", step)]
             dispatches = [i for i, step in enumerate(request_steps)
                           if "gh api --method POST" in step and "/dispatches" in step]
+            for index in dispatches:
+                dispatch = request_steps[index]
+                condition = _step_condition(dispatch)
+                if re.search(r"\b(?:always|failure|cancelled)\s*\(", condition):
+                    problems.append("OPS03_DISPATCH_BYPASS: signed build can dispatch after rejected approval")
             if len(gates) != 1 or len(dispatches) != 1 or gates[0][0] >= dispatches[0]:
                 problems.append("OPS03_PREFLIGHT: release build approval must precede build dispatch")
             else:
