@@ -44,6 +44,10 @@ class PromotionTests(unittest.TestCase):
         env["APPROVAL_PHRASE"] = ""
         self.assertEqual(p.parse_request(env)["mode"], "check")
 
+    def test_promote_request_can_run_readonly_check_first(self):
+        source = Path(SCRIPT).read_text(encoding="utf-8")
+        self.assertIn('sys.argv[1] == "check" or sys.argv[1] == req["mode"]', source)
+
     def test_forbidden_destination_rejected(self):
         for track in ("production","beta","internal","qa","open","internalsharing"):
             with self.subTest(track=track):
