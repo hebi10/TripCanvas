@@ -155,6 +155,21 @@ class AppContracts(unittest.TestCase):
                 self.assertTrue(any("OPS03_PREFLIGHT:" in item for item in blockers),
                                 blockers)
 
+    def test_ops03_build_dispatch_cannot_run_after_failed_gate(self):
+        path = ".github/workflows/release-build.yml"
+        read_file = audit.read
+        original = read_file(path)
+        dispatch = "      - name: Dispatch existing signed AAB build-only mode\n"
+        self.assertIn(dispatch, original)
+        for condition in ("always()", "failure()", "cancelled()"):
+            with self.subTest(condition=condition):
+                altered = original.replace(dispatch, dispatch + "        if: " + condition + "\n", 1)
+                with patch.object(audit, "read", side_effect=lambda name:
+                                  altered if name == path else read_file(name)):
+                    blockers = audit.findings()
+                self.assertTrue(any("OPS03_DISPATCH_BYPASS:" in item for item in blockers),
+                                blockers)
+
     def test_approved_ops03_values_must_be_in_request_job_env(self):
         source_path = ".github/workflows/release-build.yml"
         source = audit.read(source_path)
