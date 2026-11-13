@@ -88,17 +88,39 @@ def job_condition(body):
     return ""
 
 
+def has_top_level_or(expr):
+    depth = 0
+    quote = None
+    for index, char in enumerate(expr):
+        if quote is not None:
+            if char == quote:
+                quote = None
+            continue
+        if char in ('"', "'"):
+            quote = char
+        elif char == '(':
+            depth += 1
+        elif char == ')':
+            depth = max(0, depth - 1)
+        elif depth == 0 and expr[index:index + 2] == '||':
+            return True
+    return False
+
+
 def is_disabled(condition):
-    return re.match(r"^false(?:\s*&&|\s*$)", condition.strip()) is not None
+    expr = condition.strip()
+    return not has_top_level_or(expr) and re.match(r"^false(?:\s*&&|\s*$)", expr) is not None
 
 
 def is_manual_only(condition):
     cond = condition.replace('"', "'").strip()
-    # A leading conjunctive manual gate dominates nested legacy push/dispatch ORs.
+    if has_top_level_or(cond):
+        return False
+    # The mandatory manual event conjunct dominates legacy ORs only inside parentheses.
     if cond.startswith("github.event_name == 'workflow_dispatch' &&"):
         return True
     return ("github.event_name == 'workflow_dispatch'" in cond
-            and not re.search(r"(\|\||\bor\b)\s*\(?\s*github\.event_name", cond)
+            and '||' not in cond
             and not re.search(r"github\.event_name == '(push|workflow_run|issue_comment|pull_request)'", cond))
 
 
