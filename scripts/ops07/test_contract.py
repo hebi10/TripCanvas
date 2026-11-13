@@ -101,6 +101,20 @@ class AppContracts(unittest.TestCase):
         with self.assertRaises(mod.Stop):
             mod.make_plan(tracks,[{"versionCode":19,"sha256":"b"*64}],req)
 
+    def test_existing_aab_rejects_mismatched_approved_digest(self):
+        mod = module("scripts/ops04/internal.py")
+        self.assertIsNotNone(mod, "OPS-04 immutable AAB guard missing")
+        with tempfile.TemporaryDirectory() as tmp:
+            aab = Path(tmp) / "signed-source.aab"
+            aab.write_bytes(b"offline-aab-digest-mismatch-fixture")
+            with patch.object(mod, "BUNDLE_PATH", Path(tmp)), \
+                 patch.dict(mod.os.environ, {"AAB_SHA256": "0" * 64}), \
+                 patch.object(mod, "invoke") as tool:
+                with self.assertRaisesRegex(
+                        mod.GateError, "Downloaded AAB SHA-256 differs from approved bytes"):
+                    mod.verify()
+                tool.assert_not_called()
+
     def test_missing_existing_aab_cannot_be_published(self):
         mod=module("scripts/ops04/internal.py")
         self.assertIsNotNone(mod, "OPS-04 immutable AAB guard missing")
