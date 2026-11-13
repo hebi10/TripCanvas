@@ -197,6 +197,36 @@ class FailClosedRegressionTests(unittest.TestCase):
                 self.assertTrue(any("FROZEN" in item for item in
                                     issues_for(unsafe)))
 
+    def test_if_first_provenance_guard_fails_closed(self):
+        workflow = ("on:\n  workflow_dispatch:\njobs:\n"
+                    "  verify:\n    steps:\n"
+                    "      - if: false\n"
+                    "        run: python3 scripts/ops04/internal.py guard\n"
+                    "  publish:\n    steps:\n"
+                    "      - if: false\n"
+                    "        run: python3 scripts/ops04/internal.py guard\n")
+        with patch.object(audit, "read", side_effect=lambda path:
+                          workflow if path == ".github/workflows/play-internal-release.yml"
+                          else None):
+            issues = audit.findings()
+        self.assertTrue(any("PROVENANCE" in issue for issue in issues), issues)
+
+    def test_legacy_frozen_promotion_with_continued_command(self):
+        prefix = ("on:\n  workflow_dispatch:\njobs:\n"
+                  "  release:\n    steps:\n"
+                  "      - name: Legacy closed promotion\n")
+        command = ("        run: |\n"
+                   "          python3 scripts/play/publisher.py --report report.json \\\n"
+                   "            promote --track alpha\n")
+        def issues_for(condition):
+            with patch.object(audit, "read", side_effect=lambda path:
+                              prefix + condition + command
+                              if path == ".github/workflows/play-internal.yml" else None):
+                return audit.findings()
+        self.assertFalse(any("FROZEN" in issue for issue in
+                             issues_for("        if: false # frozen\n")))
+        self.assertTrue(any("FROZEN" in issue for issue in issues_for("")))
+
     def test_removing_both_internal_provenance_guards_fails(self):
         workflow = ("on:\n  workflow_dispatch:\njobs:\n"
                     "  verify:\n    runs-on: ubuntu-latest\n    steps:\n"
