@@ -300,7 +300,7 @@ class AppContracts(unittest.TestCase):
         path = ".github/workflows/play-listing-images.yml"
         read_file = audit.read
         original = read_file(path)
-        marker = "    steps:\n      - uses: actions/checkout@v4\n"
+        marker = "  upload:\n    needs: validate\n"
         self.assertIn(marker, original)
         for key, field, forged in (
             ("OPS06_CONFIRMATION", "ops06_confirmation",
@@ -312,8 +312,10 @@ class AppContracts(unittest.TestCase):
                 expected = key + ": " + "$" + "{{ inputs." + field + " }}"
                 self.assertIn(expected, original)
                 changed = original.replace(
-                    marker, "    env:\n      " + expected + "\n" + marker, 1)
-                changed = changed.replace(expected, key + ": " + forged, 1)
+                    marker, marker + "    env:\n      " + expected + "\n", 1)
+                prefix, separator, suffix = changed.rpartition(expected)
+                self.assertTrue(separator)
+                changed = prefix + key + ": " + forged + suffix
                 with patch.object(audit, "read", side_effect=lambda name:
                                   changed if name == path else read_file(name)):
                     blockers = audit.findings()
