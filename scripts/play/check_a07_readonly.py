@@ -19,7 +19,7 @@ def verify_internal_release(track, bundles, expected_code, expected_sha256):
     expected = str(expected_sha256).lower()
     if not re.fullmatch(r"[a-f0-9]{64}", expected):
         raise ReleaseError("Expected AAB SHA-256 must contain exactly 64 hexadecimal digits")
-    if not isinstance(track, dict) or track.get("track", "internal") != "internal":
+    if not isinstance(track, dict) or track.get("track") != "internal":
         raise ReleaseError("Unexpected track response; the internal release was not verified")
 
     entries = track.get("releases", [])

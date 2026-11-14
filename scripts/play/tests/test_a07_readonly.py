@@ -53,6 +53,10 @@ class ReleaseA07ReadOnlyTests(unittest.TestCase):
                 with self.assertRaises(ReleaseError):
                     verify_internal_release(self.track, bundles, CODE, HASH)
 
+    def test_missing_track_identity_is_not_assumed_internal(self):
+        with self.assertRaises(ReleaseError):
+            verify_internal_release({"releases": self.track["releases"]}, self.bundles, CODE, HASH)
+
     def test_wrong_track_and_duplicate_completed_releases_are_rejected(self):
         with self.assertRaises(ReleaseError):
             verify_internal_release({"track": "production", "releases": self.track["releases"]}, self.bundles, CODE, HASH)
