@@ -458,6 +458,11 @@ def findings():
                 if len(occurrences) != 1 or not re.search(expr, scoped_env):
                     problems.append("APPROVAL_BINDING: OPS-03 build request must bind " + name
                                     + " to caller-approved dispatch input")
+            required_ci_binding = """REQUIRED_CI_JSON: '["TripCanvas Android CI"]'"""
+            required_ci_env = re.findall(r"(?m)^      REQUIRED_CI_JSON:[ \t]*([^\n#]+)", request)
+            if (len(required_ci_env) != 1
+                    or required_ci_env[0].strip() != "'[\"TripCanvas Android CI\"]'"):
+                problems.append("OPS03_REQUIRED_CI: TripCanvas Android CI must be mandatory")
             request_steps = _workflow_steps(request)
             gates = [(i, step) for i, step in enumerate(request_steps)
                      if re.search(r"(?m)^[ \t]*-[ \t]+name:[ \t]*"
@@ -478,6 +483,9 @@ def findings():
                     'if os.environ["FINAL_BATCH_APPROVED"]!="true"',
                     'sha!=os.environ["GITHUB_SHA"]',
                     'api("repos/"+repo+"/git/ref/heads/main")',
+                    'required=json.loads(os.environ["REQUIRED_CI_JSON"])',
+                    'if not matching: refuse("Missing exact-main CI: "+name)',
+                    'if latest.get("status")!="completed" or latest.get("conclusion")!="success"',
                 )
                 if (_step_condition(gate)
                         or re.search(r"(?m)^[ \t]*(?:-[ \t]+)?continue-on-error[ \t]*:", gate)
