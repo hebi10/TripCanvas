@@ -296,6 +296,30 @@ class AppContracts(unittest.TestCase):
             altered, (("FINAL_RELEASE_APPROVED", "final_release_approved"),), "OPS-04")
         self.assertTrue(any("APPROVAL_BINDING: OPS-04" in issue for issue in issues), issues)
 
+    def test_store_guard_rejects_shadowed_effective_approval_values(self):
+        path = ".github/workflows/play-listing-images.yml"
+        read_file = audit.read
+        original = read_file(path)
+        marker = "    steps:\n      - uses: actions/checkout@v4\n"
+        self.assertIn(marker, original)
+        for key, field, forged in (
+            ("OPS06_CONFIRMATION", "ops06_confirmation",
+             "APPLY_VERIFIED_PLAY_STORE_ASSETS"),
+            ("OPS06_EXPECTED_MAIN_SHA", "ops06_expected_main_sha",
+             "$" + "{{ github.sha }}"),
+        ):
+            with self.subTest(key=key):
+                expected = key + ": " + "$" + "{{ inputs." + field + " }}"
+                self.assertIn(expected, original)
+                changed = original.replace(
+                    marker, "    env:\n      " + expected + "\n" + marker, 1)
+                changed = changed.replace(expected, key + ": " + forged, 1)
+                with patch.object(audit, "read", side_effect=lambda name:
+                                  changed if name == path else read_file(name)):
+                    blockers = audit.findings()
+                self.assertTrue(any("STORE_INPUT_BINDING: TripCanvas " + key in item
+                                    for item in blockers), blockers)
+
     def test_missing_existing_aab_cannot_be_published(self):
         mod=module("scripts/ops04/internal.py")
         self.assertIsNotNone(mod, "OPS-04 immutable AAB guard missing")
