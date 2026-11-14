@@ -593,6 +593,28 @@ def findings():
                     problems.append("PROVENANCE_BYPASS: OPS-04 " + stage + " can publish after a failed guard")
                     break
     if REPOSITORY == "hebi10/TripCanvas":
+        listing = read(".github/workflows/play-listing-images.yml") or ""
+        upload = jobs(listing).get("upload") or ""
+        approval = [step for step in _workflow_steps(upload)
+                    if re.search(r"(?m)^[ \t]*(?:-[ \t]+)?run:[ \t]*python3[ \t]+"
+                                 r"scripts/ops06/store_gate\.py[ \t]+apply[ \t]*(?:#.*)?$", step)]
+        if len(approval) != 1:
+            problems.append("STORE_INPUT_BINDING: TripCanvas needs one executable OPS-06 gate")
+        else:
+            guard = approval[0]
+            for key, field in (
+                ("OPS06_STORE_APPROVED", "ops06_store_approved"),
+                ("OPS06_CONFIRMATION", "ops06_confirmation"),
+                ("OPS06_EXPECTED_MAIN_SHA", "ops06_expected_main_sha"),
+                ("OPS06_BATCH_ID", "ops06_batch_id"),
+            ):
+                expected = "$" + "{{ inputs." + field + " }}"
+                scoped = re.findall(r"(?m)^[ \t]+" + re.escape(key) + r":[ \t]*([^\n#]+)", guard)
+                effective = re.findall(r"(?m)^[ \t]+" + re.escape(key) + r":[ \t]*([^\n#]+)", listing)
+                if (len(scoped) != 1 or scoped[0].strip() != expected
+                        or len(effective) != 1 or effective[0].strip() != expected):
+                    problems.append("STORE_INPUT_BINDING: TripCanvas " + key
+                                    + " must use exactly one caller-approved input in the gate")
         promote = jobs(read(".github/workflows/play-promote.yml")).get("promote")
         if not promote or "inputs.final_release_confirmed == true" not in _guaranteed_atoms(job_condition(promote)):
             problems.append("APPROVAL: TripCanvas legacy closed promotion lacks mandatory final approval")
