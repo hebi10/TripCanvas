@@ -227,10 +227,10 @@ fun TripMapScreen(
                     }
                 }
             }
-            Text(
-                "이동 시간·경로: 조회 불가. 제공자 응답이 없는 값을 임의로 계산하지 않습니다.",
-                style = MaterialTheme.typography.bodySmall,
-                color = p.textSecondary
+            TripRouteComparisonPanel(
+                selectedDate = selectedDate,
+                schedules = schedules,
+                savedPlaces = savedPlaces
             )
         }
     }
