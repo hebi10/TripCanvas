@@ -492,6 +492,7 @@ def findings():
                 if (_step_condition(gate)
                         or re.search(r"(?m)^[ \t]*(?:-[ \t]+)?continue-on-error[ \t]*:", gate)
                         or re.search(r"(?m)^[ \t]*python3[ \t]+-[ \t]+<<'PY'[ \t]*(?:\|\||;|\|(?!\|))", gate)
+                        or re.search(r"(?m)^[ \t]*set[ \t]+\+e(?:[ \t]*(?:#.*)?$|[ \t]*;)", gate)
                         or not re.search(r"(?m)^[ \t]*(?:-[ \t]+)?run:[ \t]*\|[ \t]*(?:#.*)?$", gate)
                         or not all(check in gate for check in required_checks)):
                     problems.append("OPS03_PREFLIGHT: release approval gate must execute and fail closed")
