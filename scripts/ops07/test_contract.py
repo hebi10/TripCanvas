@@ -193,6 +193,31 @@ class AppContracts(unittest.TestCase):
                 self.assertTrue(any("OPS03_REQUIRED_CI:" in item or
                                     "OPS03_PREFLIGHT:" in item for item in issues), issues)
 
+    def test_ops03_step_ci_override_and_secondary_dispatch_are_blocked(self):
+        path = ".github/workflows/release-build.yml"
+        original_read = audit.read
+        original = original_read(path)
+        token = "          GH_TOKEN: " + "$" + "{{ github.token }}"
+        self.assertIn(token, original)
+        self.assertIn("python3 - <<'PY'", original)
+        variants = (
+            ("step_override", original.replace(
+                token, token + "\n          REQUIRED_CI_JSON: '[]'", 1)),
+            ("secondary_job", original + "\n  bypass:\n"
+             "    runs-on: ubuntu-latest\n"
+             "    steps:\n"
+             "      - run: gh api --method POST repos/example/actions/workflows/play-internal.yml/dispatches\n"),
+            ("masked_gate", original.replace("python3 - <<'PY'",
+                                             "python3 - <<'PY' || true", 1)),
+        )
+        for label, changed in variants:
+            with self.subTest(label=label):
+                with patch.object(audit, "read", side_effect=lambda target:
+                                  changed if target == path else original_read(target)):
+                    issues = audit.findings()
+                self.assertTrue(any(item.startswith(("OPS03_REQUIRED_CI:", "OPS03_SCOPE:",
+                                                       "OPS03_PREFLIGHT:")) for item in issues), issues)
+
     def test_approved_ops03_values_must_be_in_request_job_env(self):
         source_path = ".github/workflows/release-build.yml"
         source = audit.read(source_path)
