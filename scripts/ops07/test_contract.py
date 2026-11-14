@@ -218,6 +218,19 @@ class AppContracts(unittest.TestCase):
                 self.assertTrue(any(item.startswith(("OPS03_REQUIRED_CI:", "OPS03_SCOPE:",
                                                        "OPS03_PREFLIGHT:")) for item in issues), issues)
 
+    def test_ops03_shell_cannot_disable_errexit_and_mask_rejection(self):
+        path = ".github/workflows/release-build.yml"
+        original_read = audit.read
+        original = original_read(path)
+        command = "          python3 - <<'PY'\n"
+        self.assertIn(command, original)
+        modified = original.replace(
+            command, "          set +e\n" + command, 1)
+        with patch.object(audit, "read", side_effect=lambda target:
+                          modified if target == path else original_read(target)):
+            findings = audit.findings()
+        self.assertTrue(any("OPS03_PREFLIGHT:" in x for x in findings), findings)
+
     def test_approved_ops03_values_must_be_in_request_job_env(self):
         source_path = ".github/workflows/release-build.yml"
         source = audit.read(source_path)
