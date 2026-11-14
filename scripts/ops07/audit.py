@@ -443,7 +443,10 @@ def findings():
         if "github.ref" not in source and "GITHUB_REF" not in source:
             problems.append("SOURCE: " + file + " missing main ref gate")
         if file == "release-build.yml":
-            request = jobs(source).get("request") or ""
+            request_jobs = jobs(source)
+            if set(request_jobs) != {"request"}:
+                problems.append("OPS03_SCOPE: TripCanvas signed-build request must have exactly one gated job")
+            request = request_jobs.get("request") or ""
             header = re.search(r"(?m)^    env:[ \t]*(?:#.*)?$", request)
             scoped_env = ""
             if header:
@@ -458,8 +461,7 @@ def findings():
                 if len(occurrences) != 1 or not re.search(expr, scoped_env):
                     problems.append("APPROVAL_BINDING: OPS-03 build request must bind " + name
                                     + " to caller-approved dispatch input")
-            required_ci_binding = """REQUIRED_CI_JSON: '["TripCanvas Android CI"]'"""
-            required_ci_env = re.findall(r"(?m)^      REQUIRED_CI_JSON:[ \t]*([^\n#]+)", request)
+            required_ci_env = re.findall(r"(?m)^[ \t]+REQUIRED_CI_JSON:[ \t]*([^\n#]+)", request)
             if (len(required_ci_env) != 1
                     or required_ci_env[0].strip() != "'[\"TripCanvas Android CI\"]'"):
                 problems.append("OPS03_REQUIRED_CI: TripCanvas Android CI must be mandatory")
@@ -489,6 +491,7 @@ def findings():
                 )
                 if (_step_condition(gate)
                         or re.search(r"(?m)^[ \t]*(?:-[ \t]+)?continue-on-error[ \t]*:", gate)
+                        or re.search(r"(?m)^[ \t]*python3[ \t]+-[ \t]+<<'PY'[ \t]*(?:\|\||;|\|(?!\|))", gate)
                         or not re.search(r"(?m)^[ \t]*(?:-[ \t]+)?run:[ \t]*\|[ \t]*(?:#.*)?$", gate)
                         or not all(check in gate for check in required_checks)):
                     problems.append("OPS03_PREFLIGHT: release approval gate must execute and fail closed")
