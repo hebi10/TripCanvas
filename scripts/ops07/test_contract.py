@@ -170,6 +170,29 @@ class AppContracts(unittest.TestCase):
                 self.assertTrue(any("OPS03_DISPATCH_BYPASS:" in item for item in blockers),
                                 blockers)
 
+    def test_ops03_required_android_ci_cannot_be_disabled(self):
+        path = ".github/workflows/release-build.yml"
+        original_read = audit.read
+        original = original_read(path)
+        expected = """REQUIRED_CI_JSON: '["TripCanvas Android CI"]'"""
+        self.assertIn(expected, original)
+        for label, changed in (
+            ("empty", original.replace(expected, "REQUIRED_CI_JSON: '[]'", 1)),
+            ("wrong_ci", original.replace(expected, """REQUIRED_CI_JSON: '["Unknown"]'""", 1)),
+            ("skip_missing", original.replace(
+                'if not matching: refuse("Missing exact-main CI: "+name)',
+                "if not matching: pass", 1)),
+            ("skip_failed", original.replace(
+                'if latest.get("status")!="completed" or latest.get("conclusion")!="success": refuse("Required CI not successful: "+name)',
+                "if False: refuse('unreachable')", 1)),
+        ):
+            with self.subTest(label=label):
+                with patch.object(audit, "read", side_effect=lambda filename:
+                                  changed if filename == path else original_read(filename)):
+                    issues = audit.findings()
+                self.assertTrue(any("OPS03_REQUIRED_CI:" in item or
+                                    "OPS03_PREFLIGHT:" in item for item in issues), issues)
+
     def test_approved_ops03_values_must_be_in_request_job_env(self):
         source_path = ".github/workflows/release-build.yml"
         source = audit.read(source_path)
