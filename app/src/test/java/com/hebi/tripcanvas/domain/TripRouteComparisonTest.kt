@@ -64,6 +64,39 @@ class TripRouteComparisonTest {
         assertEquals(valid, validatedRouteEstimate(valid))
     }
 
+    @Test fun invalidCoordinatesAreNeverMarkedReadyForProvider() {
+        val items = listOf(
+            itinerary("a", "2026-11-11", "airport", 0),
+            itinerary("b", "2026-11-11", "invalid", 1)
+        )
+        val badCoordinates = listOf(
+            91.0 to 127.0,
+            -91.0 to 127.0,
+            35.0 to 181.0,
+            35.0 to -181.0,
+            Double.NaN to 127.0,
+            35.0 to Double.POSITIVE_INFINITY
+        )
+        badCoordinates.forEach { (lat, lon) ->
+            val saved = places + place("invalid", "잘못된 좌표", lat, lon)
+            assertEquals(
+                TripRouteAvailability.COORDINATES_MISSING,
+                tripRouteLegsForDate(items, saved, "2026-11-11").single().availability
+            )
+        }
+    }
+
+    @Test fun validCoordinateBoundaryIsAccepted() {
+        val items = listOf(
+            itinerary("a", "2026-11-11", "airport", 0),
+            itinerary("b", "2026-11-11", "edge", 1)
+        )
+        val result = tripRouteLegsForDate(
+            items, places + place("edge", "경계", -90.0, 180.0), "2026-11-11"
+        )
+        assertEquals(TripRouteAvailability.PROVIDER_NOT_CONFIGURED, result.single().availability)
+    }
+
     private fun place(id: String, name: String, lat: Double?, lon: Double?) =
         PlaceEntity(
             id = id, tripId = "trip", name = name, address = "", note = "",
