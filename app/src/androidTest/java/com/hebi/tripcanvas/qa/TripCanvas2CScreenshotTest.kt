@@ -7,6 +7,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
+import androidx.test.uiautomator.BySelector
 import androidx.test.uiautomator.Direction
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.StaleObjectException
@@ -482,8 +483,7 @@ class TripCanvas2CScreenshotTest {
             awaitText("제주 주말 여행")
             click("제주 주말 여행")
             awaitText("작업 도구")
-            click("오늘의 여행 열기")
-            awaitText("방문 기록은 버튼을 눌렀을 때만 저장합니다. 위치를 자동 수집하지 않습니다.")
+            openScreen("오늘의 여행 열기", today)
             awaitText("공항 도착")
             capture("24-p3-live-before-checkin")
             click("방문 완료")
@@ -491,14 +491,12 @@ class TripCanvas2CScreenshotTest {
             capture("25-p3-live-after-checkin")
             device.pressBack()
             awaitText("작업 도구")
-            click("여행 기록 열기")
-            awaitText("사진 원본은 복사하지 않습니다. 원본을 이동·삭제하거나 접근 권한이 만료되면 열리지 않을 수 있습니다.")
-            awaitText("공항 도착")
+            openScreen("여행 기록 열기", "방문 기록")
+            awaitText("공항 도착 방문 기록", By.textStartsWith("공항 도착 · "))
             capture("26-p3-memories-visit")
             device.pressBack()
             awaitText("작업 도구")
-            click("리포트 열기")
-            awaitText("여행 리포트")
+            openScreen("리포트 열기", "여행 기간: 1일")
             awaitText("실제 방문: 1건")
             capture("27-p3-report-visited")
         }
@@ -606,18 +604,18 @@ class TripCanvas2CScreenshotTest {
         Thread.sleep(400)
     }
 
-    private fun awaitText(text: String) {
+    private fun awaitText(text: String, selector: BySelector = uiSelector(text)) {
         dismissSystemAnr()
-        if (device.wait(Until.hasObject(uiSelector(text)), 5000)) return
+        if (device.wait(Until.hasObject(selector), 5000)) return
         repeat(6) {
             dismissSystemAnr()
             swipeUp()
-            if (device.wait(Until.hasObject(uiSelector(text)), 1200)) return
+            if (device.wait(Until.hasObject(selector), 1200)) return
         }
         repeat(6) {
             dismissSystemAnr()
             swipeDown()
-            if (device.wait(Until.hasObject(uiSelector(text)), 1200)) return
+            if (device.wait(Until.hasObject(selector), 1200)) return
         }
         val diagnosticDir = File(context.getExternalFilesDir(null), "qa")
         diagnosticDir.mkdirs()
