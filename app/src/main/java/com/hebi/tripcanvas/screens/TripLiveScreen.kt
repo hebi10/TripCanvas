@@ -21,6 +21,7 @@ import com.hebi.tripcanvas.data.TripRepository
 import com.hebi.tripcanvas.data.local.TripEntity
 import com.hebi.tripcanvas.ui.TripPageFrame
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZoneId
 import kotlinx.coroutines.launch
 
@@ -30,6 +31,7 @@ fun TripLiveScreen(
     trips: TripRepository,
     schedules: ItineraryRepository,
     journal: TravelJournalRepository,
+    bookings: BookingRepository,
     onBack: () -> Unit,
     onExpenses: () -> Unit,
     onMemories: () -> Unit
@@ -37,6 +39,7 @@ fun TripLiveScreen(
     val trip by remember(tripId) { trips.observeTrip(tripId) }.collectAsState(initial = null)
     val items by remember(tripId) { schedules.observeTrip(tripId) }.collectAsState(initial = emptyList())
     val visits by remember(tripId) { journal.visits(tripId) }.collectAsState(initial = emptyList())
+    val reservations by remember(tripId) { bookings.observe(tripId) }.collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     var error by remember { mutableStateOf<String?>(null) }
     val today = trip?.let { localToday(it) }
@@ -44,8 +47,16 @@ fun TripLiveScreen(
         compareBy({ it.startTime ?: "99:99" }, { it.sortOrder })
     )
     val visitedIds = visits.mapNotNull { it.itineraryItemId }.toSet()
+    val currentTime = trip?.let { LocalTime.now(ZoneId.of(it.timeZoneId)).toString().take(5) }
+    val next = todays.firstOrNull { it.id !in visitedIds && (it.startTime == null || it.startTime >= currentTime.orEmpty()) }
+    val todayReservations = reservations.filter { it.startAtLocal?.startsWith(today.orEmpty()) == true }
     TripPageFrame(title = "오늘의 여행", onBack = onBack) {
         Text(today ?: "여행 정보 없음", style = MaterialTheme.typography.titleLarge)
+        next?.let { Text("다음 일정: " + it.title, style = MaterialTheme.typography.titleMedium) }
+        if (todayReservations.isNotEmpty()) {
+            Text("오늘의 예약", style = MaterialTheme.typography.titleMedium)
+            todayReservations.forEach { Text(it.title + " · " + (it.startAtLocal?.substringAfter("T") ?: "시간 미정")) }
+        }
         if (todays.isEmpty()) {
             Text("오늘 등록된 일정이 없습니다.")
         }
