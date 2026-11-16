@@ -343,6 +343,7 @@ fun TripApp(onThemeResolved: (Boolean) -> Unit) {
                             TripLiveScreen(
                                 tripId = id, trips = tripRepository,
                                 schedules = itineraryRepository, journal = travelJournalRepository,
+                                bookings = bookingRepository,
                                 onBack = { navController.popBackStack() },
                                 onExpenses = { navController.navigate(TripDestinations.newExpense(id)) },
                                 onMemories = { navController.navigate(TripDestinations.memories(id)) }
