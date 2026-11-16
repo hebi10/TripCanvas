@@ -24,6 +24,8 @@ import com.hebi.tripcanvas.data.local.TripDatabase
 import com.hebi.tripcanvas.data.local.TripEntity
 import com.hebi.tripcanvas.designsystem.theme.TripThemeMode
 import java.io.File
+import java.time.LocalDate
+import java.time.ZoneId
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -461,6 +463,44 @@ class TripCanvas2CScreenshotTest {
             openScreen("경비 열기", "예산 설정·변경")
             awaitText("예산 현황")
             capture("23-expenses-dark-font160")
+        }
+    }
+
+
+    @Test
+    fun captureLiveMemoriesAndReportFromRealAndroidUi() {
+        val today = LocalDate.now(ZoneId.of("Asia/Seoul")).toString()
+        runBlocking {
+            val snapshot = database.backupDao().snapshot()
+            val trip = snapshot.trips.single().copy(startDate = today, endDate = today)
+            val schedule = snapshot.itineraries.single().copy(date = today)
+            database.backupDao().replaceAll(snapshot.copy(
+                trips = listOf(trip), itineraries = listOf(schedule)
+            ))
+        }
+        ActivityScenario.launch(MainActivity::class.java).use {
+            awaitText("제주 주말 여행")
+            click("제주 주말 여행")
+            awaitText("작업 도구")
+            click("오늘의 여행 열기")
+            awaitText("오늘의 여행")
+            awaitText("공항 도착")
+            capture("24-p3-live-before-checkin")
+            click("방문 완료")
+            awaitText("방문 완료")
+            capture("25-p3-live-after-checkin")
+            device.pressBack()
+            awaitText("작업 도구")
+            click("여행 기록 열기")
+            awaitText("방문·사진 기록")
+            awaitText("공항 도착")
+            capture("26-p3-memories-visit")
+            device.pressBack()
+            awaitText("작업 도구")
+            click("리포트 열기")
+            awaitText("여행 리포트")
+            awaitText("실제 방문: 1건")
+            capture("27-p3-report-visited")
         }
     }
 
