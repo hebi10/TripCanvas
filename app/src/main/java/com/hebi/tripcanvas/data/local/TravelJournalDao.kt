@@ -2,6 +2,7 @@ package com.hebi.tripcanvas.data.local
 
 import androidx.room.Dao
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
@@ -20,8 +21,8 @@ interface TravelJournalDao {
     @Query("SELECT * FROM visit_records WHERE tripId = :tripId AND id = :visitId LIMIT 1")
     suspend fun findVisitById(tripId: String, visitId: String): VisitRecordEntity?
 
-    @Insert
-    suspend fun insertVisit(record: VisitRecordEntity)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertVisit(record: VisitRecordEntity): Long
 
     @Insert
     suspend fun insertMoment(record: TravelMomentEntity)
