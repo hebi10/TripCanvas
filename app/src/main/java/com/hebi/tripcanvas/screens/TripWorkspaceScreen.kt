@@ -79,7 +79,10 @@ fun TripWorkspaceScreen(
     onExpenses: () -> Unit = {},
     onSettlement: () -> Unit = {},
     onParticipants: () -> Unit = {},
-    onBookings: () -> Unit = {}
+    onBookings: () -> Unit = {},
+    onLive: () -> Unit = {},
+    onMemories: () -> Unit = {},
+    onReport: () -> Unit = {}
 ) {
     var refresh by remember { mutableIntStateOf(0) }
     val flow = remember(repository, tripId, refresh) {
@@ -145,7 +148,8 @@ fun TripWorkspaceScreen(
             isPreview -> WorkspaceContent(trip = null, isPreview = true, scheduleCount = 0, onSchedule = onSchedule, onPlaces = onPlaces, onMap = onMap,
                 schedules = emptyList(), budget = null, checklist = emptyList(), expenses = emptyList(),
                 onChecklist = onChecklist, onExpenses = onExpenses,
-                onSettlement = onSettlement, onParticipants = onParticipants, onBookings = onBookings)
+                onSettlement = onSettlement, onParticipants = onParticipants, onBookings = onBookings,
+                onLive = onLive, onMemories = onMemories, onReport = onReport)
             state == WorkspaceState.Loading -> TripLoadingState("여행 정보를 불러오는 중")
             state == WorkspaceState.Failed -> TripErrorState(
                 title = "여행 정보를 불러오지 못했습니다",
@@ -159,7 +163,8 @@ fun TripWorkspaceScreen(
             else -> WorkspaceContent(trip = loaded, isPreview = false, scheduleCount = scheduleCount, onSchedule = onSchedule, onPlaces = onPlaces, onMap = onMap,
                 schedules = schedules, budget = budget, checklist = checklist, expenses = expenses,
                 onChecklist = onChecklist, onExpenses = onExpenses,
-                onSettlement = onSettlement, onParticipants = onParticipants, onBookings = onBookings)
+                onSettlement = onSettlement, onParticipants = onParticipants, onBookings = onBookings,
+                onLive = onLive, onMemories = onMemories, onReport = onReport)
         }
     }
     if (loaded != null && showDelete && repository != null) {
@@ -188,7 +193,10 @@ private fun WorkspaceContent(
     onExpenses: () -> Unit,
     onSettlement: () -> Unit,
     onParticipants: () -> Unit,
-    onBookings: () -> Unit
+    onBookings: () -> Unit,
+    onLive: () -> Unit,
+    onMemories: () -> Unit,
+    onReport: () -> Unit
 ) {
     val p = TripDesign.palette
     WorkspaceHeader(trip = trip, isPreview = isPreview)
@@ -213,7 +221,10 @@ private fun WorkspaceContent(
         onExpenses = onExpenses,
         onSettlement = onSettlement,
         onParticipants = onParticipants,
-        onBookings = onBookings
+        onBookings = onBookings,
+        onLive = onLive,
+        onMemories = onMemories,
+        onReport = onReport
     )
     Text(
         "일정·경비·준비물은 이 여행의 로컬 데이터로 관리됩니다.",
@@ -461,7 +472,10 @@ private fun WorkspaceToolGrid(
     onExpenses: () -> Unit,
     onSettlement: () -> Unit,
     onParticipants: () -> Unit,
-    onBookings: () -> Unit
+    onBookings: () -> Unit,
+    onLive: () -> Unit,
+    onMemories: () -> Unit,
+    onReport: () -> Unit
 ) {
     val p = TripDesign.palette
     val tools = listOf(
@@ -497,7 +511,10 @@ private fun WorkspaceToolGrid(
         WorkspaceTool(
             "저장 장소", "저장한 장소 목록 관리",
             "저장 장소 관리", if (isPreview) null else onPlaces
-        )
+        ),
+        WorkspaceTool("오늘의 여행", "오늘 일정과 방문 체크인", "오늘의 여행 열기", if (isPreview) null else onLive),
+        WorkspaceTool("여행 기록", "사진·방문 메모", "여행 기록 열기", if (isPreview) null else onMemories),
+        WorkspaceTool("여행 리포트", "실제 방문·지출 요약", "리포트 열기", if (isPreview) null else onReport)
     )
 
     Column(
