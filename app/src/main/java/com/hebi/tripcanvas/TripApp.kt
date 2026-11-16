@@ -1,4 +1,13 @@
 package com.hebi.tripcanvas
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.runtime.DisposableEffect
+import com.hebi.tripcanvas.monetization.TripBillingManager
+import com.hebi.tripcanvas.monetization.TripAdConsent
 
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -80,7 +89,35 @@ private sealed interface SettingsLoadState {
 
 @Composable
 fun TripApp(onThemeResolved: (Boolean) -> Unit) {
-    val context = LocalContext.current.applicationContext
+    val host = LocalContext.current
+    val activity = generateSequence(host as Context?) { current ->
+        (current as? ContextWrapper)?.baseContext
+    }.filterIsInstance<Activity>().firstOrNull()
+    val context = host.applicationContext
+    val billingManager = remember(context) { TripBillingManager(context) }
+    val adConsent = remember(activity) { activity?.let(::TripAdConsent) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(billingManager, lifecycleOwner) {
+        billingManager.connect()
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) billingManager.refresh()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            billingManager.close()
+        }
+    }
+    DisposableEffect(adConsent) {
+        adConsent?.request()
+        onDispose { }
+    }
+    val billingState by billingManager.state.collectAsState()
+    val canRequestAds by (adConsent?.canShowAds ?: remember { kotlinx.coroutines.flow.MutableStateFlow(false) })
+        .collectAsState()
+    val privacyOptionsAvailable by (adConsent?.privacyOptionsAvailable ?: remember {
+        kotlinx.coroutines.flow.MutableStateFlow(false)
+    }).collectAsState()
     val repository = remember(context) { tripPreferencesRepository(context) }
     val tripDatabase = remember(context) { TripDatabase.get(context) }
     val tripRepository = remember(tripDatabase) { TripRepository(tripDatabase.tripDao()) }
@@ -221,7 +258,10 @@ fun TripApp(onThemeResolved: (Boolean) -> Unit) {
                                 },
                                 onEditTrip = { id ->
                                     navController.navigate(TripDestinations.editTrip(id))
-                                }
+                                },
+                                canRequestAds = canRequestAds,
+                                billingResolved = billingState.resolved,
+                                adFree = billingState.adFree
                             )
                         }
                         composable(TripDestinations.Settings) {
@@ -239,7 +279,12 @@ fun TripApp(onThemeResolved: (Boolean) -> Unit) {
                                 },
                                 onOpenBackup = {
                                     navController.navigate(TripDestinations.BackupRoute)
-                                }
+                                },
+                                billingState = billingState,
+                                onPurchase = { plan -> activity?.let { billingManager.purchase(it, plan) } },
+                                onRestorePurchases = { billingManager.refresh() },
+                                onPrivacyOptions = { adConsent?.showPrivacyOptions() },
+                                privacyOptionsAvailable = privacyOptionsAvailable
                             )
                         }
                         composable(TripDestinations.CreateTrip) {
