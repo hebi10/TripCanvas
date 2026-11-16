@@ -23,6 +23,8 @@ class TripAdConsent(private val activity: Activity) {
     private val consent = UserMessagingPlatform.getConsentInformation(activity)
     private val allowed = MutableStateFlow(false)
     val canShowAds = allowed.asStateFlow()
+    private val privacyRequired = MutableStateFlow(false)
+    val privacyOptionsAvailable = privacyRequired.asStateFlow()
 
     fun request() {
         if (!BuildConfig.ADS_CONFIGURED) return
@@ -38,6 +40,9 @@ class TripAdConsent(private val activity: Activity) {
     }
 
     private fun updatePermission() {
+        privacyRequired.value = BuildConfig.ADS_CONFIGURED &&
+            consent.privacyOptionsRequirementStatus ==
+            ConsentInformation.PrivacyOptionsRequirementStatus.REQUIRED
         if (consent.canRequestAds()) {
             allowed.value = true
             MobileAds.initialize(activity.applicationContext) {}
@@ -54,10 +59,6 @@ class TripAdConsent(private val activity: Activity) {
         UserMessagingPlatform.showPrivacyOptionsForm(activity) { updatePermission() }
     }
 
-    val privacyOptionsRequired: Boolean
-        get() = BuildConfig.ADS_CONFIGURED &&
-            consent.privacyOptionsRequirementStatus ==
-            ConsentInformation.PrivacyOptionsRequirementStatus.REQUIRED
 }
 
 @Composable
