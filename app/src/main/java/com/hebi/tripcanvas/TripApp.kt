@@ -234,7 +234,8 @@ fun TripApp(onThemeResolved: (Boolean) -> Unit) {
                                 onEditTrip = { id ->
                                     navController.navigate(TripDestinations.editTrip(id))
                                 },
-                                canRequestAds = canRequestAds && billingState.resolved,
+                                canRequestAds = canRequestAds,
+                                billingResolved = billingState.resolved,
                                 adFree = billingState.adFree
                             )
                         }
