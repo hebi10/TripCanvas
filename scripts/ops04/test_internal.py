@@ -48,6 +48,45 @@ class Ops04SafetyTests(unittest.TestCase):
                     internal.guard()
                 api.assert_not_called()
 
+    def test_current_github_run_id_still_requires_exact_build_and_artifact(self):
+        data = self.environment(mode="check")
+        data["BUILD_RUN_ID"] = "43842697600"
+        data["BUILD_WORKFLOW_FILE"] = ".github/workflows/play-internal.yml"
+        source = data["EXPECTED_MAIN_SHA"]
+        repo = data["GITHUB_REPOSITORY"]
+        run_path = f"repos/{repo}/actions/runs/{data['BUILD_RUN_ID']}"
+        run = {
+            "head_sha": source, "head_branch": "main",
+            "event": "workflow_dispatch", "status": "completed", "conclusion": "success",
+            "repository": {"full_name": repo}, "path": data["BUILD_WORKFLOW_FILE"],
+        }
+        records = {
+            "total_count": 1,
+            "artifacts": [{"name": data["ARTIFACT_NAME"], "expired": False, "size_in_bytes": 1024}],
+        }
+        evidence = {
+            f"repos/{repo}/git/ref/heads/main": {"object": {"sha": source}},
+            run_path: run,
+            f"{run_path}/artifacts?per_page=100": records,
+        }
+        with patch.dict(os.environ, data, clear=True):
+            with patch.object(internal, "github", side_effect=evidence.__getitem__):
+                internal.guard()
+                run["head_sha"] = "c" * 40
+                with self.assertRaisesRegex(internal.GateError, "Build run source or status differs"):
+                    internal.guard()
+
+    def test_non_positive_or_non_numeric_run_id_fails_before_network(self):
+        for invalid_id in ("0", "043842697600", "../43842697600", "43842697600?x=1"):
+            with self.subTest(run_id=invalid_id):
+                data = self.environment(mode="check")
+                data["BUILD_RUN_ID"] = invalid_id
+                with patch.dict(os.environ, data, clear=True):
+                    with patch.object(internal, "github") as api:
+                        with self.assertRaisesRegex(internal.GateError, "Invalid source run ID"):
+                            internal.guard()
+                        api.assert_not_called()
+
     def test_invalid_artifact_name_rejected(self):
         data = self.environment(mode="check")
         data["ARTIFACT_NAME"] = "../other-run"
