@@ -16,6 +16,12 @@ val releaseVersionCode = requestedVersionCode.toIntOrNull()
     ?.takeIf { it in 1..2100000000 }
     ?: throw GradleException("versionCode / ANDROID_VERSION_CODE must be an integer between 1 and 2100000000")
 
+val adsAppId = providers.environmentVariable("TRIPCANVAS_ADMOB_APP_ID").orNull.orEmpty()
+val adsBannerId = providers.environmentVariable("TRIPCANVAS_ADMOB_BANNER_ID").orNull.orEmpty()
+val sampleAdsAppId = "ca-app-pub-3940256099942544~3347511713"
+val isAdConfigured = adsAppId.matches(Regex("ca-app-pub-[0-9]{16}~[0-9]{10}")) &&
+    adsBannerId.matches(Regex("ca-app-pub-[0-9]{16}/[0-9]{10}"))
+
 android {
     namespace = "com.hebi.tripcanvas"
     compileSdk {
@@ -31,6 +37,9 @@ android {
         versionCode = releaseVersionCode
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        manifestPlaceholders["admobAppId"] = if (isAdConfigured) adsAppId else sampleAdsAppId
+        buildConfigField("boolean", "ADS_CONFIGURED", isAdConfigured.toString())
+        buildConfigField("String", "ADMOB_BANNER_ID", "\"${if (isAdConfigured) adsBannerId else ""}\"")
     }
 
     signingConfigs {
@@ -57,6 +66,7 @@ android {
     }
 
     buildFeatures {
+        buildConfig = true
         compose = true
     }
 }
@@ -96,6 +106,9 @@ dependencies {
     implementation(libs.androidx.room.runtime)
     implementation("org.maplibre.gl:android-sdk-opengl:13.7.1")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
+    implementation("com.android.billingclient:billing:9.1.0")
+    implementation("com.google.android.gms:play-services-ads:25.5.0")
+    implementation("com.google.android.ump:user-messaging-platform:4.0.0")
     ksp(libs.androidx.room.compiler)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
