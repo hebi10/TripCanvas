@@ -194,6 +194,7 @@ abstract class TripDatabase : RoomDatabase() {
                 )
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_visit_records_tripId ON visit_records(tripId)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_visit_records_itineraryItemId ON visit_records(itineraryItemId)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_visit_records_tripId_itineraryItemId ON visit_records(tripId, itineraryItemId)")
                 db.execSQL(
                     """CREATE TABLE IF NOT EXISTS travel_moments (
                         id TEXT NOT NULL PRIMARY KEY, tripId TEXT NOT NULL,
