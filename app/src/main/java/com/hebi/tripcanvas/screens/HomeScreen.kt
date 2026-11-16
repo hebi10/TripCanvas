@@ -81,6 +81,7 @@ fun HomeScreen(
     onOpenTrip: (String) -> Unit,
     onEditTrip: (String) -> Unit,
     canRequestAds: Boolean = false,
+    billingResolved: Boolean = false,
     adFree: Boolean = true
 ) {
     var selectedFilter by rememberSaveable { mutableStateOf(TripListFilter.All) }
@@ -170,7 +171,7 @@ fun HomeScreen(
             onClick = onCreateTrip,
             modifier = Modifier.fillMaxWidth()
         )
-        TripHomeBanner(canRequestAds = canRequestAds, adFree = adFree)
+        TripHomeBanner(canRequestAds = canRequestAds, billingResolved = billingResolved, adFree = adFree)
     }
     deleteTarget?.let { trip ->
         TripDeleteDialog(
