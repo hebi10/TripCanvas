@@ -142,6 +142,18 @@ fun SettingsScreen(
         }
         billingState.message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         TripSecondaryButton(
+            label = "Google Play에서 구독 관리",
+            onClick = {
+                runCatching {
+                    context.startActivity(Intent(Intent.ACTION_VIEW,
+                        Uri.parse("https://play.google.com/store/account/subscriptions")))
+                }.onFailure {
+                    Toast.makeText(context, "구독 관리 페이지를 열지 못했습니다.", Toast.LENGTH_SHORT).show()
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        )
+        TripSecondaryButton(
             label = "구매 내역 복원·확인",
             onClick = onRestorePurchases,
             modifier = Modifier.fillMaxWidth()
