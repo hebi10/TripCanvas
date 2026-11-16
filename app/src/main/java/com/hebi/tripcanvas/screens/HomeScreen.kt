@@ -36,6 +36,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.hebi.tripcanvas.monetization.TripHomeBanner
 import com.hebi.tripcanvas.data.TripRepository
 import com.hebi.tripcanvas.data.local.TripEntity
 import com.hebi.tripcanvas.designsystem.components.TripChoiceChip
@@ -78,7 +79,9 @@ fun HomeScreen(
     onOpenSettings: () -> Unit,
     onCreateTrip: () -> Unit,
     onOpenTrip: (String) -> Unit,
-    onEditTrip: (String) -> Unit
+    onEditTrip: (String) -> Unit,
+    canRequestAds: Boolean = false,
+    adFree: Boolean = true
 ) {
     var selectedFilter by rememberSaveable { mutableStateOf(TripListFilter.All) }
     var deleteTarget by remember { mutableStateOf<TripEntity?>(null) }
@@ -167,6 +170,7 @@ fun HomeScreen(
             onClick = onCreateTrip,
             modifier = Modifier.fillMaxWidth()
         )
+        TripHomeBanner(canRequestAds = canRequestAds, adFree = adFree)
     }
     deleteTarget?.let { trip ->
         TripDeleteDialog(
