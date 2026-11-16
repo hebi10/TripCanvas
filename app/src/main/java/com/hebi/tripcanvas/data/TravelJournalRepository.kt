@@ -23,12 +23,11 @@ class TravelJournalRepository(
         val item = itineraries.findForTrip(tripId, itemId) ?: return false
         if (dao.findVisit(tripId, itemId) != null) return false
         val now = clock.millis()
-        dao.insertVisit(VisitRecordEntity(
+        return dao.insertVisit(VisitRecordEntity(
             id = UUID.randomUUID().toString(), tripId = tripId,
             itineraryItemId = itemId, titleSnapshot = item.title,
             visitAtUtcMillis = now, note = note, createdAtMillis = now
-        ))
-        return true
+        )) >= 0L
     }
 
     suspend fun addMoment(tripId: String, visitId: String?, photoUri: String?, caption: String) {
