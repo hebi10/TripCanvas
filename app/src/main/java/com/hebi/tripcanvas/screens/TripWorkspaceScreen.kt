@@ -496,6 +496,9 @@ private fun WorkspaceToolGrid(
             "지도", "저장한 장소와 날짜별 일정 핀",
             "지도 열기", if (isPreview) null else onMap
         ),
+        WorkspaceTool("오늘의 여행", "오늘 일정과 방문 체크인", "오늘의 여행 열기", if (isPreview) null else onLive),
+        WorkspaceTool("여행 기록", "사진·방문 메모", "여행 기록 열기", if (isPreview) null else onMemories),
+        WorkspaceTool("여행 리포트", "실제 방문·지출 요약", "리포트 열기", if (isPreview) null else onReport),
         WorkspaceTool(
             "예약 자료", "예약 확인 정보와 문서",
             "예약 열기", if (isPreview) null else onBookings
@@ -512,9 +515,7 @@ private fun WorkspaceToolGrid(
             "저장 장소", "저장한 장소 목록 관리",
             "저장 장소 관리", if (isPreview) null else onPlaces
         ),
-        WorkspaceTool("오늘의 여행", "오늘 일정과 방문 체크인", "오늘의 여행 열기", if (isPreview) null else onLive),
-        WorkspaceTool("여행 기록", "사진·방문 메모", "여행 기록 열기", if (isPreview) null else onMemories),
-        WorkspaceTool("여행 리포트", "실제 방문·지출 요약", "리포트 열기", if (isPreview) null else onReport)
+
     )
 
     Column(
