@@ -14,6 +14,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import com.hebi.tripcanvas.monetization.AdFreeBillingState
+import com.hebi.tripcanvas.monetization.MONTHLY_PLAN_ID
+import com.hebi.tripcanvas.monetization.YEARLY_PLAN_ID
 import com.hebi.tripcanvas.designsystem.components.TripChoiceChip
 import com.hebi.tripcanvas.designsystem.components.TripDivider
 import com.hebi.tripcanvas.designsystem.components.TripErrorState
@@ -34,7 +37,12 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onOpenWorkspacePreview: () -> Unit,
     onOpenDesignSystemPreview: () -> Unit,
-    onOpenBackup: () -> Unit
+    onOpenBackup: () -> Unit,
+    billingState: AdFreeBillingState = AdFreeBillingState(),
+    onPurchase: (String) -> Unit = {},
+    onRestorePurchases: () -> Unit = {},
+    onPrivacyOptions: () -> Unit = {},
+    privacyOptionsAvailable: Boolean = false
 ) {
     val p = TripDesign.palette
     val context = LocalContext.current
@@ -103,6 +111,58 @@ fun SettingsScreen(
                 modifier = Modifier.padding(TripSpacing.md),
                 style = MaterialTheme.typography.bodyMedium,
                 color = p.textSecondary
+            )
+        }
+        TripDivider()
+        TripSectionHeading(
+            title = "광고 제거",
+            supportingText = "Google Play 구독을 통해 광고 없이 이용할 수 있습니다. 자동 갱신 구독이며 언제든 Play에서 취소할 수 있습니다."
+        )
+        val adFreeLabel = when {
+            billingState.adFree -> "광고 제거 구독 활성"
+            !billingState.resolved -> "구독 확인 중 · 연결이 완료되면 요금제가 표시됩니다."
+            else -> "광고 포함 무료 이용"
+        }
+        Text(adFreeLabel, style = MaterialTheme.typography.bodyMedium, color = p.textPrimary)
+        if (!billingState.adFree) {
+            billingState.plans.forEach { plan ->
+                val label = if (plan.basePlanId == MONTHLY_PLAN_ID) "월간" else "연간"
+                TripSecondaryButton(
+                    label = "$label 광고 제거 · ${plan.price}",
+                    onClick = { onPurchase(plan.basePlanId) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            if (billingState.plans.isEmpty()) {
+                Text(
+                    "현재 Google Play에 구매 가능한 요금제가 없습니다. 등록 완료 후 제공됩니다.",
+                    color = p.textSecondary
+                )
+            }
+        }
+        billingState.message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        TripSecondaryButton(
+            label = "Google Play에서 구독 관리",
+            onClick = {
+                runCatching {
+                    context.startActivity(Intent(Intent.ACTION_VIEW,
+                        Uri.parse("https://play.google.com/store/account/subscriptions")))
+                }.onFailure {
+                    Toast.makeText(context, "구독 관리 페이지를 열지 못했습니다.", Toast.LENGTH_SHORT).show()
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        )
+        TripSecondaryButton(
+            label = "구매 내역 복원·확인",
+            onClick = onRestorePurchases,
+            modifier = Modifier.fillMaxWidth()
+        )
+        if (privacyOptionsAvailable) {
+            TripSecondaryButton(
+                label = "광고 개인정보 선택 변경",
+                onClick = onPrivacyOptions,
+                modifier = Modifier.fillMaxWidth()
             )
         }
         TripDivider()
