@@ -32,6 +32,9 @@ class TravelJournalRepository(
 
     suspend fun addMoment(tripId: String, visitId: String?, photoUri: String?, caption: String) {
         require(caption.length <= 2000)
+        require(photoUri == null || (photoUri.startsWith("content://") && photoUri.length <= 2048)) {
+            "Only a persisted content URI can be stored"
+        }
         require(photoUri != null || caption.isNotBlank()) { "Empty moment" }
         check(trips.findById(tripId) != null) { "Trip not found" }
         if (visitId != null) require(dao.findVisitById(tripId, visitId) != null) {
