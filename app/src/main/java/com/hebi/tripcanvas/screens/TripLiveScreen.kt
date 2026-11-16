@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -42,6 +43,7 @@ fun TripLiveScreen(
     val reservations by remember(tripId) { bookings.observe(tripId) }.collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
     var error by remember { mutableStateOf<String?>(null) }
+    var visitNote by remember { mutableStateOf("") }
     val today = trip?.let { localToday(it) }
     val todays = items.filter { it.date == today }.sortedWith(
         compareBy({ it.startTime ?: "99:99" }, { it.sortOrder })
@@ -60,6 +62,12 @@ fun TripLiveScreen(
         if (todays.isEmpty()) {
             Text("오늘 등록된 일정이 없습니다.")
         }
+        if (todays.any { it.id !in visitedIds }) {
+            OutlinedTextField(
+                value = visitNote, onValueChange = { if (it.length <= 2000) visitNote = it },
+                label = { Text("방문 메모 (선택)") }, modifier = androidx.compose.ui.Modifier.fillMaxWidth()
+            )
+        }
         todays.forEach { item ->
             Column(verticalArrangement = Arrangement.spacedBy(com.hebi.tripcanvas.designsystem.tokens.TripSpacing.xs)) {
                 Text(item.title, style = MaterialTheme.typography.titleMedium)
@@ -70,7 +78,10 @@ fun TripLiveScreen(
                     TextButton(onClick = {
                         scope.launch {
                             try {
-                                error = if (journal.checkIn(tripId, item.id)) null else "이미 방문한 일정입니다."
+                                error = if (journal.checkIn(tripId, item.id, visitNote)) {
+                                    visitNote = ""
+                                    null
+                                } else "이미 방문한 일정입니다."
                             } catch (_: Exception) {
                                 error = "방문 기록을 저장하지 못했습니다."
                             }
