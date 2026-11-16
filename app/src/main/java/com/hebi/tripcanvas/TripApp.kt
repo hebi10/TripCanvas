@@ -1,6 +1,11 @@
 package com.hebi.tripcanvas
 
 import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -81,13 +86,23 @@ private sealed interface SettingsLoadState {
 @Composable
 fun TripApp(onThemeResolved: (Boolean) -> Unit) {
     val host = LocalContext.current
-    val activity = host as? Activity
+    val activity = generateSequence(host as Context?) { current ->
+        (current as? ContextWrapper)?.baseContext
+    }.filterIsInstance<Activity>().firstOrNull()
     val context = host.applicationContext
     val billingManager = remember(context) { TripBillingManager(context) }
     val adConsent = remember(activity) { activity?.let(::TripAdConsent) }
-    DisposableEffect(billingManager) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(billingManager, lifecycleOwner) {
         billingManager.connect()
-        onDispose { billingManager.close() }
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) billingManager.refresh()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            billingManager.close()
+        }
     }
     DisposableEffect(adConsent) {
         adConsent?.request()
