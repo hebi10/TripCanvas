@@ -30,7 +30,7 @@ class TripP3BackupTest {
                 "Asia/Seoul", "KRW", "", "", 1, 1
             ))
             db.itineraryDao().insert(ItineraryItemEntity(
-                "schedule", "trip", "2026-11-11", "박물관", "10:00", null,
+                "schedule", "trip", "2026-11-11", "박물관", "10:00", "11:00",
                 null, "", false, false, 0, 1, 1
             ))
             db.travelJournalDao().insertVisit(VisitRecordEntity(
@@ -61,7 +61,7 @@ class TripP3BackupTest {
                 "Asia/Seoul", "KRW", "", "", 1, 1
             ))
             db.itineraryDao().insert(ItineraryItemEntity(
-                "schedule", "trip", "2026-11-11", "기차", "09:00", null,
+                "schedule", "trip", "2026-11-11", "기차", "09:00", "10:00",
                 null, "", false, false, 0, 1, 1
             ))
             val repository = TravelJournalRepository(
