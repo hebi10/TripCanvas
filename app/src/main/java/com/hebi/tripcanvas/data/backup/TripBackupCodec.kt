@@ -1,6 +1,8 @@
 package com.hebi.tripcanvas.data.backup
 
 import com.hebi.tripcanvas.data.local.BookingEntity
+import com.hebi.tripcanvas.data.local.VisitRecordEntity
+import com.hebi.tripcanvas.data.local.TravelMomentEntity
 import com.hebi.tripcanvas.data.local.TripParticipantEntity
 import com.hebi.tripcanvas.data.local.ExpenseShareEntity
 import com.hebi.tripcanvas.data.local.TripSettlementEntity
@@ -27,7 +29,7 @@ import org.json.JSONObject
 
 object TripBackupCodec {
     const val FORMAT = "tripcanvas-structured-backup"
-    const val VERSION = 3
+    const val VERSION = 4
     const val MAX_BYTES = 10 * 1024 * 1024
     private const val MAX_ROWS = 100_000
 
@@ -123,6 +125,20 @@ object TripBackupCodec {
                     .put("referenceNumber", it.referenceNumber).put("note", it.note)
                     .put("createdAtMillis", it.createdAtMillis)
                     .put("updatedAtMillis", it.updatedAtMillis)
+            })
+            .put("visits", array(snapshot.visits) {
+                JSONObject().put("id", it.id).put("tripId", it.tripId)
+                    .put("itineraryItemId", it.itineraryItemId ?: JSONObject.NULL)
+                    .put("titleSnapshot", it.titleSnapshot)
+                    .put("visitAtUtcMillis", it.visitAtUtcMillis).put("note", it.note)
+                    .put("createdAtMillis", it.createdAtMillis)
+            })
+            .put("moments", array(snapshot.moments) {
+                JSONObject().put("id", it.id).put("tripId", it.tripId)
+                    .put("visitId", it.visitId ?: JSONObject.NULL)
+                    .put("photoUri", it.photoUri ?: JSONObject.NULL)
+                    .put("caption", it.caption)
+                    .put("createdAtUtcMillis", it.createdAtUtcMillis)
             })
         return root.toString(2)
     }
@@ -240,6 +256,25 @@ object TripBackupCodec {
                     createdAtMillis = it.getLong("createdAtMillis"),
                     updatedAtMillis = it.getLong("updatedAtMillis")
                 )
+            },
+            visits = parseVersion4(json, "visits") {
+                VisitRecordEntity(
+                    id = it.getString("id"), tripId = it.getString("tripId"),
+                    itineraryItemId = it.nullableString("itineraryItemId"),
+                    titleSnapshot = it.getString("titleSnapshot"),
+                    visitAtUtcMillis = it.getLong("visitAtUtcMillis"),
+                    note = it.getString("note"),
+                    createdAtMillis = it.getLong("createdAtMillis")
+                )
+            },
+            moments = parseVersion4(json, "moments") {
+                TravelMomentEntity(
+                    id = it.getString("id"), tripId = it.getString("tripId"),
+                    visitId = it.nullableString("visitId"),
+                    photoUri = it.nullableString("photoUri"),
+                    caption = it.getString("caption"),
+                    createdAtUtcMillis = it.getLong("createdAtUtcMillis")
+                )
             }
         )
         validate(snapshot)
@@ -256,6 +291,8 @@ object TripBackupCodec {
         requireUnique(snapshot.budgets.map { it.tripId })
         requireUnique(snapshot.participants.map { it.id })
         requireUnique(snapshot.bookings.map { it.id })
+        requireUnique(snapshot.visits.map { it.id })
+        requireUnique(snapshot.moments.map { it.id })
         requireUnique(snapshot.settlements.map { it.tripId })
         requireUnique(snapshot.shares.map { it.expenseId + "/" + it.participantId })
 
@@ -362,6 +399,24 @@ object TripBackupCodec {
             require(booking.startAtLocal == null ||
                 runCatching { LocalDateTime.parse(booking.startAtLocal) }.isSuccess)
         }
+        val visits = snapshot.visits.associateBy { it.id }
+        for (visit in snapshot.visits) {
+            require(validId(visit.id) && trips.containsKey(visit.tripId))
+            require(visit.titleSnapshot.isNotBlank() && visit.titleSnapshot.length <= 100)
+            require(visit.note.length <= 2000 && visit.visitAtUtcMillis > 0L && visit.createdAtMillis > 0L)
+            // Historical visit records may outlive the original schedule.
+            require(visit.itineraryItemId == null || validId(visit.itineraryItemId))
+        }
+        for (moment in snapshot.moments) {
+            require(validId(moment.id) && trips.containsKey(moment.tripId))
+            require(moment.caption.length <= 2000 && moment.createdAtUtcMillis > 0L)
+            val visit = moment.visitId?.let { visits[it] }
+            require(moment.visitId == null || visit?.tripId == moment.tripId)
+            require(moment.photoUri == null || (
+                moment.photoUri.startsWith("content://") && moment.photoUri.length <= 2048
+            ))
+            require(moment.photoUri != null || moment.caption.isNotBlank())
+        }
         for (budget in snapshot.budgets) {
             require(trips.containsKey(budget.tripId)) { "Invalid budget owner" }
             require(validateMoney(budget.amountDecimal, budget.currencyCode) != null) {
@@ -388,6 +443,10 @@ object TripBackupCodec {
 
     private fun <T> array(values: List<T>, convert: (T) -> JSONObject): JSONArray =
         JSONArray().apply { values.forEach { put(convert(it)) } }
+
+    private fun <T> parseVersion4(
+        json: JSONObject, key: String, convert: (JSONObject) -> T
+    ): List<T> = if (json.getInt("version") < 4) emptyList() else parse(json, key, convert)
 
     private fun <T> parseExtension(
         json: JSONObject, key: String, convert: (JSONObject) -> T
