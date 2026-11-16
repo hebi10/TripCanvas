@@ -10,9 +10,11 @@ data class TripBackupSnapshot(
     val participants: List<TripParticipantEntity> = emptyList(),
     val shares: List<ExpenseShareEntity> = emptyList(),
     val settlements: List<TripSettlementEntity> = emptyList(),
-    val bookings: List<BookingEntity> = emptyList()
+    val bookings: List<BookingEntity> = emptyList(),
+    val visits: List<VisitRecordEntity> = emptyList(),
+    val moments: List<TravelMomentEntity> = emptyList()
 ) {
     val totalRows: Int get() =
         trips.size + places.size + itineraries.size + expenses.size + budgets.size + checklist.size +
-            participants.size + shares.size + settlements.size + bookings.size
+            participants.size + shares.size + settlements.size + bookings.size + visits.size + moments.size
 }
