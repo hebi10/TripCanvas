@@ -62,7 +62,7 @@ class TripAdConsent(private val activity: Activity) {
 
 @Composable
 fun TripHomeBanner(canRequestAds: Boolean, adFree: Boolean) {
-    if (!BuildConfig.ADS_CONFIGURED || !canRequestAds || adFree) return
+    if (!shouldShowTripBanner(BuildConfig.ADS_CONFIGURED, canRequestAds, true, adFree)) return
     val context = LocalContext.current
     val adView = remember(context) {
         AdView(context).apply {
