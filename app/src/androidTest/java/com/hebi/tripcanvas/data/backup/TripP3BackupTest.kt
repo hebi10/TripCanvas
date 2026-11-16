@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.hebi.tripcanvas.data.TravelJournalRepository
 import com.hebi.tripcanvas.data.local.ItineraryItemEntity
 import com.hebi.tripcanvas.data.local.TravelMomentEntity
 import com.hebi.tripcanvas.data.local.TripDatabase
@@ -48,6 +49,27 @@ class TripP3BackupTest {
             assertEquals(1, db.travelJournalDao().observeMoments("trip").first().size)
             assertTrue(db.travelJournalDao().deleteVisitKeepingMemories("trip", "visit"))
             assertEquals(null, db.travelJournalDao().observeMoments("trip").first().single().visitId)
+        } finally { db.close() }
+    }
+
+
+    @Test fun repeatedManualCheckinDoesNotDuplicateVisit() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(context, TripDatabase::class.java).build()
+        try {
+            db.tripDao().insert(TripEntity(
+                "trip", "여행", "2026-11-10", "2026-11-12", "", "",
+                "Asia/Seoul", "KRW", "", "", 1, 1
+            ))
+            db.itineraryDao().insert(ItineraryItemEntity(
+                "schedule", "trip", "2026-11-11", "기차", "09:00", null,
+                null, "", false, false, 0, 1, 1
+            ))
+            val repository = TravelJournalRepository(
+                db.travelJournalDao(), db.tripDao(), db.itineraryDao()
+            )
+            assertTrue(repository.checkIn("trip", "schedule", "도착"))
+            assertTrue(!repository.checkIn("trip", "schedule", "또 도착"))
+            assertEquals(1, db.travelJournalDao().observeVisits("trip").first().size)
         } finally { db.close() }
     }
 
