@@ -1,0 +1,84 @@
+name: TC-BILLING Google Play draft subscription catalog
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'check is read-only; create-draft requires explicit approval and does not activate sales'
+        required: true
+        type: choice
+        options: [check, create-draft]
+        default: check
+      expected_main_sha:
+        description: 'Exact verified current main commit SHA (40 lowercase hexadecimal characters)'
+        required: true
+        type: string
+      catalog_draft_approved:
+        description: 'Allow creating the unactivated Korea subscription drafts only'
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: tripcanvas-play-subscription-catalog
+  cancel-in-progress: false
+
+jobs:
+  catalog:
+    if: github.repository == 'hebi10/TripCanvas' && github.ref == 'refs/heads/main'
+    environment: google-play
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify immutable requested main and explicit catalog approval
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ inputs.expected_main_sha }}
+          REQUEST_MODE: ${{ inputs.mode }}
+          DRAFT_APPROVED: ${{ inputs.catalog_draft_approved }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_EVENT_NAME" == workflow_dispatch && "$GITHUB_REF" == refs/heads/main ]]
+          [[ "$EXPECTED_SHA" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$EXPECTED_SHA" == "$GITHUB_SHA" ]]
+          [[ "$EXPECTED_SHA" == "$(gh api repos/hebi10/TripCanvas/git/ref/heads/main --jq .object.sha)" ]]
+          if [[ "$REQUEST_MODE" == create-draft ]]; then
+            [[ "$DRAFT_APPROVED" == true ]]
+          else
+            [[ "$REQUEST_MODE" == check ]]
+          fi
+      - name: Authenticate with existing Play Workload Identity
+        uses: google-github-actions/auth@v3
+        id: auth
+        with:
+          workload_identity_provider: ${{ vars.PLAY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PLAY_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/androidpublisher
+          create_credentials_file: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify catalog script's offline safety tests
+        run: python3 -m unittest discover -s scripts/play/tests -p 'test_subscription_catalog.py'
+      - name: Check or create inactive subscription drafts
+        env:
+          PLAY_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          REQUEST_MODE: ${{ inputs.mode }}
+          CATALOG_DRAFT_APPROVED: ${{ inputs.catalog_draft_approved }}
+        run: |
+          python3 scripts/play/subscription_catalog.py --mode "$REQUEST_MODE" | tee "$RUNNER_TEMP/subscription-draft-result.json"
+          echo 'Product configuration checked. No base plan activation, real purchase, AAB upload, or test-track changes were executed.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Ensure main has not changed during catalog request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ inputs.expected_main_sha }}
+        run: test "$EXPECTED_SHA" = "$(gh api repos/hebi10/TripCanvas/git/ref/heads/main --jq .object.sha)"
