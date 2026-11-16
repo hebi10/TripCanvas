@@ -13,7 +13,7 @@ import androidx.room.PrimaryKey
         childColumns = ["tripId"],
         onDelete = ForeignKey.CASCADE
     )],
-    indices = [Index("tripId"), Index("itineraryItemId")]
+    indices = [Index("tripId"), Index("itineraryItemId"), Index(value = ["tripId", "itineraryItemId"], unique = true)]
 )
 data class VisitRecordEntity(
     @PrimaryKey val id: String,
