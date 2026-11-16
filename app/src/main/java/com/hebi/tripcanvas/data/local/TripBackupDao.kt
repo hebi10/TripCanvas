@@ -37,6 +37,12 @@ interface TripBackupDao {
     @Query("SELECT * FROM bookings ORDER BY id")
     suspend fun allBookings(): List<BookingEntity>
 
+    @Query("SELECT * FROM visit_records ORDER BY id")
+    suspend fun allVisits(): List<VisitRecordEntity>
+
+    @Query("SELECT * FROM travel_moments ORDER BY id")
+    suspend fun allMoments(): List<TravelMomentEntity>
+
     @Query("DELETE FROM expense_shares")
     suspend fun deleteAllShares()
 
@@ -53,6 +59,8 @@ interface TripBackupDao {
     @Insert suspend fun insertShares(items: List<ExpenseShareEntity>)
     @Insert suspend fun insertSettlements(items: List<TripSettlementEntity>)
     @Insert suspend fun insertBookings(items: List<BookingEntity>)
+    @Insert suspend fun insertVisits(items: List<VisitRecordEntity>)
+    @Insert suspend fun insertMoments(items: List<TravelMomentEntity>)
 
     @Transaction
     suspend fun snapshot(): TripBackupSnapshot = TripBackupSnapshot(
@@ -65,7 +73,9 @@ interface TripBackupDao {
         participants = allParticipants(),
         shares = allShares(),
         settlements = allSettlements(),
-        bookings = allBookings()
+        bookings = allBookings(),
+        visits = allVisits(),
+        moments = allMoments()
     )
 
     @Transaction
@@ -82,5 +92,7 @@ interface TripBackupDao {
         insertShares(snapshot.shares)
         insertSettlements(snapshot.settlements)
         insertBookings(snapshot.bookings)
+        insertVisits(snapshot.visits)
+        insertMoments(snapshot.moments)
     }
 }

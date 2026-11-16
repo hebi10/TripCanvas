@@ -31,6 +31,9 @@ object TripDestinations {
     const val NewBookingRoute = "trip/{tripId}/bookings/new"
     const val EditBookingRoute = "trip/{tripId}/bookings/{bookingId}/edit"
     const val BackupRoute = "settings/backup"
+    const val LiveRoute = "trip/{tripId}/live"
+    const val MemoriesRoute = "trip/{tripId}/memories"
+    const val ReportRoute = "trip/{tripId}/report"
 
     fun workspace(tripId: String): String = "trip/" + tripId
     fun editTrip(tripId: String): String = "trip/" + tripId + "/edit"
@@ -60,6 +63,10 @@ object TripDestinations {
     fun editBooking(tripId: String, bookingId: String) =
         "trip/" + tripId + "/bookings/" + bookingId + "/edit"
 
+    fun live(tripId: String) = "trip/" + tripId + "/live"
+    fun memories(tripId: String) = "trip/" + tripId + "/memories"
+    fun report(tripId: String) = "trip/" + tripId + "/report"
+
     fun checklist(tripId: String): String = "trip/" + tripId + "/checklist"
     fun expenses(tripId: String): String = "trip/" + tripId + "/expenses"
     fun newExpense(tripId: String): String = "trip/" + tripId + "/expenses/new"
@@ -77,6 +84,7 @@ object TripDestinations {
         ExpensesRoute, NewExpenseRoute, EditExpenseRoute, BackupRoute,
         MapRoute, ExternalPlaceSearchRoute, PlaceDetailRoute,
         ParticipantsRoute, SettlementRoute, ExpenseSplitRoute,
-        BookingsRoute, NewBookingRoute, EditBookingRoute
+        BookingsRoute, NewBookingRoute, EditBookingRoute,
+        LiveRoute, MemoriesRoute, ReportRoute
     )
 }

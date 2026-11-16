@@ -7,6 +7,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
+import androidx.test.uiautomator.BySelector
 import androidx.test.uiautomator.Direction
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.StaleObjectException
@@ -24,6 +25,8 @@ import com.hebi.tripcanvas.data.local.TripDatabase
 import com.hebi.tripcanvas.data.local.TripEntity
 import com.hebi.tripcanvas.designsystem.theme.TripThemeMode
 import java.io.File
+import java.time.LocalDate
+import java.time.ZoneId
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -464,6 +467,41 @@ class TripCanvas2CScreenshotTest {
         }
     }
 
+
+    @Test
+    fun captureLiveMemoriesAndReportFromRealAndroidUi() {
+        val today = LocalDate.now(ZoneId.of("Asia/Seoul")).toString()
+        runBlocking {
+            val snapshot = database.backupDao().snapshot()
+            val trip = snapshot.trips.single().copy(startDate = today, endDate = today)
+            val schedule = snapshot.itineraries.single().copy(date = today)
+            database.backupDao().replaceAll(snapshot.copy(
+                trips = listOf(trip), itineraries = listOf(schedule)
+            ))
+        }
+        ActivityScenario.launch(MainActivity::class.java).use {
+            awaitText("제주 주말 여행")
+            click("제주 주말 여행")
+            awaitText("작업 도구")
+            openScreen("오늘의 여행 열기", today)
+            awaitText("공항 도착")
+            capture("24-p3-live-before-checkin")
+            click("방문 완료")
+            awaitText("방문 완료")
+            capture("25-p3-live-after-checkin")
+            device.pressBack()
+            awaitText("작업 도구")
+            openScreen("여행 기록 열기", "방문 기록")
+            awaitText("공항 도착 방문 기록", By.textStartsWith("공항 도착 · "))
+            capture("26-p3-memories-visit")
+            device.pressBack()
+            awaitText("작업 도구")
+            openScreen("리포트 열기", "여행 기간: 1일")
+            awaitText("실제 방문: 1건")
+            capture("27-p3-report-visited")
+        }
+    }
+
     private fun assertStatusBarBackground(dark: Boolean) {
         val screenshot = File(context.cacheDir, "qa-status-bar.png")
         assertTrue("Status bar screenshot failed", device.takeScreenshot(screenshot))
@@ -566,18 +604,18 @@ class TripCanvas2CScreenshotTest {
         Thread.sleep(400)
     }
 
-    private fun awaitText(text: String) {
+    private fun awaitText(text: String, selector: BySelector = uiSelector(text)) {
         dismissSystemAnr()
-        if (device.wait(Until.hasObject(uiSelector(text)), 5000)) return
+        if (device.wait(Until.hasObject(selector), 5000)) return
         repeat(6) {
             dismissSystemAnr()
             swipeUp()
-            if (device.wait(Until.hasObject(uiSelector(text)), 1200)) return
+            if (device.wait(Until.hasObject(selector), 1200)) return
         }
         repeat(6) {
             dismissSystemAnr()
             swipeDown()
-            if (device.wait(Until.hasObject(uiSelector(text)), 1200)) return
+            if (device.wait(Until.hasObject(selector), 1200)) return
         }
         val diagnosticDir = File(context.getExternalFilesDir(null), "qa")
         diagnosticDir.mkdirs()
