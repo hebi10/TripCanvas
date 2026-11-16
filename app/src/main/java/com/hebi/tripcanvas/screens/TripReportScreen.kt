@@ -43,6 +43,10 @@ fun TripReportScreen(
             Text("계획 일정: ${schedules.size}개")
             Text("실제 방문: ${visits.size}건")
             Text("사진·메모 기록: ${moments.size}건")
+            moments.firstOrNull { it.photoUri != null }?.photoUri?.let { uri ->
+                Text("대표 기록 사진", style = MaterialTheme.typography.titleMedium)
+                TravelPhotoThumbnail(uri)
+            }
             val totals = calculateExpenseTotals(costs, data.currencyCode)
             Text("기록된 경비: " + displayMoney(totals.baseSpent.toPlainString(), data.currencyCode))
             if (totals.unconvertedByCurrency.isNotEmpty()) {
