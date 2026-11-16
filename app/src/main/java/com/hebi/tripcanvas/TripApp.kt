@@ -30,6 +30,7 @@ import com.hebi.tripcanvas.data.BookingRepository
 import com.hebi.tripcanvas.data.ItineraryRepository
 import com.hebi.tripcanvas.data.PlaceRepository
 import com.hebi.tripcanvas.data.TripRepository
+import com.hebi.tripcanvas.data.TravelJournalRepository
 import com.hebi.tripcanvas.data.search.PhotonPlaceSearch
 import com.hebi.tripcanvas.data.local.TripDatabase
 import com.hebi.tripcanvas.data.TripUserPreferences
@@ -62,6 +63,9 @@ import com.hebi.tripcanvas.screens.TripMapScreen
 import com.hebi.tripcanvas.screens.TripPlaceSearchScreen
 import com.hebi.tripcanvas.screens.TripPlaceDetailScreen
 import com.hebi.tripcanvas.screens.WelcomeScreen
+import com.hebi.tripcanvas.screens.TripLiveScreen
+import com.hebi.tripcanvas.screens.TripMemoriesScreen
+import com.hebi.tripcanvas.screens.TripReportScreen
 import com.hebi.tripcanvas.showcase.DesignSystemScreen
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.catch
@@ -98,6 +102,9 @@ fun TripApp(onThemeResolved: (Boolean) -> Unit) {
     }
     val bookingRepository = remember(tripDatabase) {
         BookingRepository(tripDatabase.bookingDao(), tripDatabase.tripDao())
+    }
+    val travelJournalRepository = remember(tripDatabase) {
+        TravelJournalRepository(tripDatabase.travelJournalDao(), tripDatabase.tripDao(), tripDatabase.itineraryDao())
     }
     val photonPlaceSearch = remember { PhotonPlaceSearch() }
     val checklistRepository = remember(tripDatabase) {
@@ -322,7 +329,44 @@ fun TripApp(onThemeResolved: (Boolean) -> Unit) {
                                 },
                                 onBookings = {
                                     if (tripId != null) navController.navigate(TripDestinations.bookings(tripId))
-                                }
+                                },
+                                onLive = { if (tripId != null) navController.navigate(TripDestinations.live(tripId)) },
+                                onMemories = { if (tripId != null) navController.navigate(TripDestinations.memories(tripId)) },
+                                onReport = { if (tripId != null) navController.navigate(TripDestinations.report(tripId)) }
+                            )
+                        }
+                        composable(
+                            route = TripDestinations.LiveRoute,
+                            arguments = listOf(navArgument("tripId") { type = NavType.StringType })
+                        ) { entry ->
+                            val id = requireNotNull(entry.arguments?.getString("tripId"))
+                            TripLiveScreen(
+                                tripId = id, trips = tripRepository,
+                                schedules = itineraryRepository, journal = travelJournalRepository,
+                                onBack = { navController.popBackStack() },
+                                onExpenses = { navController.navigate(TripDestinations.newExpense(id)) },
+                                onMemories = { navController.navigate(TripDestinations.memories(id)) }
+                            )
+                        }
+                        composable(
+                            route = TripDestinations.MemoriesRoute,
+                            arguments = listOf(navArgument("tripId") { type = NavType.StringType })
+                        ) { entry ->
+                            val id = requireNotNull(entry.arguments?.getString("tripId"))
+                            TripMemoriesScreen(
+                                tripId = id, journal = travelJournalRepository,
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+                        composable(
+                            route = TripDestinations.ReportRoute,
+                            arguments = listOf(navArgument("tripId") { type = NavType.StringType })
+                        ) { entry ->
+                            val id = requireNotNull(entry.arguments?.getString("tripId"))
+                            TripReportScreen(
+                                tripId = id, trips = tripRepository, itineraries = itineraryRepository,
+                                expenses = expenseRepository, journal = travelJournalRepository,
+                                onBack = { navController.popBackStack() }
                             )
                         }
                         composable(TripDestinations.BackupRoute) {
