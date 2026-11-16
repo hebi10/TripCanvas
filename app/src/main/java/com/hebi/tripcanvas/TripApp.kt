@@ -111,6 +111,9 @@ fun TripApp(onThemeResolved: (Boolean) -> Unit) {
     val billingState by billingManager.state.collectAsState()
     val canRequestAds by (adConsent?.canShowAds ?: remember { kotlinx.coroutines.flow.MutableStateFlow(false) })
         .collectAsState()
+    val privacyOptionsAvailable by (adConsent?.privacyOptionsAvailable ?: remember {
+        kotlinx.coroutines.flow.MutableStateFlow(false)
+    }).collectAsState()
     val repository = remember(context) { tripPreferencesRepository(context) }
     val tripDatabase = remember(context) { TripDatabase.get(context) }
     val tripRepository = remember(tripDatabase) { TripRepository(tripDatabase.tripDao()) }
@@ -274,7 +277,7 @@ fun TripApp(onThemeResolved: (Boolean) -> Unit) {
                                 onPurchase = { plan -> activity?.let { billingManager.purchase(it, plan) } },
                                 onRestorePurchases = { billingManager.refresh() },
                                 onPrivacyOptions = { adConsent?.showPrivacyOptions() },
-                                privacyOptionsAvailable = adConsent?.privacyOptionsRequired == true
+                                privacyOptionsAvailable = privacyOptionsAvailable
                             )
                         }
                         composable(TripDestinations.CreateTrip) {
