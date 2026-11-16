@@ -1,5 +1,7 @@
 package com.hebi.tripcanvas
 
+import android.app.Activity
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.layout.Box
@@ -23,6 +25,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.hebi.tripcanvas.monetization.TripBillingManager
+import com.hebi.tripcanvas.monetization.TripAdConsent
 import com.hebi.tripcanvas.data.ChecklistRepository
 import com.hebi.tripcanvas.data.ExpenseRepository
 import com.hebi.tripcanvas.data.TripFinanceRepository
@@ -76,7 +80,22 @@ private sealed interface SettingsLoadState {
 
 @Composable
 fun TripApp(onThemeResolved: (Boolean) -> Unit) {
-    val context = LocalContext.current.applicationContext
+    val host = LocalContext.current
+    val activity = host as? Activity
+    val context = host.applicationContext
+    val billingManager = remember(context) { TripBillingManager(context) }
+    val adConsent = remember(activity) { activity?.let(::TripAdConsent) }
+    DisposableEffect(billingManager) {
+        billingManager.connect()
+        onDispose { billingManager.close() }
+    }
+    DisposableEffect(adConsent) {
+        adConsent?.request()
+        onDispose { }
+    }
+    val billingState by billingManager.state.collectAsState()
+    val canRequestAds by (adConsent?.canShowAds ?: remember { kotlinx.coroutines.flow.MutableStateFlow(false) })
+        .collectAsState()
     val repository = remember(context) { tripPreferencesRepository(context) }
     val tripDatabase = remember(context) { TripDatabase.get(context) }
     val tripRepository = remember(tripDatabase) { TripRepository(tripDatabase.tripDao()) }
@@ -214,7 +233,9 @@ fun TripApp(onThemeResolved: (Boolean) -> Unit) {
                                 },
                                 onEditTrip = { id ->
                                     navController.navigate(TripDestinations.editTrip(id))
-                                }
+                                },
+                                canRequestAds = canRequestAds && billingState.resolved,
+                                adFree = billingState.adFree
                             )
                         }
                         composable(TripDestinations.Settings) {
@@ -232,7 +253,12 @@ fun TripApp(onThemeResolved: (Boolean) -> Unit) {
                                 },
                                 onOpenBackup = {
                                     navController.navigate(TripDestinations.BackupRoute)
-                                }
+                                },
+                                billingState = billingState,
+                                onPurchase = { plan -> activity?.let { billingManager.purchase(it, plan) } },
+                                onRestorePurchases = { billingManager.refresh() },
+                                onPrivacyOptions = { adConsent?.showPrivacyOptions() },
+                                privacyOptionsAvailable = adConsent?.privacyOptionsRequired == true
                             )
                         }
                         composable(TripDestinations.CreateTrip) {
