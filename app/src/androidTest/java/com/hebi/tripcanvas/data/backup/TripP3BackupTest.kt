@@ -59,7 +59,9 @@ class TripP3BackupTest {
                 "Asia/Seoul", "KRW", "", "", 1, 1
             ))
             val json = JSONObject(TripBackupCodec.encode(db.backupDao().snapshot()))
-            json.put("version", 3).remove("visits").remove("moments")
+            json.put("version", 3)
+            json.remove("visits")
+            json.remove("moments")
             val restored = TripBackupCodec.decode(json.toString())
             assertTrue(restored.visits.isEmpty())
             assertTrue(restored.moments.isEmpty())
