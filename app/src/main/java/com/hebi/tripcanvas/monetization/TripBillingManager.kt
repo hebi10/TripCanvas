@@ -34,6 +34,7 @@ class TripBillingManager(context: Context) : PurchasesUpdatedListener {
     private val mutableState = MutableStateFlow(AdFreeBillingState())
     val state = mutableState.asStateFlow()
     private var productDetails: ProductDetails? = null
+    private var connecting = false
 
     private val client = BillingClient.newBuilder(context.applicationContext)
         .setListener(this)
@@ -48,8 +49,11 @@ class TripBillingManager(context: Context) : PurchasesUpdatedListener {
             refresh()
             return
         }
+        if (connecting) return
+        connecting = true
         client.startConnection(object : BillingClientStateListener {
             override fun onBillingSetupFinished(result: BillingResult) {
+                connecting = false
                 if (result.responseCode == BillingClient.BillingResponseCode.OK) {
                     mutableState.value = mutableState.value.copy(connected = true, message = null)
                     refresh()
@@ -61,6 +65,7 @@ class TripBillingManager(context: Context) : PurchasesUpdatedListener {
             }
 
             override fun onBillingServiceDisconnected() {
+                connecting = false
                 mutableState.value = mutableState.value.copy(connected = false, resolved = false)
             }
         })
