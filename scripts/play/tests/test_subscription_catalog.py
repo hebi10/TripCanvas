@@ -44,8 +44,7 @@ class SubscriptionCatalogTests(unittest.TestCase):
         self.assertTrue(result["exists"])
         self.assertFalse(result["saleActivated"])
         self.assertEqual(4, api.call_count)
-        self.assertIn("regionsVersion.version=", api.call_args_list[2].args[3][:30] if False else
-                      api.call_args_list[2].args[2])
+        self.assertIn("regionsVersion.version=", api.call_args_list[2].args[2])
 
     def test_price_mismatch_refuses_catalog(self):
         item = draft()
