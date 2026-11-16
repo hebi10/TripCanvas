@@ -50,6 +50,11 @@ fun validatedRouteEstimate(estimate: TripRouteEstimate?): TripRouteEstimate? =
             it.queriedAtMillis > 0L
     }
 
+private fun PlaceEntity.hasValidCoordinates(): Boolean =
+    latitude != null && longitude != null &&
+        latitude.isFinite() && longitude.isFinite() &&
+        latitude in -90.0..90.0 && longitude in -180.0..180.0
+
 fun tripRouteLegsForDate(
     schedules: List<ItineraryItemEntity>,
     savedPlaces: List<PlaceEntity>,
@@ -73,9 +78,7 @@ fun tripRouteLegsForDate(
             fromName = from.name,
             toPlaceId = to.id,
             toName = to.name,
-            availability = if (from.latitude == null || from.longitude == null ||
-                to.latitude == null || to.longitude == null
-            ) {
+            availability = if (!from.hasValidCoordinates() || !to.hasValidCoordinates()) {
                 TripRouteAvailability.COORDINATES_MISSING
             } else {
                 TripRouteAvailability.PROVIDER_NOT_CONFIGURED
