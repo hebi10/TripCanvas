@@ -12,9 +12,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         TripEntity::class, PlaceEntity::class, ItineraryItemEntity::class,
         ExpenseEntity::class, TripBudgetEntity::class, ChecklistItemEntity::class,
         TripParticipantEntity::class, ExpenseShareEntity::class, TripSettlementEntity::class,
-        BookingEntity::class, BookingAttachmentEntity::class
+        BookingEntity::class, BookingAttachmentEntity::class,
+        VisitRecordEntity::class, TravelMomentEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = true
 )
 abstract class TripDatabase : RoomDatabase() {
@@ -26,6 +27,7 @@ abstract class TripDatabase : RoomDatabase() {
     abstract fun backupDao(): TripBackupDao
     abstract fun financeDao(): TripFinanceDao
     abstract fun bookingDao(): BookingDao
+    abstract fun travelJournalDao(): TravelJournalDao
 
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -178,6 +180,33 @@ abstract class TripDatabase : RoomDatabase() {
             }
         }
 
+
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS visit_records (
+                        id TEXT NOT NULL PRIMARY KEY, tripId TEXT NOT NULL,
+                        itineraryItemId TEXT, titleSnapshot TEXT NOT NULL,
+                        visitAtUtcMillis INTEGER NOT NULL, note TEXT NOT NULL,
+                        createdAtMillis INTEGER NOT NULL,
+                        FOREIGN KEY(tripId) REFERENCES trips(id) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )""".trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_visit_records_tripId ON visit_records(tripId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_visit_records_itineraryItemId ON visit_records(itineraryItemId)")
+                db.execSQL(
+                    """CREATE TABLE IF NOT EXISTS travel_moments (
+                        id TEXT NOT NULL PRIMARY KEY, tripId TEXT NOT NULL,
+                        visitId TEXT, photoUri TEXT, caption TEXT NOT NULL,
+                        createdAtUtcMillis INTEGER NOT NULL,
+                        FOREIGN KEY(tripId) REFERENCES trips(id) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )""".trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_travel_moments_tripId ON travel_moments(tripId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_travel_moments_visitId ON travel_moments(visitId)")
+            }
+        }
+
         @Volatile private var instance: TripDatabase? = null
 
         fun get(context: Context): TripDatabase =
@@ -186,7 +215,7 @@ abstract class TripDatabase : RoomDatabase() {
                     context.applicationContext,
                     TripDatabase::class.java,
                     "tripcanvas.db"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build().also { instance = it }
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6).build().also { instance = it }
             }
     }
 }
