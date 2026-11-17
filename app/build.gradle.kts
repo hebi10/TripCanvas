@@ -109,6 +109,7 @@ dependencies {
     implementation("com.android.billingclient:billing:9.1.0")
     implementation("com.google.android.gms:play-services-ads:25.5.0")
     implementation("com.google.android.ump:user-messaging-platform:4.0.0")
+    implementation("com.google.mlkit:text-recognition-korean:16.0.1")
     ksp(libs.androidx.room.compiler)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
