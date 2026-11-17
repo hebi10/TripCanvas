@@ -35,6 +35,7 @@ object RouteEndpointPolicy {
             uri.fragment == null &&
             uri.path == "/v1/routes" &&
             host.matches(Regex("""[a-z0-9-]+(\.[a-z0-9-]+)+""")) &&
+            !host.matches(Regex("""[0-9]+(\.[0-9]+){3}""")) &&
             !host.endsWith(".local") &&
             !host.endsWith(".internal") &&
             !host.endsWith(".test") &&
