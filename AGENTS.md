@@ -28,3 +28,9 @@
 
 ### 앱별 보존 지침
 - 여행 일정·경비·장소·백업/복원의 기존 저장 데이터와 마이그레이션을 우선 보호한다. `.github/workflows/android-ci.yml`, `play-internal.yml`, `play-promote.yml`의 최종 승인·동결 조건을 유지한다.
+
+## CI-DEDUP-20261119 — 최종 main 통합 Android QA
+- PR/main은 `android-ci.yml`의 앱 빌드·JVM 단위·릴리스 정책 테스트를 유지하며, `room-migration-instrumentation`은 최종 수동 계측에서만 실행한다.
+- `2c-screen-qa.yml`, `3a-map-qa.yml`, `3b-screen-qa.yml`, `release-compat-qa.yml`의 장시간 기기 테스트는 일반 PR에서 건너뛰고, 정확한 최종 main SHA에서 `final-device-qa.yml` 한 번의 수동 실행으로 모두 호출한다.
+- `qa-a06-backup-integrity.yml`의 고위험 백업 변경 PR 계측은 보존하며, 최종 QA에도 포함한다. 실제 Android API 29·35·36, 폰/태블릿, 마이그레이션·백업·복원 증빙을 유지한다.
+- `release-build.yml`은 같은 main SHA의 Android CI 성공과 수동 TripCanvas final Android QA 성공 없이는 서명 빌드를 차단한다. 새 커밋이 생기면 새로운 최종 SHA 재검증을 요구한다.
