@@ -465,6 +465,10 @@ def findings():
             if (len(required_ci_env) != 1
                     or required_ci_env[0].strip() != "'[\"TripCanvas Android CI\"]'"):
                 problems.append("OPS03_REQUIRED_CI: TripCanvas Android CI must be mandatory")
+            manual_qa_env = re.findall(r"(?m)^[ \\t]+REQUIRED_MANUAL_QA_JSON:[ \\t]*([^\\n#]+)", request)
+            if (len(manual_qa_env) != 1
+                    or manual_qa_env[0].strip() != "'[\"TripCanvas final Android QA\"]'"):
+                problems.append("OPS03_REQUIRED_CI: exact-main manually executed full Android QA is mandatory")
             request_steps = _workflow_steps(request)
             gates = [(i, step) for i, step in enumerate(request_steps)
                      if re.search(r"(?m)^[ \t]*-[ \t]+name:[ \t]*"
@@ -487,7 +491,11 @@ def findings():
                     'api("repos/"+repo+"/git/ref/heads/main")',
                     'required=json.loads(os.environ["REQUIRED_CI_JSON"])',
                     'if not matching: refuse("Missing exact-main CI: "+name)',
-                    'if latest.get("status")!="completed" or latest.get("conclusion")!="success"',
+                    'if latest.get("status")!="completed" or latest.get("conclusion")!="success": refuse("Required CI not successful: "+name)',
+                    'for name in json.loads(os.environ["REQUIRED_MANUAL_QA_JSON"])',
+                    'r.get("event")=="workflow_dispatch"',
+                    'if not matching: refuse("Missing manually executed final Android QA for exact main: "+name)',
+                    'if latest.get("status")!="completed" or latest.get("conclusion")!="success": refuse("Manual final Android QA did not succeed: "+name)',
                 )
                 if (_step_condition(gate)
                         or re.search(r"(?m)^[ \t]*(?:-[ \t]+)?continue-on-error[ \t]*:", gate)
