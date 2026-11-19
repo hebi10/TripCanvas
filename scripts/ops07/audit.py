@@ -465,7 +465,7 @@ def findings():
             if (len(required_ci_env) != 1
                     or required_ci_env[0].strip() != "'[\"TripCanvas Android CI\"]'"):
                 problems.append("OPS03_REQUIRED_CI: TripCanvas Android CI must be mandatory")
-            manual_qa_env = re.findall(r"(?m)^[ \\t]+REQUIRED_MANUAL_QA_JSON:[ \\t]*([^\\n#]+)", request)
+            manual_qa_env = re.findall(r"(?m)^[ \t]+REQUIRED_MANUAL_QA_JSON:[ \t]*([^\n#]+)", request)
             if (len(manual_qa_env) != 1
                     or manual_qa_env[0].strip() != "'[\"TripCanvas final Android QA\"]'"):
                 problems.append("OPS03_REQUIRED_CI: exact-main manually executed full Android QA is mandatory")
