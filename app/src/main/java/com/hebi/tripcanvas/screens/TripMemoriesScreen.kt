@@ -3,6 +3,7 @@ package com.hebi.tripcanvas.screens
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
+import com.hebi.tripcanvas.data.backup.TravelMediaExportService
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -51,6 +52,30 @@ fun TripMemoriesScreen(
     var selectedVisit by remember { mutableStateOf<String?>(null) }
     var photoUri by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    val mediaExport = remember(context) { TravelMediaExportService(context.applicationContext) }
+    var exporting by remember { mutableStateOf(false) }
+    var exportStatus by remember { mutableStateOf<String?>(null) }
+    val exportPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip")
+    ) { uri ->
+        if (uri != null && !exporting) {
+            exporting = true
+            exportStatus = null
+            scope.launch {
+                try {
+                    val copied = mediaExport.export(tripId, uri, moments)
+                    exportStatus = "사진 원본 " + copied + "개 ZIP 내보내기 완료"
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    error = "사진 내보내기에 실패했습니다. 원본 접근 권한·파일 형식·저장 공간을 확인해 주세요."
+                } finally {
+                    exporting = false
+                }
+            }
+        }
+    }
+
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             try {
@@ -127,6 +152,13 @@ fun TripMemoriesScreen(
                 }
             }
         }
+        Text("사진 원본 ZIP 내보내기", style = MaterialTheme.typography.titleMedium)
+        Text("현재 여행에서 선택해 저장한 사진만 ZIP으로 복사합니다. 메모가 포함되고 암호화되지 않으므로 안전하게 보관해 주세요. 다른 기기에서 ZIP을 앱으로 복원하는 기능은 아직 지원하지 않습니다.")
+        TextButton(
+            enabled = moments.any { it.photoUri != null } && !exporting,
+            onClick = { exportPicker.launch("TripCanvas_photos_" + tripId.take(8) + ".zip") }
+        ) { Text(if (exporting) "사진 내보내는 중" else "사진 원본 ZIP 저장") }
+        exportStatus?.let { Text(it) }
         Text("사진 원본은 복사하지 않습니다. 원본을 이동·삭제하거나 접근 권한이 만료되면 열리지 않을 수 있습니다.")
     }
 }

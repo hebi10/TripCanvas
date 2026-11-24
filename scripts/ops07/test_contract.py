@@ -193,6 +193,30 @@ class AppContracts(unittest.TestCase):
                 self.assertTrue(any("OPS03_REQUIRED_CI:" in item or
                                     "OPS03_PREFLIGHT:" in item for item in issues), issues)
 
+    def test_ops03_manual_final_device_qa_cannot_be_omitted_or_forged(self):
+        path = ".github/workflows/release-build.yml"
+        original_read = audit.read
+        original = original_read(path)
+        required = "REQUIRED_MANUAL_QA_JSON: '[\"TripCanvas final Android QA\"]'"
+        self.assertIn(required, original)
+        variants = (
+            ("removed", original.replace(required, "REQUIRED_MANUAL_QA_JSON: '[]'", 1)),
+            ("allow_push", original.replace(
+                'r.get("event")=="workflow_dispatch"',
+                'r.get("event") in ("push","workflow_dispatch")', 1)),
+            ("ignore_failed", original.replace(
+                'if latest.get("status")!="completed" or latest.get("conclusion")!="success": refuse("Manual final Android QA did not succeed: "+name)',
+                "if False: pass", 1)),
+        )
+        for label, changed in variants:
+            with self.subTest(label=label):
+                self.assertNotEqual(original, changed)
+                with patch.object(audit, "read", side_effect=lambda filename:
+                                  changed if filename == path else original_read(filename)):
+                    findings = audit.findings()
+                self.assertTrue(any("OPS03_REQUIRED_CI:" in item or
+                                    "OPS03_PREFLIGHT:" in item for item in findings), findings)
+
     def test_ops03_step_ci_override_and_secondary_dispatch_are_blocked(self):
         path = ".github/workflows/release-build.yml"
         original_read = audit.read

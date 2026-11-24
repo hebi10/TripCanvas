@@ -12,12 +12,14 @@ on:
       - 'app/build.gradle.kts'
       - 'app/src/main/**'
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
 
 jobs:
   screen-qa:
+    if: ${{ github.event_name != 'pull_request' }}
     name: screen-qa-${{ matrix.device }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
