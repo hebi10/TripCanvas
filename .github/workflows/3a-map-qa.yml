@@ -10,12 +10,14 @@ on:
       - 'app/src/androidTest/**'
       - 'app/build.gradle.kts'
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
 
 jobs:
   map-screen-qa:
+    if: ${{ github.event_name != 'pull_request' }}
     name: map-qa-${{ matrix.device }}
     runs-on: ubuntu-latest
     timeout-minutes: 50

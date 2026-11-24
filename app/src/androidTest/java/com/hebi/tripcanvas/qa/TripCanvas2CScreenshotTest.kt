@@ -7,6 +7,8 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
+import androidx.test.uiautomator.BySelector
+import androidx.test.uiautomator.Direction
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.StaleObjectException
 import androidx.test.uiautomator.UiObject2
@@ -23,6 +25,8 @@ import com.hebi.tripcanvas.data.local.TripDatabase
 import com.hebi.tripcanvas.data.local.TripEntity
 import com.hebi.tripcanvas.designsystem.theme.TripThemeMode
 import java.io.File
+import java.time.LocalDate
+import java.time.ZoneId
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -55,9 +59,9 @@ class TripCanvas2CScreenshotTest {
                 TripBackupSnapshot(
                     trips = listOf(
                         TripEntity(
-                            "qa-trip", "QA 제주 여행", "2026-11-20", "2026-11-22",
+                            "qa-trip", "제주 주말 여행", "2026-11-20", "2026-11-22",
                             "대한민국", "제주", "Asia/Seoul", "KRW",
-                            "2박 3일 여행", "실제 Android 화면 검수용 샘플",
+                            "2박 3일 여행", "여행 일정과 지출을 한눈에",
                             1L, 1L
                         )
                     ),
@@ -105,19 +109,26 @@ class TripCanvas2CScreenshotTest {
     @Test
     fun captureRealMainActivityAndExerciseMvp() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            awaitText("QA 제주 여행")
+            awaitText("제주 주말 여행")
             capture("01-home-light")
             assertStatusBarBackground(dark = false)
             click("완료")
             awaitText("완료된 여행이 없습니다")
             capture("01a-home-filter-empty")
             click("전체")
-            awaitText("QA 제주 여행")
+            awaitText("제주 주말 여행")
             openTripActions()
             capture("01b-home-actions-menu")
             click("여행 편집")
             awaitText("여행 기본 정보")
+            awaitText("여행 기간·목적지")
             capture("01c-home-edit-from-menu")
+            click("시작일 *  2026-11-20")
+            awaitText("취소")
+            capture("01c1-home-edit-date-picker")
+            click("취소")
+            awaitText("현지 설정")
+            capture("01c2-home-edit-local-settings")
             device.pressBack()
             awaitText("내 여행")
             openTripActions()
@@ -126,9 +137,22 @@ class TripCanvas2CScreenshotTest {
             capture("01d-home-delete-confirm")
             click("취소")
             awaitText("내 여행")
-            click("QA 제주 여행")
+            click("제주 주말 여행")
             awaitText("여행 한눈에")
+            assertTrue(
+                "첫 화면에서 일정 빠른 실행이 보여야 합니다.",
+                device.wait(Until.hasObject(By.desc("일정 열기")), 3000)
+            )
+            assertTrue(
+                "첫 화면에서 경비 빠른 실행이 보여야 합니다.",
+                device.wait(Until.hasObject(By.desc("경비 열기")), 3000)
+            )
+            capture("02a0-workspace-quick-actions-light")
             capture("02a-workspace-overview-light")
+            click("여행 설명 보기")
+            awaitText("여행 일정과 지출을 한눈에")
+            capture("02a1-workspace-details-light")
+            click("여행 설명 접기")
             awaitText("작업 도구")
             swipeUp()
             awaitText("일정 열기")
@@ -137,7 +161,46 @@ class TripCanvas2CScreenshotTest {
             click("일정 열기")
             capture("02d-schedule-after-click")
             awaitText("여행 일정")
+            awaitText("11월 20일 · 금요일")
+            awaitText("11월 20일 · 금요일")
+            awaitText("공항 도착")
+            awaitText("10:00")
+            awaitText("10:30")
+            assertTrue(
+                "짧은 여행에서 중복 날짜 선택기를 노출하면 안 됩니다.",
+                !device.hasObject(By.text("다른 날짜 선택"))
+            )
             capture("02d-workspace-schedule-route")
+            capture("02d1-schedule-timeline-light")
+            click("11/21 토")
+            awaitText("11월 21일 · 토요일")
+            awaitText("이 날짜에는 일정이 없습니다")
+            capture("02f-schedule-empty-date")
+            click("11/20 금")
+            awaitText("11월 20일 · 금요일")
+            awaitText("공항 도착")
+            val scheduleMenu = device.wait(
+                Until.findObject(By.desc("공항 도착 일정 메뉴")), 5000
+            ) ?: throw AssertionError("일정 카드 더보기 메뉴를 찾지 못했습니다.")
+            scheduleMenu.click()
+            awaitText("복제")
+            capture("02g-schedule-actions-menu")
+            click("복제")
+            assertTrue(waitForScheduleCount(2))
+            awaitText("시간 겹침")
+            capture("02h-schedule-after-duplicate")
+            device.wait(Until.findObject(By.desc("공항 도착 일정 메뉴")), 5000)
+                ?.click() ?: throw AssertionError("복제 후 일정 메뉴를 찾지 못했습니다.")
+            awaitText("아래로")
+            click("아래로")
+            assertTrue(waitForScheduleFirstId("qa-schedule", first = false))
+            device.wait(Until.findObject(By.desc("공항 도착 일정 메뉴")), 5000)
+                ?.click() ?: throw AssertionError("재정렬 후 일정 메뉴를 찾지 못했습니다.")
+            click("삭제")
+            awaitText("일정 삭제")
+            capture("02i-schedule-delete-confirm")
+            click("취소")
+            assertTrue(waitForScheduleCount(2))
             device.pressBack()
             awaitText("작업 도구")
             awaitText("저장 장소 관리")
@@ -158,9 +221,28 @@ class TripCanvas2CScreenshotTest {
             openScreen("준비물 열기", "체크 상태와 항목 순서는 기기에 저장됩니다.")
             awaitText("준비 완료 1 / 3")
             awaitText("여권")
+            assertTrue(
+                "준비물 진행률 접근성 설명이 있어야 합니다.",
+                device.wait(Until.hasObject(By.desc("준비 완료 1개 / 전체 3개")), 5000)
+            )
             capture("03-checklist-light")
             click("미완료")
             capture("04-checklist-incomplete-filter")
+            openChecklistActions("충전기")
+            val moveWhileFiltered = device.wait(Until.findObject(By.text("위로")), 3000)
+                ?: throw AssertionError("필터에서 재정렬 메뉴를 찾지 못했습니다.")
+            capture("04a-checklist-filter-menu")
+            val orderBeforeDisabledMove = runBlocking {
+                database.checklistDao().ordered("qa-trip").map { it.id }
+            }
+            moveWhileFiltered.click()
+            Thread.sleep(350)
+            assertEquals(
+                "미완료 필터에서 이동을 눌러도 저장 순서는 바뀌지 않아야 합니다.",
+                orderBeforeDisabledMove,
+                runBlocking { database.checklistDao().ordered("qa-trip").map { it.id } }
+            )
+            if (device.hasObject(By.text("수정"))) device.pressBack()
             click("전체")
             click("준비물 추가")
             awaitText("준비물 이름 *")
@@ -172,19 +254,64 @@ class TripCanvas2CScreenshotTest {
             click("저장")
             assertTrue(waitForChecklistCount(4))
             capture("06-checklist-added")
+            openChecklistActions("충전기")
+            awaitText("수정")
+            capture("06a-checklist-actions-menu")
+            click("수정")
+            awaitText("준비물 수정")
+            capture("06b-checklist-edit-dialog")
+            click("취소")
+            openChecklistActions("충전기")
+            click("아래로")
+            assertTrue("아래로 이동 후 정렬 순서가 저장되어야 합니다.", waitForChecklistPosition("qa-check-2", 2))
+            openChecklistActions("충전기")
+            click("위로")
+            assertTrue("위로 이동 후 정렬 순서가 복원되어야 합니다.", waitForChecklistPosition("qa-check-2", 1))
+            val checkSelector = By.desc("충전기 준비 여부")
+            device.wait(Until.findObject(checkSelector), 5000)
+                ?.click() ?: throw AssertionError("준비물 체크박스의 접근성 이름이 없습니다.")
+            assertTrue(waitForChecklistChecked("qa-check-2", true))
+            device.wait(Until.findObject(checkSelector), 5000)
+                ?.click() ?: throw AssertionError("변경 후 준비물 체크박스를 찾지 못했습니다.")
+            assertTrue(waitForChecklistChecked("qa-check-2", false))
+            openChecklistActions("멀티탭")
+            click("삭제")
+            awaitText("준비물 삭제")
+            capture("06c-checklist-delete-confirm")
+            click("삭제")
+            assertTrue(waitForChecklistCount(3))
+            click("방금 삭제한 준비물 복구")
+            assertTrue(waitForChecklistCount(4))
+            capture("06d-checklist-restored")
             device.pressBack()
             awaitText("준비물 열기")
 
             openScreen("경비 열기", "예산 설정·변경")
+            awaitText("예산 현황")
+            awaitText("총예산")
+            awaitText("지출 합계")
+            awaitText("잔액")
+            awaitText("KRW 287,500 남음")
+            awaitText("예산 사용률")
+            awaitText("4%")
             capture("07-expenses-light")
+            awaitText("환산 필요")
+            capture("07a-expenses-unconverted-warning")
             click("예산 설정·변경")
             awaitText("총예산 · KRW")
             capture("08-budget-edit-dialog")
             click("취소")
             device.wait(Until.gone(By.text("총예산 · KRW")), 3000)
             openScreen("지출 추가", "지출 정보")
+            awaitText("지출 일시")
             capture("09-expense-create-form")
-            swipeUp()
+            repeat(12) {
+                if (!device.hasObject(By.text("지출 저장"))) {
+                    val scrollView = device.findObject(By.scrollable(true))
+                        ?: throw AssertionError("지출 입력 화면의 스크롤 영역을 찾지 못했습니다.")
+                    scrollView.scroll(Direction.DOWN, 0.75f)
+                }
+            }
             awaitText("지출 저장")
             capture("09a-expense-form-bottom")
             click("지출 저장")
@@ -215,8 +342,25 @@ class TripCanvas2CScreenshotTest {
             capture("13-android-file-save-picker")
             device.pressBack()
             awaitText("백업·복원")
-            awaitText("파일 저장을 취소했습니다.")
+            awaitText("파일 저장을 취소했습니다. 기존 여행 데이터는 변경되지 않았습니다.")
+            assertTrue("백업 저장 취소 후 기존 여행이 유지되어야 합니다.", runBlocking {
+                database.tripDao().findById("qa-trip") != null
+            })
             capture("14-backup-cancelled")
+            click("백업 파일 선택 및 검증")
+            val importPickerOpened = (0 until 25).any {
+                if (device.currentPackageName != "com.hebi.tripcanvas") true
+                else { Thread.sleep(300); false }
+            }
+            assertTrue("Android import document picker did not become foreground", importPickerOpened)
+            capture("14a-backup-import-picker")
+            device.pressBack()
+            awaitText("백업·복원")
+            awaitText("파일 선택을 취소했습니다. 기존 여행 데이터는 변경되지 않았습니다.")
+            assertTrue("백업 선택 취소 후 기존 여행이 유지되어야 합니다.", runBlocking {
+                database.tripDao().findById("qa-trip") != null
+            })
+            capture("14b-backup-import-cancelled")
             device.pressBack()
             awaitText("설정")
             device.pressBack()
@@ -230,7 +374,7 @@ class TripCanvas2CScreenshotTest {
             capture("15-home-dark")
             assertStatusBarBackground(dark = true)
 
-            click("QA 제주 여행")
+            click("제주 주말 여행")
             awaitText("여행 한눈에")
             capture("16a-workspace-overview-dark")
             awaitText("작업 도구")
@@ -239,6 +383,18 @@ class TripCanvas2CScreenshotTest {
             awaitText("1 / 4")
             awaitText("경비 열기")
             capture("16-workspace-dark")
+            click("일정 열기")
+            awaitText("여행 일정")
+            awaitText("11월 20일 · 금요일")
+            awaitText("공항 도착")
+            capture("16c-schedule-dark")
+            device.wait(Until.findObject(By.desc("공항 도착 일정 메뉴")), 5000)
+                ?.click() ?: throw AssertionError("다크 모드에서 일정 더보기 메뉴를 찾지 못했습니다.")
+            awaitText("복제")
+            capture("16d-schedule-actions-menu-dark")
+            device.pressBack()
+            device.pressBack()
+            awaitText("작업 도구")
             openScreen("준비물 열기", "체크 상태와 항목 순서는 기기에 저장됩니다.")
             awaitText("준비 완료 1 / 4")
             awaitText("멀티탭")
@@ -246,6 +402,7 @@ class TripCanvas2CScreenshotTest {
             device.pressBack()
             awaitText("경비 열기")
             openScreen("경비 열기", "예산 설정·변경")
+            awaitText("예산 현황")
             capture("18-expenses-dark")
             device.pressBack()
             awaitText("경비 열기")
@@ -253,6 +410,7 @@ class TripCanvas2CScreenshotTest {
             awaitText("TripCanvas")
             click("설정")
             awaitText("로컬 백업·복원")
+            capture("18a-settings-dark")
             click("로컬 백업·복원")
             awaitText("백업 파일 내보내기")
             capture("19-backup-dark")
@@ -268,21 +426,79 @@ class TripCanvas2CScreenshotTest {
             Thread.sleep(1200)
             capture("20-home-dark-font160")
             assertStatusBarBackground(dark = true)
-            click("QA 제주 여행")
+            click("설정")
+            awaitText("화면 모드")
+            awaitText("개인정보·앱 정보")
+            capture("20a-settings-dark-font160")
+            device.pressBack()
+            awaitText("TripCanvas")
+            click("제주 주말 여행")
             awaitText("여행 한눈에")
             capture("21a-workspace-overview-dark-font160")
             awaitText("작업 도구")
             capture("21b-workspace-tools-dark-font160")
             awaitText("경비 열기")
             capture("21-workspace-dark-font160")
+            click("일정 열기")
+            awaitText("여행 일정")
+            awaitText("11월 20일 · 금요일")
+            capture("21c-schedule-dark-font160-top")
+            awaitText("공항 도착")
+            capture("21d-schedule-dark-font160-card")
+            device.wait(Until.findObject(By.desc("공항 도착 일정 메뉴")), 5000)
+                ?.click() ?: throw AssertionError("160% 글꼴에서 일정 더보기 메뉴를 찾지 못했습니다.")
+            awaitText("복제")
+            capture("21e-schedule-menu-dark-font160")
+            device.pressBack()
+            device.pressBack()
+            awaitText("작업 도구")
             openScreen("준비물 열기", "체크 상태와 항목 순서는 기기에 저장됩니다.")
             awaitText("준비 완료 1 / 4")
             awaitText("여권")
             capture("22-checklist-dark-font160")
+            openChecklistActions("충전기")
+            capture("22a-checklist-menu-dark-font160")
+            device.pressBack()
             device.pressBack()
             awaitText("경비 열기")
             openScreen("경비 열기", "예산 설정·변경")
+            awaitText("예산 현황")
             capture("23-expenses-dark-font160")
+        }
+    }
+
+
+    @Test
+    fun captureLiveMemoriesAndReportFromRealAndroidUi() {
+        val today = LocalDate.now(ZoneId.of("Asia/Seoul")).toString()
+        runBlocking {
+            val snapshot = database.backupDao().snapshot()
+            val trip = snapshot.trips.single().copy(startDate = today, endDate = today)
+            val schedule = snapshot.itineraries.single().copy(date = today)
+            database.backupDao().replaceAll(snapshot.copy(
+                trips = listOf(trip), itineraries = listOf(schedule)
+            ))
+        }
+        ActivityScenario.launch(MainActivity::class.java).use {
+            awaitText("제주 주말 여행")
+            click("제주 주말 여행")
+            awaitText("작업 도구")
+            openScreen("오늘의 여행 열기", today)
+            awaitText("공항 도착")
+            capture("24-p3-live-before-checkin")
+            click("방문 완료")
+            awaitText("방문 완료")
+            capture("25-p3-live-after-checkin")
+            device.pressBack()
+            awaitText("작업 도구")
+            openScreen("여행 기록 열기", "방문 기록")
+            awaitText("공항 도착 방문 기록", By.textStartsWith("공항 도착 · "))
+            capture("26-p3-memories-visit")
+            device.pressBack()
+            awaitText("작업 도구")
+            openScreen("리포트 열기", "여행 기간: 1일")
+            awaitText("실제 방문: 1건")
+            capture("27-p3-report-visited")
         }
     }
 
@@ -308,11 +524,62 @@ class TripCanvas2CScreenshotTest {
 
     private fun openTripActions() {
         val button = device.wait(
-            Until.findObject(By.desc("QA 제주 여행 메뉴")), 5000
+            Until.findObject(By.desc("제주 주말 여행 메뉴")), 5000
         ) ?: throw AssertionError("여행 카드 더보기 버튼을 찾지 못했습니다.")
         button.click()
         awaitText("여행 편집")
         awaitText("여행 삭제")
+    }
+
+    private fun waitForScheduleCount(expected: Int): Boolean {
+        repeat(20) {
+            val size = runBlocking {
+                database.itineraryDao().getDay("qa-trip", "2026-11-20").size
+            }
+            if (size == expected) return true
+            Thread.sleep(250)
+        }
+        return false
+    }
+
+    private fun waitForScheduleFirstId(id: String, first: Boolean): Boolean {
+        repeat(20) {
+            val actual = runBlocking {
+                database.itineraryDao().getDay("qa-trip", "2026-11-20").firstOrNull()?.id
+            }
+            if ((actual == id) == first && actual != null) return true
+            Thread.sleep(250)
+        }
+        return false
+    }
+
+    private fun openChecklistActions(itemTitle: String) {
+        awaitText(itemTitle)
+        val action = device.wait(
+            Until.findObject(By.desc("$itemTitle 준비물 메뉴")), 5000
+        ) ?: throw AssertionError("준비물 더보기 버튼을 찾지 못했습니다: $itemTitle")
+        action.click()
+        awaitText("수정")
+    }
+
+    private fun waitForChecklistPosition(id: String, position: Int): Boolean {
+        repeat(20) {
+            val actual = runBlocking {
+                database.checklistDao().ordered("qa-trip").indexOfFirst { it.id == id }
+            }
+            if (actual == position) return true
+            Thread.sleep(250)
+        }
+        return false
+    }
+
+    private fun waitForChecklistChecked(id: String, checked: Boolean): Boolean {
+        repeat(20) {
+            val actual = runBlocking { database.checklistDao().find("qa-trip", id)?.checked }
+            if (actual == checked) return true
+            Thread.sleep(250)
+        }
+        return false
     }
 
     private fun waitForChecklistCount(expected: Int): Boolean {
@@ -337,18 +604,18 @@ class TripCanvas2CScreenshotTest {
         Thread.sleep(400)
     }
 
-    private fun awaitText(text: String) {
+    private fun awaitText(text: String, selector: BySelector = uiSelector(text)) {
         dismissSystemAnr()
-        if (device.wait(Until.hasObject(uiSelector(text)), 5000)) return
+        if (device.wait(Until.hasObject(selector), 5000)) return
         repeat(6) {
             dismissSystemAnr()
             swipeUp()
-            if (device.wait(Until.hasObject(uiSelector(text)), 1200)) return
+            if (device.wait(Until.hasObject(selector), 1200)) return
         }
         repeat(6) {
             dismissSystemAnr()
             swipeDown()
-            if (device.wait(Until.hasObject(uiSelector(text)), 1200)) return
+            if (device.wait(Until.hasObject(selector), 1200)) return
         }
         val diagnosticDir = File(context.getExternalFilesDir(null), "qa")
         diagnosticDir.mkdirs()

@@ -6,6 +6,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -33,6 +36,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.hebi.tripcanvas.monetization.TripHomeBanner
 import com.hebi.tripcanvas.data.TripRepository
 import com.hebi.tripcanvas.data.local.TripEntity
 import com.hebi.tripcanvas.designsystem.components.TripChoiceChip
@@ -75,7 +79,10 @@ fun HomeScreen(
     onOpenSettings: () -> Unit,
     onCreateTrip: () -> Unit,
     onOpenTrip: (String) -> Unit,
-    onEditTrip: (String) -> Unit
+    onEditTrip: (String) -> Unit,
+    canRequestAds: Boolean = false,
+    billingResolved: Boolean = false,
+    adFree: Boolean = true
 ) {
     var selectedFilter by rememberSaveable { mutableStateOf(TripListFilter.All) }
     var deleteTarget by remember { mutableStateOf<TripEntity?>(null) }
@@ -90,14 +97,24 @@ fun HomeScreen(
     TripPageFrame(
         title = "TripCanvas",
         trailingActions = {
-            TextButton(onClick = onOpenSettings) {
+            TextButton(
+                onClick = onOpenSettings,
+                modifier = Modifier.heightIn(min = TripSizes.minimumTouchTarget)
+            ) {
+                Icon(
+                    imageVector = TripIcons.Settings,
+                    contentDescription = null,
+                    tint = p.textPrimary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(TripSpacing.xxs))
                 Text("설정", color = p.textPrimary)
             }
         }
     ) {
         TripSectionHeading(
             title = "내 여행",
-            supportingText = "여행을 만들고 일정과 경비를 한곳에서 관리하세요."
+            supportingText = "여행별 일정·준비물·경비를 관리하세요."
         )
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs),
@@ -154,6 +171,7 @@ fun HomeScreen(
             onClick = onCreateTrip,
             modifier = Modifier.fillMaxWidth()
         )
+        TripHomeBanner(canRequestAds = canRequestAds, billingResolved = billingResolved, adFree = adFree)
     }
     deleteTarget?.let { trip ->
         TripDeleteDialog(
@@ -192,8 +210,8 @@ private fun TripListCard(
         border = BorderStroke(1.dp, p.outline)
     ) {
         Column(
-            modifier = Modifier.padding(TripSpacing.md),
-            verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
+            modifier = Modifier.padding(TripSpacing.sm),
+            verticalArrangement = Arrangement.spacedBy(TripSpacing.xxs)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -220,6 +238,11 @@ private fun TripListCard(
                             overflow = TextOverflow.Ellipsis
                         )
                     }
+                    Text(
+                        text = trip.startDate.replace('-', '.') + " ~ " + trip.endDate.replace('-', '.'),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = p.textPrimary
+                    )
                 }
                 Box {
                     IconButton(
@@ -259,11 +282,6 @@ private fun TripListCard(
                     }
                 }
             }
-            Text(
-                text = trip.startDate.replace('-', '.') + " ~ " + trip.endDate.replace('-', '.'),
-                style = MaterialTheme.typography.bodyMedium,
-                color = p.textSecondary
-            )
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,

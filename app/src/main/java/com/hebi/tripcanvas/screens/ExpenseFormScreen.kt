@@ -1,9 +1,19 @@
 package com.hebi.tripcanvas.screens
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.platform.LocalContext
+import com.hebi.tripcanvas.data.ocr.ReceiptOcrService
+import com.hebi.tripcanvas.domain.ocr.ReceiptSuggestion
+import com.hebi.tripcanvas.domain.ocr.ReceiptSuggestionParser
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -18,6 +28,7 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
 import com.hebi.tripcanvas.data.ExpenseRepository
 import com.hebi.tripcanvas.data.PlaceRepository
 import com.hebi.tripcanvas.data.TripRepository
@@ -80,6 +91,35 @@ fun ExpenseFormScreen(
 ) {
     val p = TripDesign.palette
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val ocrService = remember(context) { ReceiptOcrService(context.applicationContext) }
+    var ocrBusy by remember { mutableStateOf(false) }
+    var ocrError by remember { mutableStateOf<String?>(null) }
+    var receiptSuggestion by remember { mutableStateOf<ReceiptSuggestion?>(null) }
+    val receiptPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null && !ocrBusy) {
+            ocrBusy = true
+            ocrError = null
+            receiptSuggestion = null
+            scope.launch {
+                try {
+                    val rawText = ocrService.recognizeSelectedImage(uri)
+                    val proposed = ReceiptSuggestionParser.parse(rawText)
+                    if (proposed.hasApplicableFields) receiptSuggestion = proposed
+                    else ocrError = "확실한 결제 금액·날짜 후보를 찾지 못했습니다. 직접 입력해 주세요."
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    ocrError = "영수증 이미지 인식에 실패했습니다. 이미지 권한·용량·화질을 확인해 주세요."
+                } finally {
+                    ocrBusy = false
+                }
+            }
+        }
+    }
+
     val trip by remember(trips, tripId) { trips.observeTrip(tripId) }
         .collectAsState(initial = null)
     val flow = remember(repository, tripId, itemId) {
@@ -150,30 +190,46 @@ fun ExpenseFormScreen(
             else -> {
                 TripSectionHeading(
                     title = "지출 정보",
-                    supportingText = "금액은 통화별 소수 자릿수로 정확하게 저장됩니다."
+                    supportingText = "* 표시 항목은 필수입니다. 금액은 통화별 소수 자릿수로 저장됩니다."
                 )
+                TripSectionHeading(
+                    title = "영수증 OCR (선택)",
+                    supportingText = "영수증 사진을 기기에서 인식합니다. 후보를 확인한 후에만 입력란에 반영하며 자동 저장하지 않습니다."
+                )
+                TripSecondaryButton(
+                    label = if (ocrBusy) "인식 중" else "영수증 사진에서 금액·날짜 읽기",
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !ocrBusy && !saving,
+                    onClick = { receiptPicker.launch(arrayOf("image/*")) }
+                )
+                ocrError?.let {
+                    Text(it, style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error)
+                }
                 TripTextField(
                     value = input.amount,
                     onValueChange = {
                         input = input.copy(amount = it)
-                        errors = emptyMap(); failed = false
+                        errors = errors - ExpenseField.Amount; failed = false
                     },
                     label = "금액 *",
                     placeholder = "예: 12000 또는 12.50",
                     supportingText = errors[ExpenseField.Amount]
                         ?: "0보다 큰 금액 · 쉼표 없이 입력",
-                    isError = errors.containsKey(ExpenseField.Amount)
+                    isError = errors.containsKey(ExpenseField.Amount),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
                 )
                 TripTextField(
                     value = input.currencyCode,
                     onValueChange = {
                         input = input.copy(currencyCode = it)
-                        errors = emptyMap(); failed = false
+                        errors = errors - ExpenseField.Currency; failed = false
                     },
                     label = "통화 *",
                     supportingText = errors[ExpenseField.Currency]
                         ?: "ISO 4217 코드 · 기본 통화 " + trip!!.currencyCode,
-                    isError = errors.containsKey(ExpenseField.Currency)
+                    isError = errors.containsKey(ExpenseField.Currency),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii)
                 )
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs),
@@ -184,25 +240,33 @@ fun ExpenseFormScreen(
                             TripChoiceChip(
                                 label = code,
                                 selected = input.currencyCode.equals(code, true),
-                                onClick = { input = input.copy(currencyCode = code); errors = emptyMap() }
+                                onClick = { input = input.copy(currencyCode = code); errors = errors - ExpenseField.Currency }
                             )
                         }
                 }
+                TripSectionHeading(
+                    title = "지출 일시",
+                    supportingText = "여행 현지 시각을 그대로 기록합니다. 선결제도 저장할 수 있습니다."
+                )
                 TripDateField(
                     label = "지출 날짜 *",
                     date = input.date,
                     error = errors[ExpenseField.Date],
-                    onDateSelected = { input = input.copy(date = it); errors = emptyMap() }
+                    onDateSelected = { input = input.copy(date = it); errors = errors - ExpenseField.Date }
                 )
                 TripTextField(
                     value = input.time,
-                    onValueChange = { input = input.copy(time = it); errors = emptyMap() },
+                    onValueChange = { input = input.copy(time = it); errors = errors - ExpenseField.Time },
                     label = "현지 시각 *",
                     placeholder = "14:30",
                     supportingText = errors[ExpenseField.Time] ?: "HH:mm · 여행 전 선결제 날짜도 저장 가능",
-                    isError = errors.containsKey(ExpenseField.Time)
+                    isError = errors.containsKey(ExpenseField.Time),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii)
                 )
-                TripSectionHeading(title = "분류")
+                TripSectionHeading(
+                    title = "분류·장소·메모",
+                    supportingText = "분류는 필수, 장소와 메모는 선택 사항입니다."
+                )
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs),
                     verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
@@ -215,9 +279,10 @@ fun ExpenseFormScreen(
                         )
                     }
                 }
-                TripSectionHeading(
-                    title = "장소 연결",
-                    supportingText = "선택 사항 · 현재 여행에 등록된 장소만 연결할 수 있습니다."
+                Text(
+                    "장소 연결 · 이 여행에 등록된 장소만 선택할 수 있습니다.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = p.textSecondary
                 )
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs),
@@ -238,7 +303,7 @@ fun ExpenseFormScreen(
                 }
                 TripTextField(
                     value = input.note,
-                    onValueChange = { input = input.copy(note = it); errors = emptyMap() },
+                    onValueChange = { input = input.copy(note = it); errors = errors - ExpenseField.Note },
                     label = "메모",
                     supportingText = errors[ExpenseField.Note] ?: "최대 2,000자",
                     isError = errors.containsKey(ExpenseField.Note),
@@ -288,6 +353,35 @@ fun ExpenseFormScreen(
                 }
             }
         }
+    }
+    receiptSuggestion?.let { suggestion ->
+        AlertDialog(
+            onDismissRequest = { receiptSuggestion = null },
+            title = { Text("영수증 인식 후보 확인") },
+            text = {
+                Text(
+                    "금액: " + (suggestion.amount ?: "인식 불확실") +
+                        "\n통화: " + (suggestion.currencyCode ?: "현재 입력 유지") +
+                        "\n날짜: " + (suggestion.date ?: "현재 입력 유지") +
+                        "\n상호 후보: " + (suggestion.merchant ?: "없음") +
+                        "\n\n반영 후에도 직접 수정할 수 있습니다. 저장은 별도로 진행합니다."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    input = input.copy(
+                        amount = suggestion.amount ?: input.amount,
+                        currencyCode = suggestion.currencyCode ?: input.currencyCode,
+                        date = suggestion.date ?: input.date
+                    )
+                    errors = emptyMap()
+                    receiptSuggestion = null
+                }) { Text("입력란에 반영") }
+            },
+            dismissButton = {
+                TextButton(onClick = { receiptSuggestion = null }) { Text("취소") }
+            }
+        )
     }
     if (showDiscard) {
         TripConfirmDialog(

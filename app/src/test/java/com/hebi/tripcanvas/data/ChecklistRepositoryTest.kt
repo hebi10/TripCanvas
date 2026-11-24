@@ -40,6 +40,29 @@ class ChecklistRepositoryTest {
         assertFalse(repository.find("trip", first)!!.checked)
     }
 
+    @Test fun boundaryMovesAndUndoPreserveSavedChecklistState() = runBlocking {
+        val dao = FakeChecklistDao()
+        val repository = ChecklistRepository(dao, FakeChecklistTripDao(), clock)
+        val first = repository.create("trip", "여권")
+        val second = repository.create("trip", "충전기")
+        val third = repository.create("trip", "상비약")
+
+        repository.setChecked("trip", first, true)
+        assertFalse(repository.move("trip", first, -1))
+        assertFalse(repository.move("trip", third, 1))
+        assertTrue(repository.move("trip", second, 1))
+        assertEquals(listOf(first, third, second), dao.ordered("trip").map { it.id })
+        assertTrue(repository.move("trip", second, -1))
+        assertEquals(listOf(first, second, third), dao.ordered("trip").map { it.id })
+
+        val deleted = repository.delete("trip", second)
+        assertEquals(listOf(first, third), dao.ordered("trip").map { it.id })
+        repository.undoDelete(deleted)
+        assertEquals(listOf(first, second, third), dao.ordered("trip").map { it.id })
+        assertTrue(repository.find("trip", first)!!.checked)
+        assertFalse(repository.find("trip", second)!!.checked)
+    }
+
     @Test fun rejectsEmptyNamesAndCrossTripOperations() = runBlocking {
         val repository = ChecklistRepository(FakeChecklistDao(), FakeChecklistTripDao(), clock)
         assertTrue(runCatching { repository.create("trip", " ") }.isFailure)

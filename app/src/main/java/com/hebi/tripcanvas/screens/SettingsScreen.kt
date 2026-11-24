@@ -14,6 +14,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import com.hebi.tripcanvas.monetization.AdFreeBillingState
+import com.hebi.tripcanvas.monetization.MONTHLY_PLAN_ID
+import com.hebi.tripcanvas.monetization.YEARLY_PLAN_ID
 import com.hebi.tripcanvas.designsystem.components.TripChoiceChip
 import com.hebi.tripcanvas.designsystem.components.TripDivider
 import com.hebi.tripcanvas.designsystem.components.TripErrorState
@@ -34,7 +37,12 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onOpenWorkspacePreview: () -> Unit,
     onOpenDesignSystemPreview: () -> Unit,
-    onOpenBackup: () -> Unit
+    onOpenBackup: () -> Unit,
+    billingState: AdFreeBillingState = AdFreeBillingState(),
+    onPurchase: (String) -> Unit = {},
+    onRestorePurchases: () -> Unit = {},
+    onPrivacyOptions: () -> Unit = {},
+    privacyOptionsAvailable: Boolean = false
 ) {
     val p = TripDesign.palette
     val context = LocalContext.current
@@ -44,7 +52,7 @@ fun SettingsScreen(
     ) {
         TripSectionHeading(
             title = "화면 모드",
-            supportingText = "선택한 테마는 이 기기에 저장되며 앱을 다시 실행해도 유지됩니다."
+            supportingText = "라이트·다크·시스템 설정 중 하나를 선택합니다. 저장된 설정은 앱 재실행 후에도 유지됩니다."
         )
         FlowRow(
             modifier = Modifier.fillMaxWidth(),
@@ -55,6 +63,7 @@ fun SettingsScreen(
                 TripChoiceChip(
                     label = mode.label,
                     selected = themeMode == mode,
+                    enabled = !themeSaving,
                     onClick = { if (!themeSaving) onThemeModeChange(mode) }
                 )
             }
@@ -75,11 +84,11 @@ fun SettingsScreen(
         TripDivider()
         TripSectionHeading(
             title = "여행 기본값",
-            supportingText = "여행 생성 시 기기 시간대와 기본 통화를 제안하며, 여행별로 수정할 수 있습니다."
+            supportingText = "새 여행 생성 시 기기 시간대와 기본 통화를 제안합니다."
         )
         TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
             Text(
-                text = "새 여행 화면에서 여행별 통화와 현지 시간대를 변경할 수 있습니다.",
+                text = "현재 여행의 시간대·기준 통화는 해당 여행 편집 화면에서 변경할 수 있습니다.",
                 modifier = Modifier.padding(TripSpacing.md),
                 style = MaterialTheme.typography.bodyMedium,
                 color = p.textSecondary
@@ -88,17 +97,78 @@ fun SettingsScreen(
         TripDivider()
         TripSectionHeading(
             title = "데이터 관리",
-            supportingText = "여행·경비·환율·분담·동행자·예약 자료를 백업합니다. 문서 원본은 제외됩니다."
+            supportingText = "기기의 여행 데이터를 JSON 파일로 내보내거나 검증한 파일로 전체 복원합니다."
         )
         TripSecondaryButton(
             label = "로컬 백업·복원",
             onClick = onOpenBackup,
             modifier = Modifier.fillMaxWidth()
         )
-        Text(
-            "백업 파일은 암호화되지 않으므로 안전한 위치에 보관해야 합니다.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = p.textSecondary
+        TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                "백업은 암호화되지 않습니다. 예약 확인번호·메모 등 개인정보가 포함될 수 있고 " +
+                    "PDF·이미지 원본과 접근 URI는 제외됩니다.",
+                modifier = Modifier.padding(TripSpacing.md),
+                style = MaterialTheme.typography.bodyMedium,
+                color = p.textSecondary
+            )
+        }
+        TripDivider()
+        TripSectionHeading(
+            title = "광고 제거",
+            supportingText = "Google Play 구독을 통해 광고 없이 이용할 수 있습니다. 자동 갱신 구독이며 언제든 Play에서 취소할 수 있습니다."
+        )
+        val adFreeLabel = when {
+            billingState.adFree -> "광고 제거 구독 활성"
+            !billingState.resolved -> "구독 확인 중 · 연결이 완료되면 요금제가 표시됩니다."
+            else -> "광고 포함 무료 이용"
+        }
+        Text(adFreeLabel, style = MaterialTheme.typography.bodyMedium, color = p.textPrimary)
+        if (!billingState.adFree) {
+            billingState.plans.forEach { plan ->
+                val label = if (plan.basePlanId == MONTHLY_PLAN_ID) "월간" else "연간"
+                TripSecondaryButton(
+                    label = "$label 광고 제거 · ${plan.price}",
+                    onClick = { onPurchase(plan.basePlanId) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            if (billingState.plans.isEmpty()) {
+                Text(
+                    "현재 Google Play에 구매 가능한 요금제가 없습니다. 등록 완료 후 제공됩니다.",
+                    color = p.textSecondary
+                )
+            }
+        }
+        billingState.message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        TripSecondaryButton(
+            label = "Google Play에서 구독 관리",
+            onClick = {
+                runCatching {
+                    context.startActivity(Intent(Intent.ACTION_VIEW,
+                        Uri.parse("https://play.google.com/store/account/subscriptions")))
+                }.onFailure {
+                    Toast.makeText(context, "구독 관리 페이지를 열지 못했습니다.", Toast.LENGTH_SHORT).show()
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        )
+        TripSecondaryButton(
+            label = "구매 내역 복원·확인",
+            onClick = onRestorePurchases,
+            modifier = Modifier.fillMaxWidth()
+        )
+        if (privacyOptionsAvailable) {
+            TripSecondaryButton(
+                label = "광고 개인정보 선택 변경",
+                onClick = onPrivacyOptions,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+        TripDivider()
+        TripSectionHeading(
+            title = "개인정보·앱 정보",
+            supportingText = "개인정보처리방침은 외부 브라우저에서 확인할 수 있습니다."
         )
         TripSecondaryButton(
             label = "개인정보처리방침",
@@ -114,7 +184,7 @@ fun SettingsScreen(
         TripDivider()
         TripSectionHeading(
             title = "화면 검수",
-            supportingText = "개발 단계의 디자인을 확인하는 미리보기입니다. 실제 여행 데이터는 생성되지 않습니다."
+            supportingText = "개발용 화면 미리보기입니다. 실제 여행 데이터는 생성·변경하지 않습니다."
         )
         Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)) {
             TripSecondaryButton(

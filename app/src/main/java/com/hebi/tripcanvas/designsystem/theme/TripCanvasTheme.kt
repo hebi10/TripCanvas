@@ -47,6 +47,8 @@ fun TripCanvasTheme(
             surfaceVariant = palette.surfaceSubtle,
             onSurfaceVariant = palette.textSecondary,
             outline = palette.outline,
+            outlineVariant = palette.outline,
+            surfaceTint = palette.surface,
             error = palette.error,
             onError = palette.background
         )
@@ -65,6 +67,8 @@ fun TripCanvasTheme(
             surfaceVariant = palette.surfaceSubtle,
             onSurfaceVariant = palette.textSecondary,
             outline = palette.outline,
+            outlineVariant = palette.outline,
+            surfaceTint = palette.surface,
             error = palette.error,
             onError = palette.background
         )
