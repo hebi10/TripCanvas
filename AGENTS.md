@@ -28,3 +28,18 @@
 
 ### 앱별 보존 지침
 - 여행 일정·경비·장소·백업/복원의 기존 저장 데이터와 마이그레이션을 우선 보호한다. `.github/workflows/android-ci.yml`, `play-internal.yml`, `play-promote.yml`의 최종 승인·동결 조건을 유지한다.
+
+## CI-DEDUP-20261119 — 최종 main 통합 Android QA
+- PR/main은 `android-ci.yml`의 앱 빌드·JVM 단위·릴리스 정책 테스트를 유지하며, `room-migration-instrumentation`은 최종 수동 계측에서만 실행한다.
+- `2c-screen-qa.yml`, `3a-map-qa.yml`, `3b-screen-qa.yml`, `release-compat-qa.yml`의 장시간 기기 테스트는 일반 PR에서 건너뛰고, 정확한 최종 main SHA에서 `final-device-qa.yml` 한 번의 수동 실행으로 모두 호출한다.
+- `qa-a06-backup-integrity.yml`의 고위험 백업 변경 PR 계측은 보존하며, 최종 QA에도 포함한다. 실제 Android API 29·35·36, 폰/태블릿, 마이그레이션·백업·복원 증빙을 유지한다.
+- `release-build.yml`은 같은 main SHA의 Android CI 성공과 수동 TripCanvas final Android QA 성공 없이는 서명 빌드를 차단한다. 새 커밋이 생기면 새로운 최종 SHA 재검증을 요구한다.
+
+
+## OPS-09 — 내부 테스트 배포 1회 승인 (2026-11-19)
+- 사용자가 **내부 테스트 배포**를 명시적으로 요청하면 별도의 단계별 재승인 없이 `.github/workflows/internal-release-once.yml`의 1회 승인으로 **현재 main 기본 CI 확인 → 최종 Android 전체 QA → 기존 OPS-03 서명 AAB 빌드 → 기존 OPS-04 Google Play 내부 테스트 업로드**를 순차 실행할 수 있다. 이는 이 문서의 OPS-02 제4절에서 내부 테스트용 빌드 및 게시 승인을 각각 요구한 부분의 명시적인 예외다.
+- `internal_release_approved=true`, 정확한 동결 `main` SHA, 앱별 release_tag/versionCode, 안전한 QA·빌드 증빙이 필수이며 어느 단계든 누락·실패·SHA 변경이 발생하면 즉시 다음 단계를 차단한다.
+- 전체 QA는 배치 종료 후 이 승인된 파이프라인에서 **앱당 1회만** 수행한다. PR·중간 병합에서 3환경 계측을 중복하지 않으며 민감 데이터 삭제·복구·권한·결제 변경의 선별 PR 검증은 유지한다.
+- 새 파이프라인은 기존 OPS-03·OPS-04 검증 스크립트, 기존 서명 인증서·Play 계정, 서명 AAB SHA-256·versionCode·applicationId 및 Play 업로드 승인 문구를 변경하지 않는다. 실제 업로드 수락·Console 제공·테스터 설치 여부는 각각 구분해 보고한다.
+- **비공개 테스트 승격, 정식 출시, Play 이미지/등록정보 업로드, Firebase 서버 배포는 이 승인에 포함되지 않으며 별도 승인**이 필요하다.
+- 앱의 실제 Google Play 게시 작업은 사용자가 이후 내부 배포를 승인한 경우에만 실행한다. 워크플로를 추가·병합하는 작업 자체는 배포 승인이 아니다.
