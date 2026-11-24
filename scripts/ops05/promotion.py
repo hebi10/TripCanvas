@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """OPS-05: promote an existing, completed internal AAB; never upload binaries."""
+from contextlib import suppress
 import json
 import os
 from pathlib import Path
@@ -18,6 +19,49 @@ APPROVAL = "PROMOTE_VERIFIED_INTERNAL_VERSION"
 
 class Stop(RuntimeError):
     pass
+
+
+API_STATUSES = frozenset({
+    "INVALID_ARGUMENT", "FAILED_PRECONDITION", "UNAUTHENTICATED",
+    "PERMISSION_DENIED", "NOT_FOUND", "ALREADY_EXISTS", "ABORTED",
+    "RESOURCE_EXHAUSTED", "UNAVAILABLE", "DEADLINE_EXCEEDED",
+    "INTERNAL", "UNKNOWN", "CANCELLED", "OUT_OF_RANGE",
+    "UNIMPLEMENTED", "DATA_LOSS",
+})
+FAILURE_OPERATIONS = frozenset({
+    "client_setup", "edit_create", "inventory_read", "plan_validate",
+    "authorization_check", "source_recheck", "closed_track_update",
+    "edit_validate", "edit_commit", "commit_receipt_write",
+    "readback_edit_create", "readback_inventory", "readback_verify",
+    "edit_discard", "readback_edit_discard", "unclassified",
+})
+
+
+class PlayHttpStop(Stop):
+    """Only retain a numeric HTTP status and an allowlisted API status."""
+    def __init__(self, status, api_status=None):
+        self.http_status = status if type(status) is int and 100 <= status <= 599 else None
+        self.api_status = (api_status if isinstance(api_status, str)
+                           and api_status in API_STATUSES else None)
+        super().__init__("Google Play request blocked" +
+                         (" (HTTP " + str(self.http_status) + ")" if self.http_status else ""))
+
+
+def safe_http_error(error):
+    api_status = None
+    try:
+        raw = error.read(8193)
+        if len(raw) <= 8192:
+            response = json.loads(raw)
+            detail = response.get("error") if isinstance(response, dict) else None
+            if isinstance(detail, dict):
+                api_status = detail.get("status")
+    except (OSError, ValueError, TypeError, AttributeError):
+        pass
+    finally:
+        with suppress(Exception):
+            error.close()
+    return PlayHttpStop(error.code, api_status)
 
 
 def require(test, message):
@@ -170,7 +214,7 @@ class Play:
             require(isinstance(result, dict), "Invalid Play API response")
             return result
         except HTTPError as error:
-            raise Stop("Google Play " + method + " blocked (HTTP " + str(error.code) + ")") from None
+            raise safe_http_error(error) from None
         except (URLError, OSError, ValueError):
             raise Stop("Google Play request response is uncertain; do not auto-retry") from None
 
@@ -197,6 +241,23 @@ def safe_receipt(req, status):
             "status": status, "binary_uploaded": False, "aab_rebuilt": False}
 
 
+def failure_receipt(req, mode, operation, error, commit_attempted):
+    if commit_attempted:
+        status = "commit_outcome_uncertain_inspect_console_no_retry"
+    else:
+        status = "check_not_verified" if mode == "check" else "promotion_not_committed"
+    receipt = safe_receipt(req, status)
+    receipt["failedOperation"] = (operation if isinstance(operation, str)
+                                  and operation in FAILURE_OPERATIONS else "unclassified")
+    receipt["deployment"] = "unconfirmed" if commit_attempted else "not_committed"
+    if isinstance(error, PlayHttpStop):
+        if error.http_status is not None:
+            receipt["httpStatus"] = error.http_status
+        if error.api_status is not None:
+            receipt["apiStatus"] = error.api_status
+    return receipt
+
+
 def persist(receipt):
     target = Path("ops05-output")
     target.mkdir(parents=True, exist_ok=True)
@@ -204,44 +265,67 @@ def persist(receipt):
 
 
 def execute(mode, req, token, env):
-    client = Play(token, req["package"])
-    edit = client.start()
+    client = None
+    edit = None
+    fresh = None
     commit_attempted = False
+    failed = False
+    operation = "client_setup"
     try:
+        client = Play(token, req["package"])
+        operation = "edit_create"
+        edit = client.start()
+        operation = "inventory_read"
         tracks, bundles = client.inventory(edit)
+        operation = "plan_validate"
         plan = make_plan(tracks, bundles, req)
         if mode == "check":
             return safe_receipt(req, "verified_already_completed" if plan["state"] == "already_completed" else "verified_ready_for_manual_promotion")
+        operation = "authorization_check"
         require(mode == "promote" and req["mode"] == "promote", "Explicit promote-mode approval required")
         if plan["state"] == "already_completed":
             return safe_receipt(req, "already_completed_no_change")
+        operation = "source_recheck"
         verify_main(req, env)
+        operation = "closed_track_update"
         client.request("PUT", edit + "/tracks/" + quote(req["closed"], safe=""),
                        {"track": req["closed"], "releases": [plan["release"]]})
+        operation = "edit_validate"
         client.request("POST", edit + ":validate")
+        operation = "source_recheck"
         verify_main(req, env)
+        operation = "edit_commit"
         commit_attempted = True
         client.request("POST", edit + ":commit?changesInReviewBehavior=ERROR_IF_IN_REVIEW")
         receipt = safe_receipt(req, "commit_accepted_readback_pending")
+        operation = "commit_receipt_write"
         persist(receipt)
         # A fresh edit checks independently that the exact closed version is completed.
+        operation = "readback_edit_create"
         fresh = client.start()
-        try:
-            new_tracks, new_bundles = client.inventory(fresh)
-            renewed = make_plan(new_tracks, new_bundles, req)
-            require(renewed["state"] == "already_completed",
-                    "Play commit was acknowledged but closed-track readback differs")
-        finally:
-            client.discard(fresh)
+        operation = "readback_inventory"
+        new_tracks, new_bundles = client.inventory(fresh)
+        operation = "readback_verify"
+        renewed = make_plan(new_tracks, new_bundles, req)
+        require(renewed["state"] == "already_completed",
+                "Play commit was acknowledged but closed-track readback differs")
         return safe_receipt(req, "committed_and_read_back")
-    except Stop:
-        if commit_attempted:
-            persist(safe_receipt(req, "commit_outcome_uncertain_inspect_console_no_retry"))
+    except (Stop, KeyError, OSError, ValueError, TypeError) as error:
+        failed = True
+        persist(failure_receipt(req, mode, operation, error, commit_attempted))
         raise
     finally:
-        if not commit_attempted:
-            client.discard(edit)
-
+        # Never discard or automatically retry an edit after commit was attempted.
+        cleanup = fresh if fresh is not None else (None if commit_attempted else edit)
+        if client is not None and cleanup is not None:
+            try:
+                client.discard(cleanup)
+            except (Stop, KeyError, OSError, ValueError, TypeError) as error:
+                if not failed:
+                    operation = "readback_edit_discard" if fresh is not None else "edit_discard"
+                    persist(failure_receipt(req, mode, operation, error, commit_attempted))
+                    raise
+                # Cleanup failure must not replace the original diagnostic or cause a retry.
 
 def main():
     try:

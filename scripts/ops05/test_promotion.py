@@ -180,5 +180,170 @@ class PromotionTests(unittest.TestCase):
         self.assertNotIn("actions/download-artifact",workflow)
 
 
+    def test_http_error_only_keeps_allowlisted_fields(self):
+        import io
+        import json
+        from urllib.error import HTTPError
+        private = "fixture-private-message-and-edit-id"
+        cases = [
+            ({"error": {"status": "INVALID_ARGUMENT", "message": private}}, "INVALID_ARGUMENT"),
+            ({"error": {"status": private, "message": private}}, None),
+            ({"error": {"status": ["INVALID_ARGUMENT"]}}, None),
+            ({"error": {"status": "INVALID_ARGUMENT", "message": "x" * 9000}}, None),
+        ]
+        for payload, expected in cases:
+            with self.subTest(expected=expected):
+                def fail(request, **kwargs):
+                    raise HTTPError(request.full_url, 400, private, {},
+                                    io.BytesIO(json.dumps(payload).encode("utf-8")))
+                client = p.Play("fixture-credential", "com.example.fixture", transport=fail)
+                with self.assertRaises(p.PlayHttpStop) as raised:
+                    client.request("POST", "/fixture-private-edit:validate")
+                error = raised.exception
+                self.assertEqual(error.http_status, 400)
+                self.assertEqual(error.api_status, expected)
+                self.assertNotIn(private, str(error))
+                self.assertNotIn("fixture-private-edit", str(error))
+                self.assertNotIn("fixture-credential", str(error))
+
+    def test_failure_receipts_preserve_phase_and_never_retry_commit(self):
+        import json
+        from unittest.mock import patch
+        env = self.env()
+        req = p.parse_request(env)
+        before, bundles = self.snapshot()
+        after, _ = self.snapshot(closed=[{"status":"completed","versionCodes":["19"]}])
+        stages = (
+            "edit_create", "inventory_read", "closed_track_update",
+            "edit_validate", "edit_commit", "readback_edit_create",
+            "readback_inventory", "readback_verify", "readback_edit_discard",
+        )
+        for stage in stages:
+            with self.subTest(stage=stage):
+                calls = []
+                receipts = []
+                class FakePlay:
+                    def __init__(self, token, package):
+                        self.starts = 0
+
+                    def step(self, name):
+                        calls.append(name)
+                        if name == stage and name != "readback_verify":
+                            raise p.PlayHttpStop(400, "INVALID_ARGUMENT")
+
+                    def start(self):
+                        self.starts += 1
+                        self.step("edit_create" if self.starts == 1 else "readback_edit_create")
+                        return "/fixture-edit-" + str(self.starts)
+
+                    def inventory(self, edit):
+                        self.step("inventory_read" if self.starts == 1 else "readback_inventory")
+                        return (before, bundles) if self.starts == 1 or stage == "readback_verify" else (after, bundles)
+
+                    def request(self, method, suffix, data=None):
+                        if method == "PUT":
+                            self.assert_same_version(data)
+                            self.step("closed_track_update")
+                        elif method == "POST" and suffix.endswith(":validate"):
+                            self.step("edit_validate")
+                        elif method == "POST" and suffix.endswith(":commit?changesInReviewBehavior=ERROR_IF_IN_REVIEW"):
+                            self.step("edit_commit")
+                        else:
+                            raise AssertionError("Unexpected Play request")
+                        return {}
+
+                    def assert_same_version(self, data):
+                        if data["track"] != "alpha" or data["releases"][0]["versionCodes"] != ["19"]:
+                            raise AssertionError("Wrong track or version")
+
+                    def discard(self, edit):
+                        self.step("readback_edit_discard" if edit.endswith("-2") else "edit_discard")
+
+                with patch.object(p, "Play", FakePlay), patch.object(p, "verify_main"), patch.object(
+                    p, "persist", side_effect=lambda receipt: receipts.append(dict(receipt))
+                ):
+                    with self.assertRaises(p.Stop):
+                        p.execute("promote", req, "fixture-credential", env)
+                self.assertTrue(receipts)
+                result = receipts[-1]
+                self.assertEqual(result["failedOperation"], stage)
+                attempted = stages.index(stage) >= stages.index("edit_commit")
+                self.assertEqual(result["deployment"], "unconfirmed" if attempted else "not_committed")
+                self.assertEqual(result["status"], "commit_outcome_uncertain_inspect_console_no_retry"
+                                 if attempted else "promotion_not_committed")
+                self.assertEqual(calls.count("edit_commit"), 1 if attempted else 0)
+                if attempted:
+                    self.assertNotIn("edit_discard", calls)
+                self.assertFalse(result["binary_uploaded"])
+                self.assertFalse(result["aab_rebuilt"])
+                if stage == "readback_verify":
+                    self.assertNotIn("httpStatus", result)
+                else:
+                    self.assertEqual(result["httpStatus"], 400)
+                    self.assertEqual(result["apiStatus"], "INVALID_ARGUMENT")
+                self.assertNotIn("fixture-edit-", json.dumps(result))
+                self.assertNotIn("fixture-credential", json.dumps(result))
+
+    def test_cleanup_failure_preserves_original_precommit_diagnostic(self):
+        from unittest.mock import patch
+        env = self.env()
+        req = p.parse_request(env)
+        tracks, bundles = self.snapshot()
+        receipts = []
+        calls = []
+        class FakePlay:
+            def __init__(self, token, package):
+                pass
+
+            def start(self):
+                return "/fixture-edit"
+
+            def inventory(self, edit):
+                return tracks, bundles
+
+            def request(self, method, suffix, data=None):
+                calls.append((method, suffix))
+                if suffix.endswith(":validate"):
+                    raise p.PlayHttpStop(400, "INVALID_ARGUMENT")
+                return {}
+
+            def discard(self, edit):
+                raise p.PlayHttpStop(503, "UNAVAILABLE")
+
+        with patch.object(p, "Play", FakePlay), patch.object(p, "verify_main"), patch.object(
+            p, "persist", side_effect=lambda receipt: receipts.append(dict(receipt))
+        ):
+            with self.assertRaises(p.PlayHttpStop) as raised:
+                p.execute("promote", req, "fixture-credential", env)
+        self.assertEqual(raised.exception.http_status, 400)
+        self.assertEqual(len(receipts), 1)
+        self.assertEqual(receipts[0]["failedOperation"], "edit_validate")
+        self.assertEqual(receipts[0]["deployment"], "not_committed")
+        self.assertFalse(any(":commit" in suffix for _, suffix in calls))
+
+    def test_readonly_failure_writes_receipt_and_workflow_preserves_it(self):
+        from unittest.mock import patch
+        env = self.env("check")
+        req = p.parse_request(env)
+        receipts = []
+        class FakePlay:
+            def __init__(self, token, package):
+                pass
+
+            def start(self):
+                raise p.PlayHttpStop(403, "PERMISSION_DENIED")
+
+        with patch.object(p, "Play", FakePlay), patch.object(
+            p, "persist", side_effect=lambda receipt: receipts.append(dict(receipt))
+        ):
+            with self.assertRaises(p.Stop):
+                p.execute("check", req, "fixture-credential", env)
+        self.assertEqual(receipts[0]["status"], "check_not_verified")
+        self.assertEqual(receipts[0]["failedOperation"], "edit_create")
+        self.assertEqual(receipts[0]["deployment"], "not_committed")
+        workflow = (ROOT / ".github/workflows/play-closed-release.yml").read_text(encoding="utf-8")
+        self.assertIn("Save sanitized read-only inspection result\n        if: always()", workflow)
+
+
 if __name__ == "__main__":
     unittest.main()
