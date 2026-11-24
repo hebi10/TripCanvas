@@ -107,6 +107,44 @@ class TripCanvasA06BackupIoTest {
         }
     }
 
+    @Test
+    fun encryptedContentUriRequiresCorrectPasswordAndPreservesExistingDataUntilRestore() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(context, TripDatabase::class.java).build()
+        val uri = createTestDocument()
+        val password = "fixture-한글-passphrase".toCharArray()
+        val wrong = "fixture-wrong-passphrase".toCharArray()
+        try {
+            val expected = completeSnapshot()
+            db.backupDao().replaceAll(expected)
+            val service = TripBackupService(context, db)
+            assertEquals(expected, service.exportEncrypted(uri, password))
+            val encrypted = context.contentResolver.openInputStream(uri)!!.use { it.readBytes() }
+            assertTrue(EncryptedTripBackup.isEncrypted(encrypted))
+            assertFalse(String(encrypted, Charsets.ISO_8859_1).contains("QA-REFERENCE-EXAMPLE"))
+            assertTrue(runCatching { service.preview(uri) }.exceptionOrNull() is BackupPasswordRequired)
+            db.tripDao().insert(trip("a06-unrelated"))
+            val existing = db.backupDao().snapshot()
+            assertTrue(runCatching { service.preview(uri, wrong) }.isFailure)
+            assertEquals(existing, db.backupDao().snapshot())
+            val preview = service.preview(uri, password)
+            assertEquals(expected, preview)
+            assertEquals(existing, db.backupDao().snapshot())
+            context.contentResolver.openOutputStream(uri, "wt")!!.use { output ->
+                encrypted[encrypted.lastIndex] = (encrypted.last().toInt() xor 1).toByte()
+                output.write(encrypted)
+            }
+            assertTrue(runCatching { service.preview(uri, password) }.isFailure)
+            assertEquals(existing, db.backupDao().snapshot())
+            service.restore(preview)
+            assertEquals(expected, db.backupDao().snapshot())
+        } finally {
+            password.fill('\u0000')
+            wrong.fill('\u0000')
+            context.contentResolver.delete(uri, null, null)
+            db.close()
+        }
+    }
+
     private fun createTestDocument(): Uri {
         val values = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, "tripcanvas-qa-a06-${System.nanoTime()}.json")
