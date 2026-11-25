@@ -20,7 +20,7 @@ concurrency:
 
 jobs:
   design-evidence:
-    if: github.repository == 'hebi10/TripCanvas' && github.event.pull_request.head.repo.full_name == 'hebi10/TripCanvas' && github.head_ref == 'ui/tc-design-v2-places-20261125'
+    if: github.repository == 'hebi10/TripCanvas' && github.event.pull_request.head.repo.full_name == 'hebi10/TripCanvas' && (github.head_ref == 'ui/tc-design-v2-places-20261125' || github.head_ref == 'ui/tc-design-v2-forms-20261125')
     name: design-places-phone
     runs-on: ubuntu-latest
     timeout-minutes: 50
