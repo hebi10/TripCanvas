@@ -5,9 +5,8 @@ on:
     paths:
       - '.github/workflows/3b-screen-qa.yml'
       - '.github/scripts/run-3b-screen-qa.sh'
-      - 'app/src/main/**'
-      - 'app/src/androidTest/**'
-      - 'app/build.gradle.kts'
+      - 'app/src/androidTest/java/com/hebi/tripcanvas/qa/QaUiNavigator.kt'
+      - 'app/src/androidTest/java/com/hebi/tripcanvas/qa/TripCanvas3BScreenTest.kt'
   workflow_dispatch:
   workflow_call:
 
@@ -16,7 +15,6 @@ permissions:
 
 jobs:
   finance-booking-screen-qa:
-    if: ${{ github.event_name != 'pull_request' }}
     name: 3b-screen-qa-${{ matrix.device }}
     runs-on: ubuntu-latest
     timeout-minutes: 50
