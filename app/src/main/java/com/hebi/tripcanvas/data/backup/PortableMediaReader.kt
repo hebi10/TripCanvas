@@ -76,15 +76,14 @@ internal object PortableMediaReader {
         require(archiveSha256.matches(shaPattern))
         val copied = linkedMapOf<String, PortableMediaArchive.CopiedMedia>()
         var total = 0
-        val snapshot: TripBackupSnapshot
-        val manifest: JSONObject
-        ZipInputStream(ByteArrayInputStream(plaintext)).use { zip ->
+        val (snapshot, manifest) = ZipInputStream(ByteArrayInputStream(plaintext)).use { zip ->
             val first = requireNotNull(zip.nextEntry)
             require(!first.isDirectory && first.name == "snapshot.json")
-            snapshot = TripBackupCodec.decode(text(readBounded(zip, TripBackupCodec.MAX_BYTES)))
+            val snapshot = TripBackupCodec.decode(text(readBounded(zip, TripBackupCodec.MAX_BYTES)))
             zip.closeEntry()
 
-            while (true) {
+            var manifest: JSONObject? = null
+            while (manifest == null) {
                 val entry = requireNotNull(zip.nextEntry) { "첨부 백업 manifest가 없습니다." }
                 require(!entry.isDirectory)
                 if (entry.name == "manifest.json") {
@@ -105,6 +104,7 @@ internal object PortableMediaReader {
                 copied[entry.name] = media
                 total += media.bytes
             }
+            snapshot to requireNotNull(manifest)
         }
 
         require(copied.isNotEmpty())
