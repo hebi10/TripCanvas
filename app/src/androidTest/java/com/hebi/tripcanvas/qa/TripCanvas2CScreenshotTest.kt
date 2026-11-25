@@ -110,6 +110,8 @@ class TripCanvas2CScreenshotTest {
     fun captureRealMainActivityAndExerciseMvp() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             awaitText("제주 주말 여행")
+            awaitText("KRW 12,500")
+            awaitText("1 / 3")
             capture("01-home-light")
             assertStatusBarBackground(dark = false)
             click("완료")
@@ -226,6 +228,11 @@ class TripCanvas2CScreenshotTest {
                 device.wait(Until.hasObject(By.desc("준비 완료 1개 / 전체 3개")), 5000)
             )
             capture("03-checklist-light")
+            click("완료")
+            awaitText("여권")
+            assertTrue("완료 필터에서 미완료 항목은 보이지 않아야 합니다.", !device.hasObject(By.text("충전기")))
+            capture("03a-checklist-completed-filter")
+            click("전체")
             click("미완료")
             capture("04-checklist-incomplete-filter")
             openChecklistActions("충전기")

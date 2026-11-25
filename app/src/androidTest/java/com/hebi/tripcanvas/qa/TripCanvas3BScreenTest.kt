@@ -121,6 +121,11 @@ class TripCanvas3BScreenTest {
                 awaitText("첨부 1개")
                 assertFalse("예약 확인번호가 목록에 노출되면 안 됩니다.", device.hasObject(By.text("QA-PRIVATE-REF")))
                 capture("08-bookings-light")
+                click("항공")
+                awaitText("선택한 유형의 예약이 없습니다")
+                capture("08c-bookings-type-filter")
+                click("전체")
+                awaitText("숙소 예약")
                 assertFalse(
                     "삭제는 예약 관리 메뉴에만 노출되어야 합니다.",
                     device.hasObject(By.text("예약 삭제"))
