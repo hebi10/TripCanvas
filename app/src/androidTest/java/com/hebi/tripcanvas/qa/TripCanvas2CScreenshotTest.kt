@@ -481,6 +481,167 @@ class TripCanvas2CScreenshotTest {
 
 
     @Test
+    fun capturePlaceManagementAndSelection() {
+        val placeName = "QA Harbor"
+        val scheduleName = "QA Harbor visit"
+
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            fun hideKeyboardIfVisible() {
+                var visible = false
+                scenario.onActivity { activity ->
+                    visible = androidx.core.view.ViewCompat.getRootWindowInsets(activity.window.decorView)
+                        ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) == true
+                }
+                if (visible) device.pressBack()
+            }
+
+            fun enterFirstField(value: String) {
+                val field = device.wait(Until.findObject(By.clazz("android.widget.EditText")), 5000)
+                    ?: throw AssertionError("입력 필드를 찾지 못했습니다.")
+                field.setText(value)
+                hideKeyboardIfVisible()
+            }
+
+            fun openPlaceList() {
+                awaitText("저장 장소 관리")
+                navigator.clickVisible(By.desc("저장 장소 관리"), "저장 장소 관리", "여행 장소")
+                awaitText("여행 장소")
+            }
+
+            awaitText("제주 주말 여행")
+            click("제주 주말 여행")
+            openPlaceList()
+            awaitText("제주국제공항")
+            awaitText("좌표 등록됨")
+            awaitText("새 장소 만들기")
+            capture("p01-place-list-light")
+            navigator.clickVisible(By.text("새 장소 만들기"), "새 장소 만들기", "장소 정보")
+            awaitText("장소 정보")
+            capture("p02-place-create-light")
+            enterFirstField(placeName)
+            awaitText("장소 만들기")
+            navigator.clickVisible(By.text("장소 만들기"), "장소 저장", "여행 장소")
+            awaitText("여행 장소")
+            awaitText("장소 검색")
+            enterFirstField(placeName)
+            awaitText(placeName)
+            awaitText("좌표 없음")
+            assertTrue("검색 결과에서 다른 장소가 제외되어야 합니다.", device.wait(Until.gone(By.text("제주국제공항")), 5000))
+            val saved = runBlocking { database.backupDao().snapshot().places.single { it.name == placeName } }
+            assertEquals(null, saved.latitude)
+            assertEquals(null, saved.longitude)
+            capture("p03-place-search-light")
+            navigator.clickVisible(By.desc("삭제: $placeName"), "장소 삭제", "장소 삭제")
+            awaitText("장소 삭제")
+            capture("p04-place-delete-confirm-light")
+            click("취소")
+            awaitText(placeName)
+            assertTrue(runBlocking { database.backupDao().snapshot().places.any { it.id == saved.id } })
+            navigator.clickVisible(By.desc("상세: $placeName"), "장소 상세", "장소 상세")
+            awaitText("좌표 없음 · 지도 핀 미표시")
+            capture("p05-place-detail-light")
+            navigator.clickVisible(By.text("장소 편집"), "장소 편집", "장소 정보")
+            awaitText("장소 정보")
+            capture("p06-place-edit-light")
+            device.pressBack()
+            awaitText("장소 상세")
+            device.pressBack()
+            awaitText("여행 장소")
+            device.pressBack()
+            awaitText("작업 도구")
+            device.pressBack()
+            awaitText("내 여행")
+
+            runBlocking { tripPreferencesRepository(context).saveThemeMode(TripThemeMode.Dark) }
+            device.executeShellCommand("settings put system font_scale 1.6")
+            Thread.sleep(1200)
+            scenario.recreate()
+            awaitText("내 여행")
+            click("제주 주말 여행")
+            awaitText("일정 열기")
+            navigator.clickVisible(By.desc("일정 열기"), "일정 열기", "여행 일정")
+            awaitText("일정 추가")
+            navigator.clickVisible(By.text("일정 추가"), "일정 추가", "일정 정보")
+            awaitText("일정 정보")
+            capture("p07-schedule-form-dark-font160")
+            enterFirstField(scheduleName)
+            awaitText("장소 선택·추가")
+            navigator.clickVisible(By.text("장소 선택·추가"), "장소 선택·추가", "장소 연결")
+            awaitText("장소 검색")
+            enterFirstField(placeName)
+            awaitText(placeName)
+            try {
+                awaitText("선택: $placeName", By.desc("선택: $placeName"))
+                capture("p08-place-select-dark-font160")
+                listOf("선택", "상세", "편집", "삭제").forEach { action ->
+                    val target = resolvePlaceAction(action, placeName)
+                    val bounds = target.visibleBounds
+                    assertTrue("장소 버튼은 활성 상태여야 합니다: $action", target.isEnabled)
+                    assertTrue("장소 버튼의 화면 내 터치 영역이 필요합니다: $action ($bounds)",
+                        bounds.width() > 0 && bounds.height() > 0 &&
+                            bounds.left >= 0 && bounds.right <= device.displayWidth)
+                }
+                val select = resolvePlaceAction("선택", placeName)
+                val bounds = select.visibleBounds
+                assertTrue("장소 선택 터치 전송 실패", device.click(bounds.centerX(), bounds.centerY()))
+                awaitText("장소 연결 해제")
+            } catch (failure: AssertionError) {
+                val dir = File(context.getExternalFilesDir(null), "qa")
+                dir.mkdirs()
+                runCatching {
+                    capture("99-place-selection-font160-failure")
+                    device.dumpWindowHierarchy(File(dir, "99-place-selection-font160-hierarchy.xml"))
+                }
+                throw failure
+            }
+            awaitText(placeName)
+            capture("p09-schedule-place-linked-dark-font160")
+            awaitText("일정 저장")
+            navigator.clickVisible(By.text("일정 저장"), "일정 저장", "여행 일정")
+            awaitText(scheduleName)
+            assertEquals(saved.id, runBlocking {
+                database.backupDao().snapshot().itineraries.single { it.title == scheduleName }.placeId
+            })
+            capture("p10-schedule-saved-dark-font160")
+        }
+    }
+
+    private fun resolvePlaceAction(action: String, placeName: String): UiObject2 {
+        val description = "$action: $placeName"
+        awaitText(description, By.desc(description))
+        repeat(4) {
+            try {
+                val node = device.wait(Until.findObject(By.desc(description)), 3000)
+                    ?: throw AssertionError("장소 버튼 설명이 없습니다: $description")
+                if (node.isClickable) return node
+
+                // A Compose semantics modifier can expose a description on a
+                // wrapper rather than on the native clickable Button node.
+                val inner = node.findObjects(By.clickable(true)).filter { child ->
+                    child.text == action || child.findObject(By.text(action)) != null
+                }
+                if (inner.size == 1) return inner.single()
+
+                var parent = node.parent
+                repeat(8) {
+                    val candidate = parent ?: return@repeat
+                    if (candidate.isClickable &&
+                        (candidate.contentDescription == description ||
+                            candidate.text == action ||
+                            candidate.findObject(By.text(action)) != null)) {
+                        return candidate
+                    }
+                    parent = candidate.parent
+                }
+                throw AssertionError("설명에 대응하는 실제 클릭 가능한 버튼을 찾지 못했습니다: $description")
+            } catch (_: StaleObjectException) {
+                Thread.sleep(200)
+            }
+        }
+        throw AssertionError("화면 갱신 후 장소 버튼을 다시 찾지 못했습니다: $description")
+    }
+
+    @Test
     fun captureLiveMemoriesAndReportFromRealAndroidUi() {
         val today = LocalDate.now(ZoneId.of("Asia/Seoul")).toString()
         runBlocking {
