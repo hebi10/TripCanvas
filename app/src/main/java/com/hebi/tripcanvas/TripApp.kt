@@ -681,6 +681,7 @@ fun TripApp(onThemeResolved: (Boolean) -> Unit) {
                             val tripId = requireNotNull(entry.arguments?.getString("tripId"))
                             PlaceListScreen(
                                 repository = placeRepository,
+                                tripRepository = tripRepository,
                                 tripId = tripId,
                                 selectionMode = false,
                                 onSelect = {},
@@ -712,6 +713,7 @@ fun TripApp(onThemeResolved: (Boolean) -> Unit) {
                             }
                             PlaceListScreen(
                                 repository = placeRepository,
+                                tripRepository = tripRepository,
                                 tripId = tripId,
                                 selectionMode = true,
                                 onSelect = selectPlace,
