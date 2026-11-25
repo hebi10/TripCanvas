@@ -26,6 +26,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
@@ -352,10 +353,10 @@ fun BackupScreen(
         )
     }
 
-    TripPageFrame(title = "백업·복원", onBack = { if (!busy) onBack() }) {
+    TripPageFrame(title = "백업·복원", onBack = { if (!busy) onBack() }, contentSpacing = TripSpacing.md) {
         TripSectionHeading(
             title = "로컬 데이터 백업",
-            supportingText = "1단계 · 여행·일정·경비·정산·예약·기록 데이터를 비밀번호로 보호하여 내보냅니다."
+            supportingText = "1단계 · 여행 데이터를 보호하여 내보냅니다. 암호화 백업을 권장합니다."
         )
         TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
             Column(
@@ -368,7 +369,7 @@ fun BackupScreen(
                     color = p.textPrimary
                 )
                 Text(
-                    "백업 형식 v" + TripBackupCodec.VERSION +
+                    "여행 데이터 형식 v" + TripBackupCodec.VERSION +
                         " · 최대 " + (TripBackupCodec.MAX_BYTES / 1024 / 1024) + "MB",
                     style = MaterialTheme.typography.bodyMedium,
                     color = p.textSecondary
@@ -379,22 +380,14 @@ fun BackupScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = p.textSecondary
                 )
+                TripSectionHeading(title = "데이터만 암호화 (.tcb)")
                 TripPrimaryButton(
                     label = "암호화 백업 내보내기",
                     enabled = !busy,
                     modifier = Modifier.fillMaxWidth(),
                     onClick = { exportDialog = true }
                 )
-                TripSecondaryButton(
-                    label = "평문 JSON 내보내기",
-                    enabled = !busy,
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = {
-                        exportPicker.launch(
-                            "TripCanvas_backup_" + LocalDate.now().toString() + ".json"
-                        )
-                    }
-                )
+                TripSectionHeading(title = "첨부 포함 암호화 (.tcm)")
                 Text(
                     "첨부 포함 암호화 백업(.tcm)은 사진·예약 문서의 실제 원본을 포함합니다. " +
                         "최대 100개, 개별 10MB, 원본 합계 20MB이며 열 수 없는 원본이 있으면 저장하지 않습니다. " +
@@ -407,6 +400,19 @@ fun BackupScreen(
                     enabled = !busy,
                     modifier = Modifier.fillMaxWidth(),
                     onClick = { mediaExportDialog = true }
+                )
+                TripSectionHeading(title = "평문 JSON (.json)")
+                Text("암호화되지 않는 파일입니다. 개인정보가 포함될 수 있으므로 안전하게 보관하세요.",
+                    style = MaterialTheme.typography.bodyMedium, color = p.textSecondary)
+                TripSecondaryButton(
+                    label = "평문 JSON 내보내기",
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = {
+                        exportPicker.launch(
+                            "TripCanvas_backup_" + LocalDate.now().toString() + ".json"
+                        )
+                    }
                 )
             }
         }
@@ -708,8 +714,16 @@ private fun BackupPasswordDialog(
     var confirmation by remember { mutableStateOf("") }
     val valid = password.length in EncryptedTripBackup.MIN_PASSWORD_LENGTH..EncryptedTripBackup.MAX_PASSWORD_LENGTH &&
         password.any { !it.isWhitespace() } && (!exporting || password == confirmation)
+    val palette = TripDesign.palette
+    val dismiss = {
+        password = ""
+        confirmation = ""
+        onDismiss()
+    }
     AlertDialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = dismiss,
+        shape = RectangleShape,
+        containerColor = palette.surface,
         title = { Text(if (exporting) "암호화 백업 비밀번호 설정" else "암호화 백업 비밀번호 입력") },
         text = {
             Column(
@@ -722,6 +736,9 @@ private fun BackupPasswordDialog(
                     value = password,
                     onValueChange = { if (it.length <= EncryptedTripBackup.MAX_PASSWORD_LENGTH) password = it },
                     label = "백업 비밀번호",
+                    supportingText = if (password.isNotEmpty() && password.length < EncryptedTripBackup.MIN_PASSWORD_LENGTH)
+                        "12자 이상 입력해 주세요." else null,
+                    isError = password.isNotEmpty() && password.length < EncryptedTripBackup.MIN_PASSWORD_LENGTH,
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
                 )
@@ -732,6 +749,8 @@ private fun BackupPasswordDialog(
                         label = "비밀번호 확인",
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        supportingText = if (confirmation.isNotEmpty() && confirmation != password)
+                            "비밀번호가 일치하지 않습니다." else null,
                         isError = confirmation.isNotEmpty() && confirmation != password
                     )
                 }
@@ -745,6 +764,6 @@ private fun BackupPasswordDialog(
                 onConfirm(selected)
             }) { Text(if (exporting) "저장 위치 선택" else "비밀번호 확인 및 검증") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } }
+        dismissButton = { TextButton(onClick = dismiss) { Text("취소") } }
     )
 }

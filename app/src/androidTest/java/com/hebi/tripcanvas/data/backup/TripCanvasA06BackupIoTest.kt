@@ -471,6 +471,64 @@ class TripCanvasA06BackupIoTest {
         assertTrue(runCatching { PortableMediaReader.inspect(archive("media/000.png", row().put("mimeType", "application/pdf")), fingerprint) }.isFailure)
     }
 
+    @Test
+    fun journalPhotoZipRetainsSourceBytesAndExistingRecords() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(context, TripDatabase::class.java).build()
+        val photo = createTestDocument("image/png", "png")
+        val destination = createTestDocument("application/zip", "zip")
+        val resolver = context.contentResolver
+        try {
+            val original = ByteArrayOutputStream().use { out ->
+                val bitmap = Bitmap.createBitmap(64, 48, Bitmap.Config.ARGB_8888)
+                try {
+                    bitmap.eraseColor(android.graphics.Color.DKGRAY)
+                    check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, out))
+                } finally {
+                    bitmap.recycle()
+                }
+                out.toByteArray()
+            }
+            requireNotNull(resolver.openOutputStream(photo, "wt")).use { it.write(original) }
+            db.tripDao().insert(trip("qa-photo-trip"))
+            val withPhoto = TravelMomentEntity(
+                "qa-photo", "qa-photo-trip", null, photo.toString(), "QA photo", 1000L
+            )
+            val noteOnly = TravelMomentEntity(
+                "qa-note", "qa-photo-trip", null, null, "QA memo", 2000L
+            )
+            db.travelJournalDao().insertMoment(withPhoto)
+            db.travelJournalDao().insertMoment(noteOnly)
+            val before = db.travelJournalDao().observeMoments("qa-photo-trip").first()
+            val service = TravelMediaExportService(context)
+            assertTrue(runCatching { service.export("qa-photo-trip", photo, before) }.isFailure)
+            assertArrayEquals(original, requireNotNull(resolver.openInputStream(photo)).use { it.readBytes() })
+            assertEquals(1, service.export("qa-photo-trip", destination, before))
+            val entries = linkedMapOf<String, ByteArray>()
+            ZipInputStream(requireNotNull(resolver.openInputStream(destination))).use { zip ->
+                while (true) {
+                    val entry = zip.nextEntry ?: break
+                    entries[entry.name] = zip.readBytes()
+                    zip.closeEntry()
+                }
+            }
+            assertEquals(setOf("photos/000.png", "manifest.json"), entries.keys)
+            assertArrayEquals(original, requireNotNull(entries["photos/000.png"]))
+            val manifestText = requireNotNull(entries["manifest.json"]).toString(Charsets.UTF_8)
+            val manifest = JSONObject(manifestText)
+            assertEquals("tripcanvas-media-export", manifest.getString("format"))
+            assertEquals("qa-photo-trip", manifest.getString("tripId"))
+            assertEquals(2, manifest.getJSONArray("moments").length())
+            assertTrue(manifestText.contains("QA photo") && manifestText.contains("QA memo"))
+            assertFalse("원본 파일의 접근 URI를 ZIP에 포함하면 안 됩니다.", manifestText.contains(photo.toString()))
+            assertEquals(before, db.travelJournalDao().observeMoments("qa-photo-trip").first())
+            assertArrayEquals(original, requireNotNull(resolver.openInputStream(photo)).use { it.readBytes() })
+        } finally {
+            resolver.delete(photo, null, null)
+            resolver.delete(destination, null, null)
+            db.close()
+        }
+    }
+
     private fun createTestDocument(mime: String = "application/json", suffix: String = "json"): Uri {
         val values = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, "tripcanvas-qa-a06-${System.nanoTime()}.$suffix")

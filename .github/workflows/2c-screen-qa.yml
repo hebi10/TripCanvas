@@ -28,9 +28,11 @@ jobs:
       matrix:
         include:
           - device: phone
+            profile: pixel_6
             resolution: 1080x2400
             density: '420'
           - device: tablet
+            profile: pixel_tablet
             resolution: 1600x2560
             density: '320'
     steps:
@@ -65,8 +67,9 @@ jobs:
           api-level: 35
           target: google_apis
           arch: x86_64
+          profile: ${{ matrix.profile }}
           disable-animations: true
-          script: bash .github/scripts/run-2c-screen-qa.sh ${{ matrix.resolution }} ${{ matrix.density }}
+          script: bash .github/scripts/run-design-evidence-qa.sh .github/scripts/run-2c-screen-qa.sh ${{ matrix.resolution }} ${{ matrix.density }}
 
       - name: Upload real emulator screenshot evidence and test logs
         if: always()

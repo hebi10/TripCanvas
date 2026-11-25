@@ -14,6 +14,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import com.hebi.tripcanvas.BuildConfig
 import com.hebi.tripcanvas.monetization.AdFreeBillingState
 import com.hebi.tripcanvas.monetization.MONTHLY_PLAN_ID
 import com.hebi.tripcanvas.monetization.YEARLY_PLAN_ID
@@ -48,7 +49,8 @@ fun SettingsScreen(
     val context = LocalContext.current
     TripPageFrame(
         title = "설정",
-        onBack = onBack
+        onBack = onBack,
+        contentSpacing = TripSpacing.md
     ) {
         TripSectionHeading(
             title = "화면 모드",
@@ -97,7 +99,7 @@ fun SettingsScreen(
         TripDivider()
         TripSectionHeading(
             title = "데이터 관리",
-            supportingText = "기기의 여행 데이터를 JSON 파일로 내보내거나 검증한 파일로 전체 복원합니다."
+            supportingText = "암호화 백업(.tcb), 첨부 포함 암호화 백업(.tcm), 평문 JSON을 지원합니다. 검증 후 전체 복원할 수 있습니다."
         )
         TripSecondaryButton(
             label = "로컬 백업·복원",
@@ -105,13 +107,20 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxWidth()
         )
         TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
-            Text(
-                "백업은 암호화되지 않습니다. 예약 확인번호·메모 등 개인정보가 포함될 수 있고 " +
-                    "PDF·이미지 원본과 접근 URI는 제외됩니다.",
+            Column(
                 modifier = Modifier.padding(TripSpacing.md),
-                style = MaterialTheme.typography.bodyMedium,
-                color = p.textSecondary
-            )
+                verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)
+            ) {
+                Text("암호화 백업(.tcb)", style = MaterialTheme.typography.titleSmall, color = p.textPrimary)
+                Text("여행 데이터 보호 · 사진·PDF 원본은 제외", style = MaterialTheme.typography.bodyMedium, color = p.textSecondary)
+                Text("첨부 포함 암호화 백업(.tcm)", style = MaterialTheme.typography.titleSmall, color = p.textPrimary)
+                Text("여행 데이터와 선택한 사진·예약 문서 원본 보호", style = MaterialTheme.typography.bodyMedium, color = p.textSecondary)
+                Text("평문 JSON", style = MaterialTheme.typography.titleSmall, color = p.textPrimary)
+                Text("암호화되지 않아 예약 확인번호·메모 등 개인정보가 노출될 수 있습니다. 원본 파일과 접근 URI는 제외됩니다.",
+                    style = MaterialTheme.typography.bodyMedium, color = p.textSecondary)
+                Text("암호화 백업은 비밀번호 분실 시 복원할 수 없습니다.",
+                    style = MaterialTheme.typography.bodySmall, color = p.textSecondary)
+            }
         }
         TripDivider()
         TripSectionHeading(
@@ -123,21 +132,29 @@ fun SettingsScreen(
             !billingState.resolved -> "구독 확인 중 · 연결이 완료되면 요금제가 표시됩니다."
             else -> "광고 포함 무료 이용"
         }
-        Text(adFreeLabel, style = MaterialTheme.typography.bodyMedium, color = p.textPrimary)
-        if (!billingState.adFree) {
-            billingState.plans.forEach { plan ->
-                val label = if (plan.basePlanId == MONTHLY_PLAN_ID) "월간" else "연간"
-                TripSecondaryButton(
-                    label = "$label 광고 제거 · ${plan.price}",
-                    onClick = { onPurchase(plan.basePlanId) },
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-            if (billingState.plans.isEmpty()) {
-                Text(
-                    "현재 Google Play에 구매 가능한 요금제가 없습니다. 등록 완료 후 제공됩니다.",
-                    color = p.textSecondary
-                )
+        TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier.padding(TripSpacing.md),
+                verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)
+            ) {
+                Text(adFreeLabel, style = MaterialTheme.typography.titleMedium, color = p.textPrimary)
+                if (!billingState.adFree && billingState.resolved) {
+                    val availablePlans = billingState.plans.filter {
+                        it.basePlanId == MONTHLY_PLAN_ID || it.basePlanId == YEARLY_PLAN_ID
+                    }.sortedBy { if (it.basePlanId == MONTHLY_PLAN_ID) 0 else 1 }
+                    availablePlans.forEach { plan ->
+                        val label = if (plan.basePlanId == MONTHLY_PLAN_ID) "월간" else "연간"
+                        TripSecondaryButton(
+                            label = "$label 광고 제거 · ${plan.price}",
+                            onClick = { onPurchase(plan.basePlanId) },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    if (availablePlans.isEmpty()) {
+                        Text("현재 Google Play에서 조회된 구매 가능 요금제가 없습니다.",
+                            style = MaterialTheme.typography.bodyMedium, color = p.textSecondary)
+                    }
+                }
             }
         }
         billingState.message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -183,7 +200,7 @@ fun SettingsScreen(
         )
         TripDivider()
         TripSectionHeading(
-            title = "화면 검수",
+            title = "개발용 화면 검수",
             supportingText = "개발용 화면 미리보기입니다. 실제 여행 데이터는 생성·변경하지 않습니다."
         )
         Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)) {
@@ -199,7 +216,7 @@ fun SettingsScreen(
             )
         }
         Text(
-            text = "TripCanvas · Android 초기 버전 0.1.0",
+            text = "TripCanvas · ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
             style = MaterialTheme.typography.labelMedium,
             color = p.textSecondary
         )

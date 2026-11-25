@@ -805,6 +805,275 @@ class TripCanvas2CScreenshotTest {
         }
     }
 
+    @Test
+    fun captureSettingsAndBackupSafety() {
+        val before = runBlocking { database.backupDao().snapshot() }
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            fun hideKeyboard() {
+                var visible = false
+                scenario.onActivity { activity ->
+                    visible = androidx.core.view.ViewCompat.getRootWindowInsets(activity.window.decorView)
+                        ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) == true
+                }
+                if (visible) device.pressBack()
+            }
+            awaitText("내 여행")
+            click("설정")
+            awaitText("화면 모드")
+            capture("s01-settings-light")
+            awaitText("암호화 백업(.tcb)")
+            awaitText("첨부 포함 암호화 백업(.tcm)")
+            awaitText("평문 JSON")
+            capture("s02-settings-backup-formats")
+            awaitText("광고 제거")
+            capture("s03-settings-subscription")
+            awaitText("TripCanvas · " + com.hebi.tripcanvas.BuildConfig.VERSION_NAME +
+                " (" + com.hebi.tripcanvas.BuildConfig.VERSION_CODE + ")")
+            capture("s04-settings-version")
+            navigator.clickVisible(By.text("로컬 백업·복원"), "로컬 백업·복원", "로컬 데이터 백업")
+            awaitText("암호화 백업 내보내기")
+            capture("s05-backup-overview")
+            click("암호화 백업 내보내기")
+            awaitText("암호화 백업 비밀번호 설정")
+            capture("s06-backup-password-empty")
+            val fields = device.findObjects(By.clazz("android.widget.EditText"))
+            assertEquals(2, fields.size)
+            fields[0].setText("qa".repeat(3))
+            hideKeyboard()
+            awaitText("12자 이상 입력해 주세요.")
+            capture("s07-backup-password-short")
+            val passwordFields = device.findObjects(By.clazz("android.widget.EditText"))
+            assertEquals(2, passwordFields.size)
+            passwordFields[0].setText("qa".repeat(8))
+            passwordFields[1].setText("qb".repeat(8))
+            hideKeyboard()
+            awaitText("비밀번호가 일치하지 않습니다.")
+            capture("s08-backup-password-mismatch")
+            click("취소")
+            awaitText("첨부 포함 암호화 백업 내보내기")
+            capture("s09-backup-media-format")
+            awaitText("평문 JSON 내보내기")
+            capture("s10-backup-plain-format")
+            awaitText("첨부 포함 백업 선택 및 검증")
+            capture("s11-backup-restore-options")
+            awaitText("복원 전 안전 백업")
+            capture("s12-backup-checkpoint")
+            navigator.clickVisible(By.text("사용하지 않는 복원 파일 정리"), "사용하지 않는 복원 파일 정리", "복원 파일 정리")
+            awaitText("복원 파일 정리")
+            capture("s13-backup-cleanup-confirm")
+            click("취소")
+            assertEquals(before, runBlocking { database.backupDao().snapshot() })
+            device.pressBack()
+            awaitText("설정")
+            runBlocking { tripPreferencesRepository(context).saveThemeMode(TripThemeMode.Dark) }
+            device.executeShellCommand("settings put system font_scale 1.6")
+            Thread.sleep(1200)
+            scenario.recreate()
+            awaitText("화면 모드")
+            capture("s14-settings-dark-font160")
+            navigator.clickVisible(By.text("로컬 백업·복원"), "로컬 백업·복원", "로컬 데이터 백업")
+            awaitText("암호화 백업 내보내기")
+            capture("s15-backup-dark-font160")
+            awaitText("복원 전 안전 백업")
+            awaitText("사용하지 않는 복원 파일 정리")
+            capture("s16-checkpoint-dark-font160")
+            assertEquals(before, runBlocking { database.backupDao().snapshot() })
+        }
+    }
+
+    @Test
+    fun captureVerifiedAttachmentRestoreCancellation() {
+        // Only synthetic test data is included in this separate portable archive.
+        val original = runBlocking { database.backupDao().snapshot() }
+        val resolver = context.contentResolver
+        val pass = ("qa" + "restore".repeat(3)).toCharArray()
+        val archiveDb = androidx.room.Room.inMemoryDatabaseBuilder(context, TripDatabase::class.java).build()
+        val created = mutableListOf<android.net.Uri>()
+        fun newDocument(mime: String, suffix: String): android.net.Uri {
+            val uri = requireNotNull(resolver.insert(
+                android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                android.content.ContentValues().apply {
+                    put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME,
+                        "tripcanvas-qa-restore-${System.nanoTime()}.$suffix")
+                    put(android.provider.MediaStore.MediaColumns.MIME_TYPE, mime)
+                    put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH,
+                        android.os.Environment.DIRECTORY_DOWNLOADS + "/TripCanvasQA")
+                }
+            ))
+            created.add(uri)
+            requireNotNull(resolver.openOutputStream(uri, "wt")).use { it.flush() }
+            return uri
+        }
+        var monitor: android.app.Instrumentation.ActivityMonitor? = null
+        try {
+            val image = newDocument("image/png", "png")
+            val archive = newDocument("application/octet-stream", "tcm")
+            val bitmap = android.graphics.Bitmap.createBitmap(64, 48, android.graphics.Bitmap.Config.ARGB_8888)
+            try {
+                bitmap.eraseColor(Color.DKGRAY)
+                requireNotNull(resolver.openOutputStream(image, "wt")).use {
+                    check(bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it))
+                }
+            } finally {
+                bitmap.recycle()
+            }
+            runBlocking {
+                archiveDb.tripDao().insert(
+                    original.trips.single().copy(id = "qa-portable-preview", title = "QA portable preview")
+                )
+                archiveDb.travelJournalDao().insertMoment(
+                    com.hebi.tripcanvas.data.local.TravelMomentEntity(
+                        "qa-portable-photo", "qa-portable-preview", null,
+                        image.toString(), "QA portable photo", 1000L
+                    )
+                )
+                assertEquals(1, com.hebi.tripcanvas.data.backup.PortableAttachmentBackupService(
+                    context, archiveDb
+                ).export(archive, pass).files)
+            }
+            val pickerMonitor = object : android.app.Instrumentation.ActivityMonitor() {
+                override fun onStartActivity(intent: android.content.Intent): android.app.Instrumentation.ActivityResult? {
+                    if (intent.action != android.content.Intent.ACTION_OPEN_DOCUMENT) return null
+                    return android.app.Instrumentation.ActivityResult(
+                        android.app.Activity.RESULT_OK,
+                        android.content.Intent().setData(archive)
+                            .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    )
+                }
+            }
+            monitor = pickerMonitor
+            instrumentation.addMonitor(pickerMonitor)
+            ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+                awaitText("내 여행")
+                click("설정")
+                navigator.clickVisible(By.text("로컬 백업·복원"), "로컬 백업·복원", "로컬 데이터 백업")
+                awaitText("첨부 포함 백업 선택 및 검증")
+                click("첨부 포함 백업 선택 및 검증")
+                awaitText("암호화 백업 비밀번호 입력")
+                capture("s17-backup-password-import")
+                val field = device.wait(Until.findObject(By.clazz("android.widget.EditText")), 5000)
+                    ?: throw AssertionError("백업 비밀번호 입력란 미노출")
+                field.setText(String(pass))
+                var visible = false
+                scenario.onActivity { activity ->
+                    visible = androidx.core.view.ViewCompat.getRootWindowInsets(activity.window.decorView)
+                        ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) == true
+                }
+                if (visible) device.pressBack()
+                navigator.clickVisible(By.text("비밀번호 확인 및 검증"), "첨부 백업 검증")
+                awaitText("첨부 파일 포함 전체 복원")
+                awaitText("첨부 원본 수", By.textContains("사진·예약 원본 1개"))
+                capture("s18-backup-attachment-verified")
+                assertEquals(original, runBlocking { database.backupDao().snapshot() })
+                click("취소")
+                awaitText("복원을 취소했습니다. 기존 여행 데이터는 유지됩니다.")
+                assertEquals(original, runBlocking { database.backupDao().snapshot() })
+                assertEquals(1, pickerMonitor.hits)
+                capture("s19-backup-attachment-cancelled")
+            }
+        } finally {
+            monitor?.let { instrumentation.removeMonitor(it) }
+            created.forEach { resolver.delete(it, null, null) }
+            pass.fill('\u0000')
+            archiveDb.close()
+        }
+    }
+
+    @Test
+    fun captureJournalPhotoAndZipExport() {
+        val resolver = context.contentResolver
+        val created = mutableListOf<android.net.Uri>()
+        fun newDocument(mime: String, suffix: String): android.net.Uri {
+            val uri = requireNotNull(resolver.insert(
+                android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                android.content.ContentValues().apply {
+                    put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME,
+                        "tripcanvas-qa-journal-${System.nanoTime()}.$suffix")
+                    put(android.provider.MediaStore.MediaColumns.MIME_TYPE, mime)
+                    put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH,
+                        android.os.Environment.DIRECTORY_DOWNLOADS + "/TripCanvasQA")
+                }
+            ))
+            created.add(uri)
+            requireNotNull(resolver.openOutputStream(uri, "wt")).use { it.flush() }
+            return uri
+        }
+        var monitor: android.app.Instrumentation.ActivityMonitor? = null
+        try {
+            val image = newDocument("image/png", "png")
+            val output = newDocument("application/zip", "zip")
+            val bitmap = android.graphics.Bitmap.createBitmap(640, 480, android.graphics.Bitmap.Config.ARGB_8888)
+            try {
+                val canvas = android.graphics.Canvas(bitmap)
+                canvas.drawColor(Color.rgb(80, 110, 140))
+                val paint = android.graphics.Paint().apply { color = Color.WHITE; textSize = 48f }
+                canvas.drawText("QA PHOTO", 80f, 240f, paint)
+                requireNotNull(resolver.openOutputStream(image, "wt")).use {
+                    check(bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it))
+                }
+            } finally {
+                bitmap.recycle()
+            }
+            val originalBytes = requireNotNull(resolver.openInputStream(image)).use { it.readBytes() }
+            runBlocking {
+                database.travelJournalDao().insertMoment(
+                    com.hebi.tripcanvas.data.local.TravelMomentEntity(
+                        "qa-journal-photo", "qa-trip", null, image.toString(),
+                        "QA photo record", 1000L
+                    )
+                )
+            }
+            val original = runBlocking { database.travelJournalDao().observeMoments("qa-trip").first() }
+            val pickerMonitor = object : android.app.Instrumentation.ActivityMonitor() {
+                override fun onStartActivity(intent: android.content.Intent): android.app.Instrumentation.ActivityResult? {
+                    if (intent.action != android.content.Intent.ACTION_CREATE_DOCUMENT) return null
+                    return android.app.Instrumentation.ActivityResult(
+                        android.app.Activity.RESULT_OK,
+                        android.content.Intent().setData(output)
+                            .addFlags(android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                    )
+                }
+            }
+            monitor = pickerMonitor
+            instrumentation.addMonitor(pickerMonitor)
+            ActivityScenario.launch(MainActivity::class.java).use {
+                awaitText("제주 주말 여행")
+                click("제주 주말 여행")
+                awaitText("여행 기록 열기")
+                navigator.clickVisible(By.desc("여행 기록 열기"), "여행 기록 열기", "새 기록")
+                awaitText("QA photo record")
+                awaitText("여행 기록 사진", By.desc("여행 기록 사진"))
+                capture("s20-journal-photo-preview")
+                awaitText("사진 원본 ZIP 저장")
+                navigator.clickVisible(By.text("사진 원본 ZIP 저장"), "사진 원본 ZIP 저장")
+                awaitText("사진 원본 1개 ZIP 내보내기 완료")
+                capture("s21-journal-zip-exported")
+                val entries = linkedMapOf<String, ByteArray>()
+                java.util.zip.ZipInputStream(requireNotNull(resolver.openInputStream(output))).use { zip ->
+                    while (true) {
+                        val entry = zip.nextEntry ?: break
+                        entries[entry.name] = zip.readBytes()
+                        zip.closeEntry()
+                    }
+                }
+                assertEquals(setOf("photos/000.png", "manifest.json"), entries.keys)
+                assertTrue(originalBytes.contentEquals(requireNotNull(entries["photos/000.png"])))
+                assertTrue(originalBytes.contentEquals(requireNotNull(resolver.openInputStream(image)).use { it.readBytes() }))
+                assertEquals(original, runBlocking { database.travelJournalDao().observeMoments("qa-trip").first() })
+                assertEquals(1, pickerMonitor.hits)
+                device.pressBack()
+                awaitText("작업 도구")
+                navigator.clickVisible(By.desc("리포트 열기"), "리포트 열기", "여행 요약")
+                awaitText("대표 기록 사진")
+                awaitText("여행 기록 사진", By.desc("여행 기록 사진"))
+                capture("s22-report-photo-preview")
+            }
+        } finally {
+            monitor?.let { instrumentation.removeMonitor(it) }
+            created.forEach { resolver.delete(it, null, null) }
+        }
+    }
+
     private fun assertStatusBarBackground(dark: Boolean) {
         val screenshot = File(context.cacheDir, "qa-status-bar.png")
         assertTrue("Status bar screenshot failed", device.takeScreenshot(screenshot))

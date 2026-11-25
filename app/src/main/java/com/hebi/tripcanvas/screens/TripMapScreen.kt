@@ -17,6 +17,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -61,6 +62,7 @@ import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import org.maplibre.android.tile.TileOperation
 import androidx.compose.runtime.rememberUpdatedState
 import com.google.gson.JsonObject
 import org.maplibre.geojson.Feature
@@ -404,14 +406,18 @@ private fun TripMapCanvas(
         MapLibre.getInstance(context.applicationContext)
         MapView(context).apply { onCreate(null as Bundle?) }
     }
-    var map by remember { mutableStateOf<MapLibreMap?>(null) }
-    var mapSize by remember { mutableStateOf(IntSize.Zero) }
+    var map by remember(mapView) { mutableStateOf<MapLibreMap?>(null) }
+    var mapSize by remember(mapView) { mutableStateOf(IntSize.Zero) }
+    var styleRequest by remember(mapView) { mutableIntStateOf(0) }
+    var loadedStyleRequest by remember(mapView) { mutableIntStateOf(-1) }
     val pinInsetPx = with(LocalDensity.current) { 40.dp.roundToPx() }
     var initialRender by remember(mapView) { mutableStateOf(InitialMapRender.Loading) }
     var initialViewportConfigured by remember(mapView) { mutableStateOf(false) }
+    var backgroundTileParsed by remember(mapView) { mutableStateOf(false) }
     val renderListener = remember(mapView) {
         MapView.OnDidFinishRenderingFrameListener { fully, _, _ ->
-            if (fully && initialViewportConfigured && initialRender != InitialMapRender.Ready) {
+            if (fully && loadedStyleRequest == styleRequest &&
+                initialViewportConfigured && backgroundTileParsed && initialRender != InitialMapRender.Ready) {
                 initialRender = InitialMapRender.Ready
             }
         }
@@ -421,18 +427,45 @@ private fun TripMapCanvas(
             if (initialRender != InitialMapRender.Ready) initialRender = InitialMapRender.Failed
         }
     }
-    LaunchedEffect(mapView) {
+    val tileListener = remember(mapView) {
+        MapView.OnTileActionListener { operation, _, _, _, _, _, sourceId ->
+            // The local GeoJSON pin source is not evidence of a loaded background.
+            if (sourceId != PIN_SOURCE) {
+                if (operation == TileOperation.EndParse) backgroundTileParsed = true
+                if (operation == TileOperation.Error && initialRender == InitialMapRender.Loading) {
+                    initialRender = InitialMapRender.Delayed
+                }
+            }
+        }
+    }
+    LaunchedEffect(mapView, styleRequest) {
         delay(12_000)
         if (initialRender == InitialMapRender.Loading) initialRender = InitialMapRender.Delayed
     }
+    // Reload the style on the existing renderer instead of replacing its
+    // AndroidView and losing the measured viewport or camera lifecycle.
+    LaunchedEffect(map, styleRequest) {
+        val ready = map ?: return@LaunchedEffect
+        val request = styleRequest
+        ready.setStyle(Style.Builder().fromUri("https://tiles.openfreemap.org/styles/liberty")) {
+            if (styleRequest == request) loadedStyleRequest = request
+        }
+    }
     DisposableEffect(lifecycle, mapView) {
+        var destroyed = false
         val observer = LifecycleEventObserver { _, event ->
-            when (event) {
+            if (!destroyed) when (event) {
                 Lifecycle.Event.ON_START -> mapView.onStart()
                 Lifecycle.Event.ON_RESUME -> mapView.onResume()
                 Lifecycle.Event.ON_PAUSE -> mapView.onPause()
                 Lifecycle.Event.ON_STOP -> mapView.onStop()
-                Lifecycle.Event.ON_DESTROY -> mapView.onDestroy()
+                Lifecycle.Event.ON_DESTROY -> {
+                    destroyed = true
+                    mapView.removeOnDidFinishRenderingFrameListener(renderListener)
+                    mapView.removeOnDidFailLoadingMapListener(failureListener)
+                    mapView.removeOnTileActionListener(tileListener)
+                    mapView.onDestroy()
+                }
                 else -> Unit
             }
         }
@@ -441,11 +474,15 @@ private fun TripMapCanvas(
         if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) mapView.onResume()
         onDispose {
             lifecycle.removeObserver(observer)
-            mapView.removeOnDidFinishRenderingFrameListener(renderListener)
-            mapView.removeOnDidFailLoadingMapListener(failureListener)
-            mapView.onPause()
-            mapView.onStop()
-            mapView.onDestroy()
+            if (!destroyed) {
+                destroyed = true
+                mapView.removeOnDidFinishRenderingFrameListener(renderListener)
+                mapView.removeOnDidFailLoadingMapListener(failureListener)
+                mapView.removeOnTileActionListener(tileListener)
+                mapView.onPause()
+                mapView.onStop()
+                mapView.onDestroy()
+            }
         }
     }
     AndroidView(
@@ -453,11 +490,8 @@ private fun TripMapCanvas(
             mapView.apply {
                 addOnDidFinishRenderingFrameListener(renderListener)
                 addOnDidFailLoadingMapListener(failureListener)
-                getMapAsync { ready ->
-                    ready.setStyle(
-                        Style.Builder().fromUri("https://tiles.openfreemap.org/styles/liberty")
-                    ) { map = ready }
-                }
+                addOnTileActionListener(tileListener)
+                getMapAsync { ready -> map = ready }
             }
         },
         modifier = Modifier.fillMaxWidth().height(mapHeight).onSizeChanged { mapSize = it }
@@ -475,6 +509,18 @@ private fun TripMapCanvas(
         style = MaterialTheme.typography.bodySmall,
         color = TripDesign.palette.textSecondary
     )
+    if (initialRender != InitialMapRender.Loading && map != null) {
+        TripSecondaryButton(
+            label = "지도 다시 불러오기",
+            onClick = {
+                initialRender = InitialMapRender.Loading
+                initialViewportConfigured = false
+                backgroundTileParsed = false
+                loadedStyleRequest = -1
+                styleRequest++
+            }
+        )
+    }
     val currentOnSelected by rememberUpdatedState(onSelected)
     DisposableEffect(map) {
         val ready = map
@@ -497,7 +543,10 @@ private fun TripMapCanvas(
             onDispose { ready.removeOnMapClickListener(listener) }
         }
     }
-    LaunchedEffect(map, pins, selectedId, mapSize, pinInsetPx) {
+    LaunchedEffect(map, loadedStyleRequest, pins, selectedId, mapSize, pinInsetPx) {
+        if (loadedStyleRequest != styleRequest || mapSize.width <= 0 || mapSize.height <= 0) {
+            return@LaunchedEffect
+        }
         val ready = map ?: return@LaunchedEffect
         val style = ready.style ?: return@LaunchedEffect
         if (initialRender != InitialMapRender.Ready) initialViewportConfigured = false
