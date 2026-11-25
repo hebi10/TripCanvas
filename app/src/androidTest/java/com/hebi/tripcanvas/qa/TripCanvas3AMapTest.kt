@@ -184,29 +184,48 @@ class TripCanvas3AMapTest {
                 assertMapCentered(scenario, 33.4888, 126.4975)
                 capture("06b-map-second-place-camera-focused")
                 val previousMap = AtomicReference<MapView?>(null)
-                scenario.onActivity { activity ->
-                    previousMap.set(findMapView(activity.window.decorView))
-                }
-                assertTrue("지도 다시 불러오기 전 지도 인스턴스가 필요합니다.", previousMap.get() != null)
-                click("지도 다시 불러오기")
-                for (attempt in 0 until 25) {
-                    val changed = AtomicReference(false)
-                    scenario.onActivity { activity ->
-                        val view = findMapView(activity.window.decorView)
-                        changed.set(view != null && view !== previousMap.get())
-                    }
-                    if (changed.get()) break
-                    SystemClock.sleep(200)
-                }
+                val previousStyle = AtomicReference<org.maplibre.android.maps.Style?>(null)
+                val styleReady = CountDownLatch(1)
                 scenario.onActivity { activity ->
                     val view = findMapView(activity.window.decorView)
-                    assertTrue("지도 재조회 시 새 지도 인스턴스가 생성되어야 합니다.",
-                        view != null && view !== previousMap.get())
+                        ?: throw AssertionError("지도 다시 불러오기 전 지도 인스턴스가 필요합니다.")
+                    previousMap.set(view)
+                    view.getMapAsync { map ->
+                        previousStyle.set(map.style)
+                        styleReady.countDown()
+                    }
                 }
-                awaitRenderedMapPins(scenario)
-                awaitText("선택 날짜 전체 · 장소 3개 · 지도 핀 2개")
+                assertTrue("재조회 전 지도 스타일이 필요합니다.",
+                    styleReady.await(5, TimeUnit.SECONDS) && previousStyle.get() != null)
+                click("지도 다시 불러오기")
+                // Wait for the replacement style and actual rebuilt pin layers,
+                // without scrolling across the renderer or reselecting the place.
+                var styleRebuilt = false
+                for (attempt in 0 until 30) {
+                    val latch = CountDownLatch(1)
+                    val loaded = AtomicReference(false)
+                    scenario.onActivity { activity ->
+                        val view = findMapView(activity.window.decorView)
+                        assertTrue("재조회 중 기존 지도 뷰를 유지해야 합니다.", view === previousMap.get())
+                        requireNotNull(view).getMapAsync { map ->
+                            val style = map.style
+                            loaded.set(style != null && style !== previousStyle.get() &&
+                                style.getSource("tripcanvas-place-source") != null &&
+                                style.getLayer("tripcanvas-place-selected") != null)
+                            latch.countDown()
+                        }
+                    }
+                    if (latch.await(3, TimeUnit.SECONDS) && loaded.get()) {
+                        styleRebuilt = true
+                        break
+                    }
+                    SystemClock.sleep(500)
+                }
+                assertTrue("지도 스타일 재조회 및 실제 선택 핀 레이어 재구성 실패", styleRebuilt)
                 assertMapCentered(scenario, 33.4888, 126.4975)
+                awaitText("선택 날짜 전체 · 장소 3개 · 지도 핀 2개")
                 awaitText("지도 선택 · 제주도청")
+                assertMapCentered(scenario, 33.4888, 126.4975)
                 capture("06c-map-reload-keeps-selected-place")
                 click("외부 장소 검색")
                 awaitText("검색어")
@@ -342,6 +361,7 @@ class TripCanvas3AMapTest {
         expectedLatitude: Double,
         expectedLongitude: Double
     ) {
+        var lastCenter: LatLng? = null
         repeat(16) {
             val latch = CountDownLatch(1)
             val center = AtomicReference<LatLng?>(null)
@@ -355,13 +375,21 @@ class TripCanvas3AMapTest {
             }
             assertTrue("MapLibre camera callback timed out", latch.await(5, TimeUnit.SECONDS))
             val target = center.get()
+            lastCenter = target
             if (target != null &&
                 abs(target.latitude - expectedLatitude) < 0.005 &&
                 abs(target.longitude - expectedLongitude) < 0.005
             ) return
             SystemClock.sleep(200)
         }
-        throw AssertionError("MapLibre camera did not focus the selected saved place")
+        File(evidenceDir(), "99-map-camera-center.txt").writeText(
+            "Expected: $expectedLatitude,$expectedLongitude\nActual: $lastCenter\n"
+        )
+        capture("99-map-camera-focus-failure")
+        runCatching {
+            device.dumpWindowHierarchy(File(evidenceDir(), "99-map-camera-focus-hierarchy.xml"))
+        }
+        throw AssertionError("MapLibre camera did not focus the selected saved place; actual=$lastCenter")
     }
 
     private fun findMapView(root: View): MapView? {
