@@ -195,11 +195,37 @@ class TripCanvas3BScreenTest {
                 awaitText("예약 열기")
                 clickWorkspaceCard("예약 열기")
                 awaitText("예약 1건")
-                awaitText("첨부 1개")
+                assertBookingFiltersVisible()
                 capture("14-bookings-dark-font160")
+                navigator.clickVisible(bookingFilter("기타"), "기타 예약 유형", "선택한 유형의 예약이 없습니다")
+                assertTrue(
+                    "큰 글꼴에서 마지막 예약 유형을 직접 선택할 수 있어야 합니다.",
+                    device.wait(Until.hasObject(bookingFilter("기타").checked(true)), 5000)
+                )
+                assertFalse(device.hasObject(By.text("숙소 예약")))
+                capture("14a-bookings-last-filter-font160")
+                navigator.clickVisible(bookingFilter("전체"), "전체 예약 유형", "숙소 예약")
+                awaitText("첨부 1개")
             }
         } finally {
             device.executeShellCommand("settings put system font_scale 1.0")
+        }
+    }
+
+    private fun bookingFilter(label: String) =
+        By.checkable(true).clickable(true).hasChild(By.text(label))
+
+    private fun assertBookingFiltersVisible() {
+        val labels = listOf("전체", "항공", "숙소", "교통", "입장권", "기타")
+        labels.forEach { label ->
+            val chip = device.wait(Until.findObject(bookingFilter(label)), 5000)
+                ?: throw AssertionError("큰 글꼴에서 예약 유형이 보이지 않습니다: $label")
+            val bounds = chip.visibleBounds
+            assertTrue(
+                "예약 유형이 화면 안에 표시되어야 합니다: $label ($bounds)",
+                bounds.width() > 0 && bounds.height() > 0 &&
+                    bounds.left >= 0 && bounds.right <= device.displayWidth
+            )
         }
     }
 
