@@ -83,6 +83,7 @@ fun BackupScreen(
     var pendingCheckpoint by remember { mutableStateOf<RestoreCheckpoint?>(null) }
     var checkpointAvailable by remember { mutableStateOf(false) }
     var deleteCheckpointDialog by remember { mutableStateOf(false) }
+    var cleanupMediaDialog by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var status by rememberSaveable { mutableStateOf<String?>(null) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
@@ -448,7 +449,7 @@ fun BackupScreen(
                 )
                 Text(
                     "복원한 원본은 앱 전용 저장소에 복사합니다. 같은 기기의 안전 백업이 참조하는 파일도 유지하며 " +
-                        "복원 파일 저장 한도는 200MB입니다. 앱 제거 또는 앱 데이터 삭제 시 복원 파일도 사라집니다.",
+                        "복원 파일 저장 한도는 200MB입니다. 사용하지 않는 복원 파일은 아래에서 정리할 수 있으며 앱 제거 또는 앱 데이터 삭제 시 사라집니다.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = p.textSecondary
                 )
@@ -489,6 +490,12 @@ fun BackupScreen(
                         onClick = { deleteCheckpointDialog = true }
                     )
                 }
+                TripSecondaryButton(
+                    label = "사용하지 않는 복원 파일 정리",
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !busy,
+                    onClick = { cleanupMediaDialog = true }
+                )
             }
         }
         if (busy) TripLoadingState("파일을 처리하는 중")
@@ -508,6 +515,37 @@ fun BackupScreen(
                 actionLabel = "닫기"
             )
         }
+    }
+
+    if (cleanupMediaDialog) {
+        TripConfirmDialog(
+            title = "사용하지 않는 복원 파일 정리",
+            message = "현재 여행과 안전 백업에서 참조하지 않는 앱 내부 복원 파일 묶음만 삭제합니다. 외부 원본 파일은 삭제하지 않습니다.",
+            confirmLabel = "복원 파일 정리",
+            destructive = true,
+            enabled = !busy,
+            onDismiss = { if (!busy) cleanupMediaDialog = false },
+            onConfirm = {
+                if (!busy) {
+                    busy = true
+                    error = null
+                    status = null
+                    scope.launch {
+                        try {
+                            val deleted = mediaService.cleanupUnused(service)
+                            cleanupMediaDialog = false
+                            status = "사용하지 않는 복원 파일 " + deleted + "개를 정리했습니다."
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) {
+                            error = "복원 파일 참조를 확인하지 못했거나 정리할 수 없습니다. 안전 백업을 확인해 주세요."
+                        } finally {
+                            busy = false
+                        }
+                    }
+                }
+            }
+        )
     }
 
     if (deleteCheckpointDialog) {
