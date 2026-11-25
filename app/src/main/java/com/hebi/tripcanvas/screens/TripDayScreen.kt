@@ -137,7 +137,18 @@ fun TripDayScreen(
     }.collectAsState(initial = emptyList())
     val placeNames = places.associate { it.id to it.name }
 
-    TripPageFrame(title = "여행 일정", onBack = onBack) {
+    TripPageFrame(
+        title = "여행 일정",
+        onBack = onBack,
+        bottomAction = if (trip != null) ({
+            TripPrimaryButton(
+                label = "일정 추가",
+                onClick = { onAdd(selectedDate) },
+                enabled = selectedDate.isNotBlank() && !busy,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }) else null
+    ) {
         if (tripState == DayTripState.Loading) {
             TripLoadingState("여행 정보를 불러오는 중")
         } else if (tripState == DayTripState.Failed) {
@@ -188,12 +199,23 @@ fun TripDayScreen(
                         }
                     }
                 )
-                Text(
-                    text = "${selected.monthValue}월 ${selected.dayOfMonth}일 · " +
-                        selected.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.KOREAN),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = p.textPrimary
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs)
+                ) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TripSpacing.xxs)) {
+                        Text(
+                            text = "${selected.monthValue}월 ${selected.dayOfMonth}일 · " +
+                                selected.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.KOREAN),
+                            style = MaterialTheme.typography.titleLarge,
+                            color = p.textPrimary
+                        )
+                        Text("여행 " + (selected.toEpochDay() - start.toEpochDay() + 1) + "일차",
+                            style = MaterialTheme.typography.bodySmall, color = p.textSecondary)
+                    }
+                    TripSecondaryButton(label = "지도에서 보기", onClick = { onMap(selectedDate) })
+                }
             }
             if (failedAction) {
                 TripErrorState(
@@ -202,13 +224,7 @@ fun TripDayScreen(
                     onRetry = { failedAction = false }
                 )
             }
-            TripPrimaryButton(
-                label = "일정 추가",
-                onClick = { onAdd(selectedDate) },
-                enabled = selectedDate.isNotBlank(),
-                modifier = Modifier.fillMaxWidth()
-            )
-            when (val result = state) {
+             when (val result = state) {
                 DayState.Loading -> TripLoadingState("선택 날짜의 일정을 불러오는 중")
                 DayState.Failed -> TripErrorState(
                     title = "일정을 불러오지 못했습니다",
@@ -341,12 +357,7 @@ fun TripDayScreen(
                     }
                 }
             }
-            TripSecondaryButton(
-                label = "지도에서 보기",
-                onClick = { onMap(selectedDate.ifBlank { "all" }) },
-                modifier = Modifier.fillMaxWidth()
-            )
-            TripSecondaryButton(
+             TripSecondaryButton(
                 label = "저장 장소 관리",
                 onClick = onPlaces,
                 modifier = Modifier.fillMaxWidth()
@@ -595,13 +606,15 @@ private fun ScheduleRow(
                     }
                 }
             }
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs),
-                verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
-            ) {
-                if (hasConflict) TripStatusTag("시간 겹침", TripStatusTone.Warning)
-                if (item.important) TripStatusTag("중요")
-                if (item.confirmed) TripStatusTag("확정")
+            if (hasConflict || item.important || item.confirmed) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs),
+                    verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
+                ) {
+                    if (hasConflict) TripStatusTag("시간 겹침", TripStatusTone.Warning)
+                    if (item.important) TripStatusTag("중요")
+                    if (item.confirmed) TripStatusTag("확정")
+                }
             }
         }
     }

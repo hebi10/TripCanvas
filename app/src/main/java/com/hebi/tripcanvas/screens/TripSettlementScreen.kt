@@ -2,6 +2,10 @@ package com.hebi.tripcanvas.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -95,33 +99,28 @@ fun TripSettlementScreen(
                     color = palette.textSecondary
                 )
             }
-            report.transfers.forEach { transfer ->
+            if (report.transfers.isNotEmpty()) {
                 TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
-                    Column(
-                        modifier = Modifier.padding(TripSpacing.md),
-                        verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
-                    ) {
-                        Text(
-                            "누가 누구에게",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = palette.textSecondary
-                        )
-                        Text(
-                            peopleById[transfer.fromParticipantId]?.displayName.orEmpty() +
-                                " → " + peopleById[transfer.toParticipantId]?.displayName.orEmpty(),
-                            style = MaterialTheme.typography.titleLarge,
-                            color = palette.textPrimary
-                        )
-                        Text(
-                            displayMinor(transfer.amountMinor, report.baseCurrencyCode),
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = palette.textPrimary
-                        )
-                        Text(
-                            "실제 송금은 진행되지 않습니다.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = palette.textSecondary
-                        )
+                    Column(Modifier.padding(TripSpacing.md), verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)) {
+                        report.transfers.forEach { transfer ->
+                            val names = peopleById[transfer.fromParticipantId]?.displayName.orEmpty() +
+                                " → " + peopleById[transfer.toParticipantId]?.displayName.orEmpty()
+                            val amount = displayMinor(transfer.amountMinor, report.baseCurrencyCode)
+                            if (LocalDensity.current.fontScale >= 1.4f) {
+                                Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.xxs)) {
+                                    Text(names, style = MaterialTheme.typography.titleMedium, color = palette.textPrimary)
+                                    Text(amount, style = MaterialTheme.typography.headlineSmall, color = palette.textPrimary)
+                                }
+                            } else {
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(TripSpacing.sm)) {
+                                    Text(names, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, color = palette.textPrimary)
+                                    Text(amount, Modifier.weight(1f), textAlign = TextAlign.End,
+                                        style = MaterialTheme.typography.titleLarge, color = palette.textPrimary)
+                                }
+                            }
+                        }
+                        Text("실제 송금은 진행되지 않습니다.", style = MaterialTheme.typography.bodySmall, color = palette.textSecondary)
                     }
                 }
             }
@@ -187,12 +186,10 @@ fun TripSettlementScreen(
                 title = "참가자별 지불·부담",
                 supportingText = "분담이 확정된 " + report.includedExpenses + "건에 대한 금액"
             )
-            report.balances.forEach { balance ->
-                TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
-                    Column(
-                        modifier = Modifier.padding(TripSpacing.md),
-                        verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
-                    ) {
+            if (report.balances.isNotEmpty()) TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(TripSpacing.md), verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)) {
+                    report.balances.forEach { balance ->
+                        Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.xxs)) {
                         Text(
                             balance.displayName,
                             style = MaterialTheme.typography.titleMedium,
@@ -211,6 +208,7 @@ fun TripSettlementScreen(
                             },
                             color = palette.textPrimary
                         )
+                        }
                     }
                 }
             }

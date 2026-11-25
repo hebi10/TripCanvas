@@ -111,7 +111,14 @@ fun ExpenseListScreen(
         }
     }
 
-    TripPageFrame(title = "예산·경비", onBack = onBack) {
+    TripPageFrame(
+        title = "예산·경비",
+        onBack = onBack,
+        bottomAction = {
+            TripPrimaryButton(label = "지출 추가", modifier = Modifier.fillMaxWidth(),
+                enabled = trip != null && state is ExpenseListState.Ready && !working, onClick = onNew)
+        }
+    ) {
         val current = trip
         if (current == null) {
             TripLoadingState("여행 정보를 불러오는 중")
@@ -158,28 +165,15 @@ fun ExpenseListScreen(
                             modifier = Modifier.padding(TripSpacing.md),
                             verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)
                         ) {
-                            TripAdaptiveContainer(modifier = Modifier.fillMaxWidth()) { width ->
-                                if (width == TripWindowWidth.Compact) {
-                                    Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)) {
-                                        ExpenseSummaryMetric("총예산", budgetValue)
-                                        ExpenseSummaryMetric("지출 합계", spentValue)
-                                        ExpenseSummaryMetric(
-                                            "잔액", remainingValue, warning = remaining?.signum() == -1
-                                        )
-                                    }
-                                } else {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(TripSpacing.md)
-                                    ) {
-                                        ExpenseSummaryMetric("총예산", budgetValue, Modifier.weight(1f))
-                                        ExpenseSummaryMetric("지출 합계", spentValue, Modifier.weight(1f))
-                                        ExpenseSummaryMetric(
-                                            "잔액", remainingValue, Modifier.weight(1f),
-                                            warning = remaining?.signum() == -1
-                                        )
-                                    }
-                                }
+                            Text("총 사용 금액", style = MaterialTheme.typography.labelLarge, color = p.textSecondary)
+                            Text(spentValue, style = MaterialTheme.typography.headlineMedium, color = p.textPrimary)
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(TripSpacing.md),
+                                verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
+                            ) {
+                                ExpenseSummaryMetric("총예산", budgetValue)
+                                ExpenseSummaryMetric("잔액", remainingValue, warning = remaining?.signum() == -1)
                             }
                             if (usage != null) {
                                 Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
@@ -250,12 +244,7 @@ fun ExpenseListScreen(
                             )
                         }
                     }
-                    TripPrimaryButton(
-                        label = "지출 추가",
-                        modifier = Modifier.fillMaxWidth(),
-                        onClick = onNew
-                    )
-                    TripSectionHeading(
+                     TripSectionHeading(
                         title = "지출 " + result.expenses.size + "건",
                         supportingText = "날짜별 내역 · 환율 스냅샷과 분담 상태는 지출별로 관리합니다."
                     )
@@ -279,17 +268,18 @@ fun ExpenseListScreen(
                                             modifier = Modifier.padding(TripSpacing.md),
                                             verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
                                         ) {
-                                            Text(
-                                                displayMoney(item.amountDecimal, item.currencyCode),
-                                                style = MaterialTheme.typography.titleMedium,
-                                                color = p.textPrimary
-                                            )
-                                            Text(
-                                                ExpenseCategory.valueOf(item.category).label +
-                                                    " · " + item.occurredAtLocal.substringAfter("T").take(5),
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = p.textSecondary
-                                            )
+                                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TripSpacing.sm)) {
+                                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TripSpacing.xxs)) {
+                                                    Text(ExpenseCategory.valueOf(item.category).label,
+                                                        style = MaterialTheme.typography.titleMedium, color = p.textPrimary)
+                                                    Text(item.occurredAtLocal.substringAfter("T").take(5),
+                                                        style = MaterialTheme.typography.bodySmall, color = p.textSecondary)
+                                                }
+                                                Text(displayMoney(item.amountDecimal, item.currencyCode),
+                                                    modifier = Modifier.weight(1f),
+                                                    textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                                                    style = MaterialTheme.typography.titleMedium, color = p.textPrimary)
+                                            }
                                             item.placeId?.let(placeNames::get)?.let { place ->
                                                 Text(place, color = p.textSecondary)
                                             }

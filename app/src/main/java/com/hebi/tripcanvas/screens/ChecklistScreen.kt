@@ -75,7 +75,7 @@ fun ChecklistScreen(
 ) {
     val p = TripDesign.palette
     val scope = rememberCoroutineScope()
-    var incompleteOnly by rememberSaveable(tripId) { mutableStateOf(false) }
+    var filter by rememberSaveable(tripId) { mutableStateOf("all") }
     var editing by remember { mutableStateOf<ChecklistItemEntity?>(null) }
     var showEditor by remember { mutableStateOf(false) }
     var draft by remember { mutableStateOf("") }
@@ -120,7 +120,14 @@ fun ChecklistScreen(
         }
     }
 
-    TripPageFrame(title = "준비물", onBack = onBack) {
+    TripPageFrame(
+        title = "준비물",
+        onBack = onBack,
+        bottomAction = {
+            TripPrimaryButton(label = "준비물 추가", modifier = Modifier.fillMaxWidth(),
+                enabled = !saving && trip != null && state is ChecklistState.Ready, onClick = { edit(null) })
+        }
+    ) {
         TripSectionHeading(
             title = trip?.title ?: "여행 준비물",
             supportingText = "체크 상태와 항목 순서는 기기에 저장됩니다."
@@ -147,27 +154,22 @@ fun ChecklistScreen(
                     )
                 }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
-                    TripChoiceChip(
-                        label = "전체",
-                        selected = !incompleteOnly,
-                        onClick = { incompleteOnly = false }
-                    )
-                    TripChoiceChip(
-                        label = "미완료",
-                        selected = incompleteOnly,
-                        onClick = { incompleteOnly = true }
-                    )
+                    TripChoiceChip(label = "전체", selected = filter == "all", onClick = { filter = "all" })
+                    TripChoiceChip(label = "미완료", selected = filter == "remaining", onClick = { filter = "remaining" })
+                    TripChoiceChip(label = "완료", selected = filter == "completed", onClick = { filter = "completed" })
                 }
-                TripPrimaryButton(
-                    label = "준비물 추가",
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !saving,
-                    onClick = { edit(null) }
-                )
-                val filtered = if (incompleteOnly) result.items.filterNot { it.checked } else result.items
+                val filtered = when (filter) {
+                    "remaining" -> result.items.filterNot { it.checked }
+                    "completed" -> result.items.filter { it.checked }
+                    else -> result.items
+                }
                 if (filtered.isEmpty()) {
                     TripEmptyState(
-                        title = if (total == 0) "준비물이 없습니다" else "남은 준비물이 없습니다",
+                        title = when {
+                            total == 0 -> "준비물이 없습니다"
+                            filter == "completed" -> "완료된 준비물이 없습니다"
+                            else -> "남은 준비물이 없습니다"
+                        },
                         description = if (total == 0) "새 준비물을 추가해 주세요."
                             else "필터를 변경하거나 새 준비물을 추가할 수 있습니다."
                     )
@@ -180,8 +182,8 @@ fun ChecklistScreen(
                             ChecklistItemRow(
                                 item = item,
                                 disabled = saving,
-                                canMoveUp = !incompleteOnly && index > 0,
-                                canMoveDown = !incompleteOnly && index < filtered.lastIndex,
+                                canMoveUp = filter == "all" && index > 0,
+                                canMoveDown = filter == "all" && index < filtered.lastIndex,
                                 onCheckedChange = { checked ->
                                     applyOperation { repository.setChecked(tripId, item.id, checked) }
                                 },

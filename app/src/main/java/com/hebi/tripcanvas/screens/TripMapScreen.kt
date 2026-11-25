@@ -128,7 +128,7 @@ fun TripMapScreen(
         } else {
             TripSectionHeading(
                 title = requireNotNull(trip).title,
-                supportingText = "여행에 저장된 장소와 일정의 연결 상태를 지도에서 확인합니다."
+                supportingText = "저장한 장소 · 날짜별 일정"
             )
             FlowRow(horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
                 TripChoiceChip("전체", selectedDate == "all", onClick = { selectedDate = "all" })
@@ -160,7 +160,7 @@ fun TripMapScreen(
                         TripMapPane(
                             pins = pins,
                             selectedId = selectedId,
-                            mapHeight = 340.dp,
+                            mapHeight = 360.dp,
                             onPinClick = { selectedId = it }
                         )
                         focusedPlace?.let { place ->
@@ -174,6 +174,7 @@ fun TripMapScreen(
                             modifier = Modifier.fillMaxWidth(),
                             onClick = onSearch
                         )
+                        TripRouteComparisonPanel(selectedDate = selectedDate, schedules = schedules, savedPlaces = savedPlaces)
                         TripMapPlacesPane(
                             visiblePlaces = visiblePlaces,
                             dateItems = dateItems,
@@ -225,13 +226,13 @@ fun TripMapScreen(
                             )
                         }
                     }
+                    TripRouteComparisonPanel(
+                        selectedDate = selectedDate,
+                        schedules = schedules,
+                        savedPlaces = savedPlaces
+                    )
                 }
             }
-            TripRouteComparisonPanel(
-                selectedDate = selectedDate,
-                schedules = schedules,
-                savedPlaces = savedPlaces
-            )
         }
     }
 }
