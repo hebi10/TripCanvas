@@ -2,6 +2,7 @@ package com.hebi.tripcanvas.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -19,6 +20,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import com.hebi.tripcanvas.data.TripFinanceRepository
 import com.hebi.tripcanvas.data.local.TripParticipantEntity
 import com.hebi.tripcanvas.designsystem.components.TripConfirmDialog
@@ -50,12 +53,13 @@ fun TripParticipantsScreen(
     var editor by remember { mutableStateOf<TripParticipantEntity?>(null) }
     var showEditor by remember { mutableStateOf(false) }
     var draft by remember { mutableStateOf("") }
+    var editorError by remember { mutableStateOf<String?>(null) }
     var target by remember { mutableStateOf<TripParticipantEntity?>(null) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var showSharingReview by remember(tripId) { mutableStateOf(false) }
 
-    TripPageFrame(title = "동행자 관리", onBack = onBack) {
+    TripPageFrame(title = "동행자 관리", onBack = onBack, contentSpacing = TripSpacing.md) {
         TripSectionHeading(
             title = "로컬 동행자 " + participants.size + "명",
             supportingText = "정산에 사용하는 기기 내 참가자입니다. 공동 여행 계정과 별개이며 동명이인도 각각 등록할 수 있습니다."
@@ -73,17 +77,25 @@ fun TripParticipantsScreen(
                     verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
                 ) {
                     Text(person.displayName, style = MaterialTheme.typography.titleMedium)
-                    TripSecondaryButton(
-                        label = "이름 변경", enabled = !busy,
-                        onClick = {
-                            editor = person; draft = person.displayName
-                            error = null; showEditor = true
-                        }
-                    )
-                    TripSecondaryButton(
-                        label = "참가자 삭제", enabled = !busy,
-                        onClick = { target = person; error = null }
-                    )
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs),
+                        verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
+                    ) {
+                        TripSecondaryButton(
+                            label = "이름 변경", enabled = !busy,
+                            modifier = Modifier.semantics { contentDescription = "이름 변경: ${person.displayName}" },
+                            onClick = {
+                                editor = person; draft = person.displayName
+                                error = null; editorError = null; showEditor = true
+                            }
+                        )
+                        TripSecondaryButton(
+                            label = "참가자 삭제", enabled = !busy,
+                            modifier = Modifier.semantics { contentDescription = "참가자 삭제: ${person.displayName}" },
+                            onClick = { target = person; error = null }
+                        )
+                    }
                 }
             }
         }
@@ -99,7 +111,7 @@ fun TripParticipantsScreen(
             enabled = !busy,
             modifier = Modifier.fillMaxWidth(),
             onClick = {
-                editor = null; draft = ""; error = null; showEditor = true
+                editor = null; draft = ""; error = null; editorError = null; showEditor = true
             }
         )
         TripSectionHeading(
@@ -135,15 +147,16 @@ fun TripParticipantsScreen(
             text = {
                 TripTextField(
                     value = draft,
-                    onValueChange = { draft = it; error = null },
+                    onValueChange = { draft = it; editorError = null },
                     label = "동행자 이름 *",
-                    supportingText = "1~80자 · 동명이인 구분은 내부 ID로 처리"
+                    supportingText = editorError ?: "1~80자 · 동명이인 구분은 내부 ID로 처리",
+                    isError = editorError != null
                 )
             },
             confirmButton = {
                 TextButton(enabled = !busy, onClick = {
                     if (draft.trim().length !in 1..80) {
-                        error = "이름은 1~80자로 입력해 주세요."
+                        editorError = "이름은 1~80자로 입력해 주세요."
                     } else {
                         busy = true
                         scope.launch {
@@ -155,7 +168,7 @@ fun TripParticipantsScreen(
                             } catch (cancelled: CancellationException) {
                                 throw cancelled
                             } catch (failed: Exception) {
-                                error = "동행자 정보를 저장하지 못했습니다."
+                                editorError = "동행자 정보를 저장하지 못했습니다."
                             } finally {
                                 busy = false
                             }
@@ -190,7 +203,7 @@ fun TripParticipantsScreen(
                         } catch (cancelled: CancellationException) {
                             throw cancelled
                         } catch (failed: Exception) {
-                            error = failed.message ?: "정산에 연결된 참가자는 삭제할 수 없습니다."
+                            error = "참가자를 삭제할 수 없습니다. 기존 지출의 결제자 또는 분담 대상인지 확인해 주세요."
                             target = null
                         } finally { busy = false }
                     }
