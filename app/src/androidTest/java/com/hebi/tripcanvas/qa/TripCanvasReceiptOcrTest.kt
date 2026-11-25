@@ -106,7 +106,7 @@ class TripCanvasReceiptOcrTest {
                     awaitVisible(By.textContains(date), "반영된 날짜")
                     assertNoSavedExpense()
                     capture("f09-ocr-applied-unsaved")
-                    tap(By.text("지출 저장"), "지출 저장", "지출 추가")
+                    tap(By.text("지출 저장"), "지출 저장", "예산 현황")
                     val saved = runBlocking { db.backupDao().snapshot().expenses.single() }
                     assertEquals(tripId, saved.tripId)
                     assertEquals(amount, saved.amountDecimal)
