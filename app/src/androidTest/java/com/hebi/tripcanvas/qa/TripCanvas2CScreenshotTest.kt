@@ -212,7 +212,7 @@ class TripCanvas2CScreenshotTest {
             awaitText("작업 도구")
             awaitText("저장 장소 관리")
             capture("02c-workspace-tools-last-light")
-            click("저장 장소 관리")
+            navigator.clickVisible(By.desc("저장 장소 관리"), "저장 장소 관리", expectedAfter = "여행 장소")
             awaitText("여행 장소")
             capture("02e-workspace-places-route")
             device.pressBack()
@@ -616,15 +616,24 @@ class TripCanvas2CScreenshotTest {
     private fun awaitText(text: String, selector: BySelector = uiSelector(text)) {
         dismissSystemAnr()
         if (device.wait(Until.hasObject(selector), 5000)) return
-        repeat(6) {
-            dismissSystemAnr()
-            swipeUp()
-            if (device.wait(Until.hasObject(selector), 1200)) return
-        }
-        repeat(6) {
-            dismissSystemAnr()
-            swipeDown()
-            if (device.wait(Until.hasObject(selector), 1200)) return
+        for (direction in listOf(Direction.DOWN, Direction.UP)) {
+            repeat(12) {
+                dismissSystemAnr()
+                // Scroll the actual Compose viewport rather than crossing a nested clickable card.
+                val scroll = device.findObject(By.scrollable(true))
+                val moved = if (scroll != null) {
+                    try {
+                        scroll.scroll(direction, 0.75f)
+                    } catch (_: StaleObjectException) {
+                        false
+                    }
+                } else false
+                if (!moved) {
+                    if (direction == Direction.DOWN) swipeUp() else swipeDown()
+                }
+                device.waitForIdle()
+                if (device.wait(Until.hasObject(selector), 1200)) return
+            }
         }
         val diagnosticDir = File(context.getExternalFilesDir(null), "qa")
         diagnosticDir.mkdirs()
