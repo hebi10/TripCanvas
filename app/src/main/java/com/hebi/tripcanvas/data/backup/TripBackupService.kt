@@ -3,6 +3,7 @@ package com.hebi.tripcanvas.data.backup
 import android.content.Context
 import android.net.Uri
 import androidx.room.withTransaction
+import com.hebi.tripcanvas.data.local.BookingAttachmentEntity
 import com.hebi.tripcanvas.data.local.TripBackupSnapshot
 import com.hebi.tripcanvas.data.local.TripDatabase
 import java.io.ByteArrayOutputStream
@@ -132,6 +133,23 @@ class TripBackupService(
             database.withTransaction {
                 saveCurrentCheckpoint()
                 database.backupDao().replaceAll(snapshot)
+            }
+        }
+    }
+
+    internal suspend fun restorePortable(
+        snapshot: TripBackupSnapshot,
+        attachments: List<BookingAttachmentEntity>
+    ) = withContext(Dispatchers.IO) {
+        RestoreCheckpointCodec.validate(
+            RestoreCheckpoint("portable", System.currentTimeMillis(), snapshot, attachments)
+        )
+        restoreMutex.withLock {
+            database.withTransaction {
+                saveCurrentCheckpoint()
+                val dao = database.backupDao()
+                dao.replaceAll(snapshot)
+                dao.insertBookingAttachments(attachments)
             }
         }
     }
