@@ -41,6 +41,15 @@ import com.hebi.tripcanvas.designsystem.components.TripErrorState
 import com.hebi.tripcanvas.designsystem.components.TripLoadingState
 import com.hebi.tripcanvas.designsystem.components.TripStatusTag
 import com.hebi.tripcanvas.designsystem.components.TripSurfacePanel
+import com.hebi.tripcanvas.designsystem.components.TripProgressIndicator
+import com.hebi.tripcanvas.designsystem.components.TripDivider
+import com.hebi.tripcanvas.domain.budgetUsageProgress
+import com.hebi.tripcanvas.domain.checklistCompletionFraction
+import androidx.compose.ui.platform.LocalDensity
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 import com.hebi.tripcanvas.designsystem.responsive.TripAdaptiveContainer
 import com.hebi.tripcanvas.designsystem.responsive.TripWindowWidth
 import com.hebi.tripcanvas.designsystem.theme.TripDesign
@@ -365,6 +374,20 @@ private fun WorkspaceOverview(
         budgetDetail
     }
     val completed = checklist.count { it.checked }
+    val usage = if (trip != null && totals != null && budget?.currencyCode == trip.currencyCode) {
+        budgetUsageProgress(totals.baseSpent, BigDecimal(requireNotNull(budget).amountDecimal))
+    } else null
+    val dayLabel = trip?.let {
+        val start = LocalDate.parse(it.startDate)
+        val end = LocalDate.parse(it.endDate)
+        val days = ChronoUnit.DAYS.between(start, end) + 1
+        val today = Instant.now().atZone(ZoneId.of(it.timeZoneId)).toLocalDate()
+        when {
+            today.isBefore(start) -> "출발 D-" + ChronoUnit.DAYS.between(today, start)
+            today.isAfter(end) -> "여행 완료 · " + days + "일"
+            else -> "Day " + (ChronoUnit.DAYS.between(start, today) + 1) + " / " + days
+        }
+    } ?: "데이터 없음"
     val checklistValue = if (isPreview) "데이터 없음" else "$completed / ${checklist.size}"
     val checklistDetail = when {
         isPreview -> "실제 준비물 상태를 표시합니다."
@@ -378,26 +401,24 @@ private fun WorkspaceOverview(
             color = p.textPrimary
         )
         TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
-            TripAdaptiveContainer(modifier = Modifier.fillMaxWidth()) { width ->
-                if (width == TripWindowWidth.Compact) {
-                    Column(
-                        modifier = Modifier.padding(TripSpacing.sm),
-                        verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
-                    ) {
-                        WorkspaceMetric("다음 일정", nextTitle, nextDetail, compact = true)
-                        WorkspaceMetric("사용 경비", spent, expenseDetail, compact = true)
-                        WorkspaceMetric("준비물 완료", checklistValue, checklistDetail, compact = true)
-                    }
-                } else {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(TripSpacing.md),
-                        horizontalArrangement = Arrangement.spacedBy(TripSpacing.md)
-                    ) {
-                        WorkspaceMetric("다음 일정", nextTitle, nextDetail, Modifier.weight(1f))
-                        WorkspaceMetric("사용 경비", spent, expenseDetail, Modifier.weight(1f))
-                        WorkspaceMetric("준비물 완료", checklistValue, checklistDetail, Modifier.weight(1f))
-                    }
+            Column(
+                modifier = Modifier.padding(TripSpacing.md),
+                verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)
+            ) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TripSpacing.md)) {
+                    WorkspaceMetric("여행 일정", if (isPreview) "데이터 없음" else schedules.size.toString() + "개", "등록된 일정", Modifier.weight(1f))
+                    WorkspaceMetric("현재 여행일", dayLabel, "", Modifier.weight(1f))
                 }
+                TripDivider()
+                WorkspaceMetric("사용 경비", spent, expenseDetail)
+                usage?.let { TripProgressIndicator(it.fraction, "예산 사용률 " + it.percentage, warning = it.overBudget) }
+                TripDivider()
+                WorkspaceMetric("준비물 완료", checklistValue, checklistDetail)
+                if (!isPreview && checklist.isNotEmpty()) {
+                    TripProgressIndicator(checklistCompletionFraction(completed, checklist.size), "준비 완료 " + checklistValue)
+                }
+                TripDivider()
+                WorkspaceMetric("다음 일정", nextTitle, nextDetail)
             }
         }
     }
@@ -547,7 +568,7 @@ private fun WorkspaceToolRows(
     width: TripWindowWidth,
     compactPrimary: Boolean = false
 ) {
-    if (width == TripWindowWidth.Compact && !compactPrimary) {
+    if (width == TripWindowWidth.Compact && LocalDensity.current.fontScale >= 1.4f) {
         Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)) {
             tools.forEach { tool ->
                 WorkspaceToolCard(tool, modifier = Modifier.fillMaxWidth())
@@ -563,13 +584,13 @@ private fun WorkspaceToolRows(
                     WorkspaceToolCard(
                         pair[0],
                         modifier = Modifier.weight(1f),
-                        compactPrimary = compactPrimary && width == TripWindowWidth.Compact
+                        compactPrimary = width == TripWindowWidth.Compact
                     )
                     if (pair.size == 2) {
                         WorkspaceToolCard(
                             pair[1],
                             modifier = Modifier.weight(1f),
-                            compactPrimary = compactPrimary && width == TripWindowWidth.Compact
+                            compactPrimary = width == TripWindowWidth.Compact
                         )
                     }
                 }

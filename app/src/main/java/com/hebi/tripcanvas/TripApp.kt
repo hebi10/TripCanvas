@@ -261,7 +261,10 @@ fun TripApp(onThemeResolved: (Boolean) -> Unit) {
                                 },
                                 canRequestAds = canRequestAds,
                                 billingResolved = billingState.resolved,
-                                adFree = billingState.adFree
+                                adFree = billingState.adFree,
+                                itineraryRepository = itineraryRepository,
+                                checklistRepository = checklistRepository,
+                                expenseRepository = expenseRepository
                             )
                         }
                         composable(TripDestinations.Settings) {

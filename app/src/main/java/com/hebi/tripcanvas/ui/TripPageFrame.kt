@@ -40,6 +40,7 @@ fun TripPageFrame(
     title: String,
     onBack: (() -> Unit)? = null,
     trailingActions: @Composable RowScope.() -> Unit = {},
+    bottomAction: (@Composable ColumnScope.() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     val palette = TripDesign.palette
@@ -85,7 +86,7 @@ fun TripPageFrame(
                 }
                 TripDivider()
                 Box(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
                     contentAlignment = Alignment.TopCenter
                 ) {
                     Column(
@@ -106,6 +107,15 @@ fun TripPageFrame(
                             content = content
                         )
                     }
+                }
+                if (bottomAction != null) {
+                    Column(
+                        modifier = Modifier.widthIn(max = TripSizes.maximumContentWidth).fillMaxWidth()
+                            .align(Alignment.CenterHorizontally)
+                            .padding(horizontal = horizontalGutter, vertical = TripSpacing.sm),
+                        verticalArrangement = Arrangement.spacedBy(TripSpacing.xs),
+                        content = bottomAction
+                    )
                 }
             }
         }

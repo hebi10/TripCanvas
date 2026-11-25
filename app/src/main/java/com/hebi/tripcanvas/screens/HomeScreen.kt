@@ -38,6 +38,19 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.hebi.tripcanvas.monetization.TripHomeBanner
 import com.hebi.tripcanvas.data.TripRepository
+import com.hebi.tripcanvas.data.ItineraryRepository
+import com.hebi.tripcanvas.data.ChecklistRepository
+import com.hebi.tripcanvas.data.ExpenseRepository
+import com.hebi.tripcanvas.data.local.TripBudgetEntity
+import com.hebi.tripcanvas.designsystem.components.TripProgressIndicator
+import com.hebi.tripcanvas.designsystem.components.TripDivider
+import com.hebi.tripcanvas.designsystem.components.TripTextField
+import com.hebi.tripcanvas.domain.calculateExpenseTotals
+import com.hebi.tripcanvas.domain.displayMoney
+import com.hebi.tripcanvas.domain.budgetUsageProgress
+import com.hebi.tripcanvas.domain.checklistCompletionFraction
+import java.math.BigDecimal
+import kotlinx.coroutines.flow.combine
 import com.hebi.tripcanvas.data.local.TripEntity
 import com.hebi.tripcanvas.designsystem.components.TripChoiceChip
 import com.hebi.tripcanvas.designsystem.components.TripEmptyState
@@ -82,9 +95,14 @@ fun HomeScreen(
     onEditTrip: (String) -> Unit,
     canRequestAds: Boolean = false,
     billingResolved: Boolean = false,
-    adFree: Boolean = true
+    adFree: Boolean = true,
+    itineraryRepository: ItineraryRepository? = null,
+    checklistRepository: ChecklistRepository? = null,
+    expenseRepository: ExpenseRepository? = null
 ) {
     var selectedFilter by rememberSaveable { mutableStateOf(TripListFilter.All) }
+    var searchVisible by rememberSaveable { mutableStateOf(false) }
+    var search by rememberSaveable { mutableStateOf("") }
     var deleteTarget by remember { mutableStateOf<TripEntity?>(null) }
     var refresh by remember { mutableIntStateOf(0) }
     val flow = remember(repository, refresh) {
@@ -97,25 +115,31 @@ fun HomeScreen(
     TripPageFrame(
         title = "TripCanvas",
         trailingActions = {
-            TextButton(
-                onClick = onOpenSettings,
-                modifier = Modifier.heightIn(min = TripSizes.minimumTouchTarget)
+            IconButton(
+                onClick = { searchVisible = !searchVisible; if (!searchVisible) search = "" },
+                modifier = Modifier.size(TripSizes.minimumTouchTarget)
             ) {
-                Icon(
-                    imageVector = TripIcons.Settings,
-                    contentDescription = null,
-                    tint = p.textPrimary,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(TripSpacing.xxs))
-                Text("설정", color = p.textPrimary)
+                Icon(if (searchVisible) TripIcons.Close else TripIcons.Search,
+                    contentDescription = if (searchVisible) "검색 닫기" else "여행 검색",
+                    tint = p.textPrimary)
+            }
+            IconButton(
+                onClick = onOpenSettings,
+                modifier = Modifier.size(TripSizes.minimumTouchTarget)
+            ) {
+                Icon(TripIcons.Settings, contentDescription = "설정", tint = p.textPrimary)
             }
         }
     ) {
-        TripSectionHeading(
-            title = "내 여행",
-            supportingText = "여행별 일정·준비물·경비를 관리하세요."
-        )
+        TripSectionHeading(title = "내 여행")
+        if (searchVisible) {
+            TripTextField(
+                value = search,
+                onValueChange = { search = it },
+                label = "여행 검색",
+                placeholder = "여행명 또는 목적지"
+            )
+        }
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs),
             verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
@@ -128,6 +152,11 @@ fun HomeScreen(
                 )
             }
         }
+        TripPrimaryButton(
+            label = "새 여행 만들기",
+            onClick = onCreateTrip,
+            modifier = Modifier.fillMaxWidth()
+        )
         when (val result = state) {
             TripListState.Loading -> TripLoadingState("여행 목록을 불러오는 중")
             TripListState.Failed -> TripErrorState(
@@ -136,11 +165,15 @@ fun HomeScreen(
                 onRetry = { refresh++ }
             )
             is TripListState.Ready -> {
-                val filtered = result.trips.filter { selectedFilter.includes(it.phase()) }
+                val term = search.trim()
+                val filtered = result.trips.filter { trip ->
+                    selectedFilter.includes(trip.phase()) &&
+                        (term.isEmpty() || listOf(trip.title, trip.country, trip.city).any { it.contains(term, ignoreCase = true) })
+                }
                 if (filtered.isEmpty()) {
                     TripEmptyState(
-                        title = selectedFilter.emptyLabel,
-                        description = if (selectedFilter == TripListFilter.All) {
+                        title = if (term.isNotEmpty()) "검색 결과가 없습니다" else selectedFilter.emptyLabel,
+                        description = if (term.isNotEmpty()) "검색어를 변경해 주세요." else if (selectedFilter == TripListFilter.All) {
                             "첫 여행을 만들어보세요. 여행 정보는 기기에 저장됩니다."
                         } else {
                             "다른 여행 상태를 선택하거나 새 여행을 추가해 보세요."
@@ -159,18 +192,16 @@ fun HomeScreen(
                                 trip = trip,
                                 onOpen = { onOpenTrip(trip.id) },
                                 onEdit = { onEditTrip(trip.id) },
-                                onDelete = { deleteTarget = trip }
+                                onDelete = { deleteTarget = trip },
+                                itineraryRepository = itineraryRepository,
+                                checklistRepository = checklistRepository,
+                                expenseRepository = expenseRepository
                             )
                         }
                     }
                 }
             }
         }
-        TripPrimaryButton(
-            label = "새 여행 만들기",
-            onClick = onCreateTrip,
-            modifier = Modifier.fillMaxWidth()
-        )
         TripHomeBanner(canRequestAds = canRequestAds, billingResolved = billingResolved, adFree = adFree)
     }
     deleteTarget?.let { trip ->
@@ -188,7 +219,10 @@ private fun TripListCard(
     trip: TripEntity,
     onOpen: () -> Unit,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    itineraryRepository: ItineraryRepository?,
+    checklistRepository: ChecklistRepository?,
+    expenseRepository: ExpenseRepository?
 ) {
     val p = TripDesign.palette
     val phase = trip.phase()
@@ -201,6 +235,23 @@ private fun TripListCard(
         TripPhase.Completed -> "지난 여행"
     }
     var showMenu by remember(trip.id) { mutableStateOf(false) }
+    val summaryFlow = remember(trip.id, trip.currencyCode, itineraryRepository, checklistRepository, expenseRepository) {
+        if (itineraryRepository == null || checklistRepository == null || expenseRepository == null) {
+            kotlinx.coroutines.flow.flowOf<HomeTripSummary?>(null)
+        } else {
+            combine(
+                itineraryRepository.observeTripCount(trip.id),
+                checklistRepository.observe(trip.id),
+                expenseRepository.observe(trip.id),
+                expenseRepository.observeBudget(trip.id)
+            ) { schedules, checklist, expenses, budget ->
+                val totals = calculateExpenseTotals(expenses, trip.currencyCode)
+                HomeTripSummary(schedules, checklist.count { it.checked }, checklist.size,
+                    totals.baseSpent, budget, totals.unconvertedByCurrency.isNotEmpty())
+            }.map<HomeTripSummary, HomeTripSummary?> { it }.catch { emit(null) }
+        }
+    }
+    val summary by summaryFlow.collectAsState(initial = null)
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -294,6 +345,48 @@ private fun TripListCard(
                     color = p.textPrimary
                 )
             }
+            summary?.let { current ->
+                TripDivider(modifier = Modifier.padding(vertical = TripSpacing.xs))
+                HomeTripMetrics(current, trip.currencyCode)
+            }
         }
+    }
+}
+
+private data class HomeTripSummary(
+    val schedules: Int, val completed: Int, val total: Int,
+    val spent: BigDecimal, val budget: TripBudgetEntity?, val unconverted: Boolean
+)
+
+@Composable
+private fun HomeTripMetrics(summary: HomeTripSummary, currency: String) {
+    val p = TripDesign.palette
+    val budget = summary.budget?.takeIf { it.currencyCode == currency }
+    val usage = budget?.let { budgetUsageProgress(summary.spent, BigDecimal(it.amountDecimal)) }
+    Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TripSpacing.sm)) {
+            Column(Modifier.weight(1f)) {
+                Text("일정", style = MaterialTheme.typography.labelMedium, color = p.textSecondary)
+                Text(summary.schedules.toString() + "개", style = MaterialTheme.typography.titleMedium)
+            }
+            Column(Modifier.weight(1.65f)) {
+                Text("경비", style = MaterialTheme.typography.labelMedium, color = p.textSecondary)
+                Text(displayMoney(summary.spent.toPlainString(), currency), style = MaterialTheme.typography.titleMedium)
+            }
+            Column(Modifier.weight(1f)) {
+                Text("준비물", style = MaterialTheme.typography.labelMedium, color = p.textSecondary)
+                Text(summary.completed.toString() + " / " + summary.total, style = MaterialTheme.typography.titleMedium)
+            }
+        }
+        usage?.let {
+            TripProgressIndicator(it.fraction, "예산 사용률 " + it.percentage, warning = it.overBudget)
+            Text("예산 " + displayMoney(requireNotNull(budget).amountDecimal, currency) + " · " + it.percentage,
+                style = MaterialTheme.typography.bodySmall, color = if (it.overBudget) p.warning else p.textSecondary)
+        }
+        if (summary.unconverted) Text("미환산 외화 제외", style = MaterialTheme.typography.bodySmall, color = p.textSecondary)
+        if (summary.total > 0) TripProgressIndicator(
+            checklistCompletionFraction(summary.completed, summary.total),
+            "준비 완료 " + summary.completed + " / " + summary.total
+        )
     }
 }
