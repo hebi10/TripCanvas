@@ -3,8 +3,6 @@ package com.hebi.tripcanvas.screens
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.hebi.tripcanvas.designsystem.components.TripChoiceChip
@@ -87,8 +85,11 @@ fun TripBookingsScreen(
             title = "예약 " + bookings.size + "건",
             supportingText = "항공·숙소·교통·입장권 예약 정보를 보관합니다. 실제 예약·결제는 제공하지 않습니다."
         )
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs),
+            verticalArrangement = Arrangement.spacedBy(TripSpacing.xxs)
+        ) {
             TripChoiceChip("전체", filter == "all", onClick = { filter = "all" })
             BookingType.entries.forEach { type ->
                 TripChoiceChip(type.label, filter == type.name, onClick = { filter = type.name })
