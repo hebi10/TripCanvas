@@ -57,3 +57,53 @@ jobs:
   backup-integrity:
     needs: validate-source
     uses: ./.github/workflows/qa-a06-backup-integrity.yml
+
+  fresh-first-launch:
+    name: Fresh install and first trip evidence
+    needs: validate-source
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_main_sha }}
+          persist-credentials: false
+      - name: Verify frozen source
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_main_sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          mkdir -p qa-output
+          printf 'head_sha=%s\nsuite=first-launch\napi=35\nresolution=1080x2400\ndensity=420\n' "$EXPECTED_SHA" > qa-output/design-evidence.txt
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - name: Install compile SDK
+        run: sdkmanager --install "platforms;android-37.1" "build-tools;36.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Exercise clean install onboarding and first saved trip
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: bash .github/scripts/run-design-evidence-qa.sh .github/scripts/run-design-start-qa.sh 1080x2400 420
+      - name: Preserve original evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tripcanvas-final-first-launch-${{ inputs.expected_main_sha }}
+          path: qa-output/
+          retention-days: 14
+          if-no-files-found: warn
