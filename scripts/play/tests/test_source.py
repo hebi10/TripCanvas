@@ -1,6 +1,7 @@
 import importlib.util
 import pathlib
 import unittest
+from unittest.mock import patch
 
 SCRIPT = pathlib.Path(__file__).parents[1] / 'source.py'
 spec = importlib.util.spec_from_file_location('source', SCRIPT)
@@ -58,15 +59,42 @@ class SourceTests(unittest.TestCase):
         with self.assertRaisesRegex(source.SourceError, 'stale'):
             source.require_current_main(SHA, 'b' * 40)
 
-    def test_deploy_requires_both_completed_verify_jobs_on_exact_sha(self):
-        run = {'head_sha': SHA, 'head_branch': 'main', 'event': 'push', 'conclusion': 'success', 'path': '.github/workflows/android-ci.yml'}
-        jobs = [{'name': 'android-build', 'conclusion': 'success'}, {'name': 'room-migration-instrumentation', 'conclusion': 'success'}]
+    def test_basic_android_build_passes_without_duplicate_instrumentation(self):
+        run = {'head_sha': SHA, 'head_branch': 'main', 'event': 'push', 'status': 'completed',
+               'conclusion': 'success', 'path': '.github/workflows/android-ci.yml'}
+        jobs = [{'name': 'android-build', 'conclusion': 'success'},
+                {'name': 'room-migration-instrumentation', 'conclusion': 'skipped'}]
         source.verify_ci(SHA, run, jobs)
-        for invalid_jobs in ([], jobs[:1], jobs[1:], [jobs[0], dict(jobs[1], conclusion='skipped')], [dict(jobs[0], conclusion='failure'), jobs[1]]):
-            with self.assertRaises(source.SourceError):
-                source.verify_ci(SHA, run, invalid_jobs)
-        with self.assertRaises(source.SourceError):
-            source.verify_ci('b' * 40, run, jobs)
+        with self.assertRaisesRegex(source.SourceError, 'android-build'):
+            source.verify_ci(SHA, run, jobs[1:])
+
+    def test_final_qa_requires_exact_manual_run_and_successful_device_jobs(self):
+        run = {'head_sha': SHA, 'head_branch': 'main', 'event': 'workflow_dispatch',
+               'status': 'completed', 'conclusion': 'success', 'path': '.github/workflows/final-device-qa.yml'}
+        jobs = [{'name': name, 'conclusion': 'success'}
+                for name in source.WORKFLOW_REQUIREMENTS[source.FINAL_QA][1]]
+        self.assertIn('room-migration / room-migration-instrumentation', {job['name'] for job in jobs})
+        source.verify_ci(SHA, run, jobs)
+        for wrong in (dict(run, head_sha='b' * 40), dict(run, head_branch='qa'), dict(run, event='push'),
+                      dict(run, status='in_progress'), dict(run, conclusion='failure'),
+                      dict(run, path='qa/final-device-qa.yml')):
+            with self.subTest(wrong=wrong), self.assertRaises(source.SourceError):
+                source.verify_ci(SHA, wrong, jobs)
+        for job in jobs:
+            with self.subTest(job=job['name']), self.assertRaisesRegex(source.SourceError, 'missing successful jobs'):
+                source.verify_ci(SHA, run, [dict(job, conclusion='skipped') if item == job else item for item in jobs])
+
+    def test_latest_final_run_failure_cannot_fall_back_to_an_older_success(self):
+        run = {'id': 10, 'head_sha': SHA, 'head_branch': 'main', 'event': 'workflow_dispatch',
+               'status': 'completed', 'conclusion': 'success', 'path': '.github/workflows/final-device-qa.yml'}
+        jobs = [{'name': name, 'conclusion': 'success'}
+                for name in source.WORKFLOW_REQUIREMENTS[source.FINAL_QA][1]]
+        with patch.object(source, 'gh', side_effect=[{'workflow_runs': [run]}, {'jobs': jobs}]):
+            self.assertEqual(source.verify_main_workflow(SHA, source.FINAL_QA), 10)
+        with patch.object(source, 'gh', side_effect=[
+                {'workflow_runs': [run, dict(run, id=11, conclusion='failure')]}, {'jobs': jobs}]):
+            with self.assertRaisesRegex(source.SourceError, 'has not succeeded'):
+                source.verify_main_workflow(SHA, source.FINAL_QA)
 
 
 if __name__ == '__main__':
