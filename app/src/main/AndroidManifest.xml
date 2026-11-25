@@ -13,6 +13,15 @@
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="${admobAppId}" />
+        <provider
+            android:name=".data.backup.RestoredMediaProvider"
+            android:authorities="${applicationId}.restoredmedia"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/restored_media_paths" />
+        </provider>
         <activity
             android:name=".MainActivity"
             android:exported="true">
