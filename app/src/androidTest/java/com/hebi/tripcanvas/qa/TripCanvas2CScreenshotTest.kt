@@ -518,6 +518,9 @@ class TripCanvas2CScreenshotTest {
             navigator.clickVisible(By.text("새 장소 만들기"), "새 장소 만들기", "장소 정보")
             awaitText("장소 정보")
             capture("p02-place-create-light")
+            assertFormFieldPair("위도", "경도", expectHorizontal = normalFormUsesColumns(scenario))
+            capture("p02a-place-coordinates-light")
+            awaitText("장소 정보")
             enterFirstField(placeName)
             awaitText("장소 만들기")
             navigator.clickVisible(By.text("장소 만들기"), "장소 저장", "여행 장소")
@@ -549,6 +552,17 @@ class TripCanvas2CScreenshotTest {
             awaitText("여행 장소")
             device.pressBack()
             awaitText("작업 도구")
+            awaitText("일정 열기")
+            navigator.clickVisible(By.desc("일정 열기"), "일정 열기", "일정 추가")
+            awaitText("일정 추가")
+            navigator.clickVisible(By.text("일정 추가"), "일정 추가", "일정 정보")
+            awaitText("일정 정보")
+            assertFormFieldPair("시작 시각", "종료 시각", expectHorizontal = normalFormUsesColumns(scenario))
+            capture("p06a-schedule-time-fields-light")
+            device.pressBack()
+            awaitText("여행 일정")
+            device.pressBack()
+            awaitText("작업 도구")
             device.pressBack()
             awaitText("내 여행")
 
@@ -559,14 +573,23 @@ class TripCanvas2CScreenshotTest {
             awaitText("내 여행")
             click("제주 주말 여행")
             awaitText("일정 열기")
-            navigator.clickVisible(By.desc("일정 열기"), "일정 열기", "여행 일정")
+            navigator.clickVisible(By.desc("일정 열기"), "일정 열기", "일정 추가")
             awaitText("일정 추가")
             navigator.clickVisible(By.text("일정 추가"), "일정 추가", "일정 정보")
             awaitText("일정 정보")
             capture("p07-schedule-form-dark-font160")
+            assertFormFieldPair("시작 시각", "종료 시각", expectHorizontal = false)
+            capture("p07a-schedule-time-fields-dark-font160")
+            awaitText("일정 정보")
             enterFirstField(scheduleName)
             awaitText("장소 선택·추가")
             navigator.clickVisible(By.text("장소 선택·추가"), "장소 선택·추가", "장소 연결")
+            awaitText("새 장소 만들기")
+            navigator.clickVisible(By.text("새 장소 만들기"), "새 장소 만들기", "장소 정보")
+            awaitText("장소 정보")
+            assertFormFieldPair("위도", "경도", expectHorizontal = false)
+            capture("p07b-place-coordinates-dark-font160")
+            device.pressBack()
             awaitText("장소 검색")
             enterFirstField(placeName)
             awaitText(placeName)
@@ -603,6 +626,38 @@ class TripCanvas2CScreenshotTest {
                 database.backupDao().snapshot().itineraries.single { it.title == scheduleName }.placeId
             })
             capture("p10-schedule-saved-dark-font160")
+        }
+    }
+
+    private fun normalFormUsesColumns(scenario: ActivityScenario<MainActivity>): Boolean {
+        var columns = false
+        scenario.onActivity { activity ->
+            val config = activity.resources.configuration
+            val gutter = if (config.screenWidthDp < 600) 32 else 64
+            columns = config.screenWidthDp - gutter >= 360 && config.fontScale < 1.3f
+        }
+        return columns
+    }
+
+    private fun assertFormFieldPair(firstLabel: String, secondLabel: String, expectHorizontal: Boolean) {
+        awaitText(firstLabel)
+        awaitText(secondLabel)
+        val first = device.findObject(By.text(firstLabel))
+            ?: throw AssertionError("첫 번째 입력 라벨 미노출: $firstLabel")
+        val second = device.findObject(By.text(secondLabel))
+            ?: throw AssertionError("두 번째 입력 라벨 미노출: $secondLabel")
+        val a = first.visibleBounds
+        val b = second.visibleBounds
+        assertTrue("입력 라벨의 화면 내 표시 영역이 필요합니다: $a, $b",
+            a.width() > 0 && a.height() > 0 && b.width() > 0 && b.height() > 0 &&
+                a.left >= 0 && b.right <= device.displayWidth)
+        val tolerance = (context.resources.displayMetrics.density * 20).toInt()
+        if (expectHorizontal) {
+            assertTrue("일반 글꼴 입력란은 가로로 배치되어야 합니다: $a, $b",
+                b.left > a.right && kotlin.math.abs(a.centerY() - b.centerY()) <= tolerance)
+        } else {
+            assertTrue("큰 글꼴 또는 좁은 화면 입력란은 세로로 배치되어야 합니다: $a, $b",
+                b.top > a.bottom && kotlin.math.abs(a.left - b.left) <= tolerance)
         }
     }
 
