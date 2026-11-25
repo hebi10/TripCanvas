@@ -699,6 +699,8 @@ class TripCanvas2CScreenshotTest {
     @Test
     fun captureLiveMemoriesAndReportFromRealAndroidUi() {
         val today = LocalDate.now(ZoneId.of("Asia/Seoul")).toString()
+        val visitNote = "QA visit note"
+        val caption = "QA linked travel memory"
         runBlocking {
             val snapshot = database.backupDao().snapshot()
             val trip = snapshot.trips.single().copy(startDate = today, endDate = today)
@@ -707,26 +709,99 @@ class TripCanvas2CScreenshotTest {
                 trips = listOf(trip), itineraries = listOf(schedule)
             ))
         }
-        ActivityScenario.launch(MainActivity::class.java).use {
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            fun enterVisibleText(label: String, value: String) {
+                awaitText(label)
+                val field = device.wait(Until.findObject(By.clazz("android.widget.EditText")), 5000)
+                    ?: throw AssertionError("입력란을 찾지 못했습니다: $label")
+                field.setText(value)
+                var imeVisible = false
+                scenario.onActivity { activity ->
+                    imeVisible = androidx.core.view.ViewCompat.getRootWindowInsets(activity.window.decorView)
+                        ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) == true
+                }
+                if (imeVisible) device.pressBack()
+            }
             awaitText("제주 주말 여행")
             click("제주 주말 여행")
             awaitText("작업 도구")
-            openScreen("오늘의 여행 열기", today)
-            awaitText("공항 도착")
+            navigator.clickVisible(By.desc("오늘의 여행 열기"), "오늘의 여행 열기", "오늘의 일정")
+            awaitText(today)
+            awaitText("Day 1 / 1")
+            awaitText("방문 완료 0 / 1")
+            awaitText("오늘 예정된 예약이 없습니다.")
             capture("24-p3-live-before-checkin")
+            awaitText("방문 메모 (선택)")
+            enterVisibleText("방문 메모 (선택)", visitNote)
+            awaitText("공항 도착")
+            capture("j01-live-note-light")
             click("방문 완료")
-            awaitText("방문 완료")
+            awaitText("방문 완료 1 / 1")
+            val visit = runBlocking { database.backupDao().snapshot().visits.single() }
+            assertEquals("qa-schedule", visit.itineraryItemId)
+            assertEquals(visitNote, visit.note)
+            assertTrue("완료된 방문을 다시 입력하는 폼이 나타나면 안 됩니다.",
+                !device.hasObject(By.text("방문 메모 (선택)")))
             capture("25-p3-live-after-checkin")
+            navigator.clickVisible(By.text("빠른 지출 등록"), "빠른 지출 등록", "지출 정보")
+            awaitText("금액 *")
+            capture("j02-live-expense-action")
             device.pressBack()
-            awaitText("작업 도구")
-            openScreen("여행 기록 열기", "방문 기록")
+            awaitText("방문 완료 1 / 1")
+
+            navigator.clickVisible(By.text("방문·사진 기록"), "방문·사진 기록", "새 기록")
+            awaitText("방문 기록")
             awaitText("공항 도착 방문 기록", By.textStartsWith("공항 도착 · "))
+            awaitText(visitNote)
             capture("26-p3-memories-visit")
+            navigator.clickVisible(By.text("이 방문에 사진 연결"), "이 방문에 사진 연결", "선택한 방문에 연결")
+            awaitText("선택한 방문에 연결")
+            awaitText("사진 설명·메모")
+            capture("j03-memory-editor-linked")
+            enterVisibleText("사진 설명·메모", caption)
+            navigator.clickVisible(By.text("기록 저장"), "기록 저장", "1건의 사진·메모")
+            awaitText("1건의 사진·메모")
+            awaitText(caption)
+            val moment = runBlocking { database.backupDao().snapshot().moments.single() }
+            assertEquals(visit.id, moment.visitId)
+            assertEquals(caption, moment.caption)
+            assertEquals(null, moment.photoUri)
+            capture("j04-memory-saved-light")
+            awaitText("사진 원본 ZIP 저장")
+            val exportButton = device.findObject(By.text("사진 원본 ZIP 저장"))
+                ?: throw AssertionError("사진 내보내기 버튼 미노출")
+            var exportAction = exportButton
+            while (!exportAction.isClickable && exportAction.parent != null) {
+                exportAction = requireNotNull(exportAction.parent)
+            }
+            assertTrue("사진 없는 메모만 저장된 경우 사진 ZIP 내보내기는 비활성이어야 합니다.",
+                !exportAction.isEnabled)
+            capture("j05-memory-no-photo-export")
+            device.pressBack()
+            awaitText("방문 완료 1 / 1")
+            assertEquals(1, runBlocking { database.backupDao().snapshot().visits.size })
             device.pressBack()
             awaitText("작업 도구")
-            openScreen("리포트 열기", "여행 기간: 1일")
+            navigator.clickVisible(By.desc("리포트 열기"), "리포트 열기", "여행 요약")
+            awaitText("여행 기간: 1일")
             awaitText("실제 방문: 1건")
+            awaitText("사진·메모 기록: 1건")
             capture("27-p3-report-visited")
+            awaitText("등록된 기록 사진이 없습니다.")
+            awaitText("기록된 경비: KRW 12,500")
+            awaitText("미환산 외화 지출은 합계에서 제외했습니다.")
+            capture("j06-report-expense-light")
+
+            runBlocking { tripPreferencesRepository(context).saveThemeMode(TripThemeMode.Dark) }
+            device.executeShellCommand("settings put system font_scale 1.6")
+            Thread.sleep(1200)
+            scenario.recreate()
+            awaitText("여행 리포트")
+            awaitText("여행 기간: 1일")
+            awaitText("사진·메모 기록: 1건")
+            capture("j07-report-font160")
+            awaitText("기록된 경비: KRW 12,500")
+            capture("j08-report-expense-font160")
         }
     }
 
