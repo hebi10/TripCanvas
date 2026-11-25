@@ -37,6 +37,9 @@ interface TripBackupDao {
     @Query("SELECT * FROM bookings ORDER BY id")
     suspend fun allBookings(): List<BookingEntity>
 
+    @Query("SELECT * FROM booking_attachments ORDER BY id")
+    suspend fun allBookingAttachments(): List<BookingAttachmentEntity>
+
     @Query("SELECT * FROM visit_records ORDER BY id")
     suspend fun allVisits(): List<VisitRecordEntity>
 
@@ -59,6 +62,7 @@ interface TripBackupDao {
     @Insert suspend fun insertShares(items: List<ExpenseShareEntity>)
     @Insert suspend fun insertSettlements(items: List<TripSettlementEntity>)
     @Insert suspend fun insertBookings(items: List<BookingEntity>)
+    @Insert suspend fun insertBookingAttachments(items: List<BookingAttachmentEntity>)
     @Insert suspend fun insertVisits(items: List<VisitRecordEntity>)
     @Insert suspend fun insertMoments(items: List<TravelMomentEntity>)
 
