@@ -17,6 +17,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,6 +35,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import com.hebi.tripcanvas.data.TripRepository
 import com.hebi.tripcanvas.data.backup.BackupPasswordRequired
 import com.hebi.tripcanvas.data.backup.EncryptedTripBackup
+import com.hebi.tripcanvas.data.backup.RestoreCheckpoint
+import com.hebi.tripcanvas.data.backup.RestoreSafetyBackupFailed
 import com.hebi.tripcanvas.data.backup.TripBackupCodec
 import com.hebi.tripcanvas.data.backup.TripBackupService
 import com.hebi.tripcanvas.data.local.TripBackupSnapshot
@@ -51,6 +54,9 @@ import com.hebi.tripcanvas.designsystem.tokens.TripSpacing
 import com.hebi.tripcanvas.ui.TripPageFrame
 import java.io.IOException
 import java.time.LocalDate
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
@@ -69,6 +75,9 @@ fun BackupScreen(
     val existing by remember(tripRepository) { tripRepository.trips }
         .collectAsState(initial = emptyList())
     var pending by remember { mutableStateOf<TripBackupSnapshot?>(null) }
+    var pendingCheckpoint by remember { mutableStateOf<RestoreCheckpoint?>(null) }
+    var checkpointAvailable by remember { mutableStateOf(false) }
+    var deleteCheckpointDialog by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var status by rememberSaveable { mutableStateOf<String?>(null) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
@@ -79,6 +88,40 @@ fun BackupScreen(
         onDispose { exportPassword?.fill('\u0000') }
     }
     BackHandler(enabled = busy) {}
+
+    suspend fun refreshCheckpointAvailability() {
+        try {
+            checkpointAvailable = service.hasRestoreCheckpoint()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            checkpointAvailable = false
+        }
+    }
+    LaunchedEffect(service) { refreshCheckpointAvailability() }
+
+    fun previewCheckpoint() {
+        if (busy) return
+        busy = true
+        error = null
+        status = null
+        pending = null
+        pendingCheckpoint = null
+        scope.launch {
+            try {
+                val checkpoint = service.previewRestoreCheckpoint()
+                pendingCheckpoint = checkpoint
+                pending = checkpoint.snapshot
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                error = "안전 백업을 열지 못했습니다. 파일이 없거나 손상되었을 수 있습니다. 현재 데이터는 변경되지 않았습니다."
+                refreshCheckpointAvailability()
+            } finally {
+                busy = false
+            }
+        }
+    }
 
     fun saveBackup(uri: Uri?, encrypted: Boolean, password: CharArray?) {
         if (uri == null) {
@@ -123,6 +166,7 @@ fun BackupScreen(
         error = null
         status = null
         pending = null
+        pendingCheckpoint = null
         scope.launch {
             try {
                 pending = service.preview(uri, password)
@@ -252,7 +296,7 @@ fun BackupScreen(
             ) {
                 Text(
                     "복원을 승인하면 현재 기기의 여행·장소·일정·경비·예산·준비물·동행자·예약이 " +
-                        "백업 파일 내용으로 교체됩니다. 복원 전에 기존 데이터를 내보내세요.",
+                        "백업 파일 내용으로 교체됩니다. 교체 직전에 현재 데이터의 안전 백업을 저장하고 검증합니다.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = p.textPrimary
                 )
@@ -274,6 +318,42 @@ fun BackupScreen(
                 )
             }
         }
+        TripSectionHeading(
+            title = "복원 전 안전 백업",
+            supportingText = "최근 데이터 교체 직전 상태 1개를 이 기기에 암호화해 보관합니다."
+        )
+        TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier.padding(TripSpacing.md),
+                verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)
+            ) {
+                Text(
+                    if (checkpointAvailable) "복구용 안전 백업이 있습니다." else "아직 안전 백업이 없습니다.",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = p.textPrimary
+                )
+                Text(
+                    "안전 백업은 같은 기기에서만 이용할 수 있습니다. 다음 복원 시 최신 복원 직전 상태로 교체되며, " +
+                        "앱 데이터 삭제·앱 제거 시 사라집니다. 사진·예약 문서 원본은 포함하지 않고 연결 정보만 보존합니다.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = p.textSecondary
+                )
+                TripSecondaryButton(
+                    label = "안전 백업 확인 및 복구",
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = checkpointAvailable && !busy,
+                    onClick = { previewCheckpoint() }
+                )
+                if (checkpointAvailable) {
+                    TripSecondaryButton(
+                        label = "안전 백업 삭제",
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !busy,
+                        onClick = { deleteCheckpointDialog = true }
+                    )
+                }
+            }
+        }
         if (busy) TripLoadingState("파일을 처리하는 중")
         status?.let {
             Text(
@@ -293,10 +373,48 @@ fun BackupScreen(
         }
     }
 
-    pending?.let { snapshot ->
+    if (deleteCheckpointDialog) {
         TripConfirmDialog(
-            title = "현재 데이터 전체 교체",
-            message = "파일 검증 완료: 여행 " + snapshot.trips.size +
+            title = "안전 백업 삭제",
+            message = "복구용 안전 백업만 삭제합니다. 현재 여행 데이터와 외부 원본 파일은 변경되지 않습니다.",
+            confirmLabel = "안전 백업 삭제",
+            destructive = true,
+            enabled = !busy,
+            onDismiss = { if (!busy) deleteCheckpointDialog = false },
+            onConfirm = {
+                if (!busy) {
+                    busy = true
+                    error = null
+                    status = null
+                    scope.launch {
+                        try {
+                            service.deleteRestoreCheckpoint()
+                            deleteCheckpointDialog = false
+                            status = "안전 백업을 삭제했습니다."
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (_: Exception) {
+                            error = "안전 백업을 삭제하지 못했습니다."
+                        } finally {
+                            busy = false
+                            refreshCheckpointAvailability()
+                        }
+                    }
+                }
+            }
+        )
+    }
+
+    pending?.let { snapshot ->
+        val checkpoint = pendingCheckpoint
+        val savedAt = checkpoint?.let {
+            DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm")
+                .withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(it.createdAtMillis))
+        }
+        TripConfirmDialog(
+            title = if (checkpoint == null) "현재 데이터 전체 교체" else "복원 전 상태로 복구",
+            message = (if (checkpoint == null) "파일 검증 완료: " else "안전 백업 저장 시각: " + savedAt + "\n") +
+                "여행 " + snapshot.trips.size +
                 "개, 장소 " + snapshot.places.size +
                 "개, 일정 " + snapshot.itineraries.size +
                 "개, 경비 " + snapshot.expenses.size +
@@ -306,13 +424,15 @@ fun BackupScreen(
                 "명, 분담 " + snapshot.shares.size +
                 "건, 예약 " + snapshot.bookings.size + "건.\n\n" +
                 "현재 기기의 여행 " + existing.size + "개 및 연결된 데이터를 모두 " +
-                "삭제한 뒤 이 파일로 교체합니다. 기존 백업이 없다면 복구할 수 없습니다. 진행하시겠습니까?",
-            confirmLabel = if (busy) "복원 중" else "전체 교체 및 복원",
+                "교체합니다. 교체 직전의 현재 상태를 기기 내부 안전 백업으로 저장합니다. " +
+                "기존 안전 백업 1개는 새 상태로 교체되며 원본 첨부 파일은 복구하지 않습니다. 진행하시겠습니까?",
+            confirmLabel = if (busy) "복원 중" else if (checkpoint == null) "전체 교체 및 복원" else "안전 백업 복구",
             destructive = true,
             enabled = !busy,
             onDismiss = {
                 if (!busy) {
                     pending = null
+                    pendingCheckpoint = null
                     status = "복원을 취소했습니다. 기존 여행 데이터는 유지됩니다."
                 }
             },
@@ -323,15 +443,25 @@ fun BackupScreen(
                     status = null
                     scope.launch {
                         try {
-                            service.restore(snapshot)
+                            if (checkpoint == null) service.restore(snapshot)
+                            else service.restoreCheckpoint(checkpoint)
                             pending = null
-                            status = "복원이 완료되었습니다. 여행 목록에 새로운 데이터가 반영됐습니다."
+                            pendingCheckpoint = null
+                            status = if (checkpoint == null) "복원이 완료되었습니다. 복원 직전 상태는 안전 백업에서 확인할 수 있습니다."
+                                else "안전 백업 복구가 완료되었습니다. 교체 직전 상태도 새 안전 백업에 보관했습니다."
                         } catch (cancelled: CancellationException) {
                             throw cancelled
-                        } catch (failed: Exception) {
+                        } catch (_: RestoreSafetyBackupFailed) {
+                            pending = null
+                            pendingCheckpoint = null
+                            error = "안전 백업을 저장하거나 검증하지 못해 복원을 중단했습니다. 기존 데이터는 변경되지 않았습니다."
+                        } catch (_: Exception) {
+                            pending = null
+                            pendingCheckpoint = null
                             error = "복원에 실패했습니다. 기존 데이터는 변경되지 않았습니다."
                         } finally {
                             busy = false
+                            refreshCheckpointAvailability()
                         }
                     }
                 }
