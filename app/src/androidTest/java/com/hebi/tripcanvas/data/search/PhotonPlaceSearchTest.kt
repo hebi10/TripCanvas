@@ -41,6 +41,21 @@ class PhotonPlaceSearchTest {
     }
 
     @Test
+    fun approvedProxyResponsePreservesOsmIdentityAndRejectsUnlicensedOrInvalidRows() {
+        val valid = """{"provider":"Photon/OSM","places":[{"providerId":"N:321","name":"제주국제공항","address":"제주","latitude":33.51,"longitude":126.49}]}"""
+        val place = ConfiguredPhotonProxySearch.parseResponse(valid).single()
+        assertEquals("N:321", place.providerId)
+        assertEquals("Photon/OSM", place.provider)
+        assertEquals(33.51, place.latitude, 0.0001)
+        listOf(valid.replace("Photon/OSM", "Unknown"),
+            valid.replace("N:321", "../321"), valid.replace("33.51", "99.0"),
+            valid.replace("33.51", "\"33.51\"")).forEach {
+            assertTrue(runCatching { ConfiguredPhotonProxySearch.parseResponse(it) }.isFailure)
+        }
+        assertTrue(ConfiguredPhotonProxySearch.create("https://maps.tripcanvas.example.com/v1/places", null) == null)
+    }
+
+    @Test
     fun emptySearchNeverSendsNetworkRequest() = runBlocking {
         val service = PhotonPlaceSearch("https://invalid.example/api/")
         assertTrue(runCatching { service.search("") }.isFailure)
