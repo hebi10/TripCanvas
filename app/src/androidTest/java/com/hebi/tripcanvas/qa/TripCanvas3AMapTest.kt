@@ -222,11 +222,11 @@ class TripCanvas3AMapTest {
                     SystemClock.sleep(500)
                 }
                 assertTrue("지도 스타일 재조회 및 실제 선택 핀 레이어 재구성 실패", styleRebuilt)
-                assertMapCentered(scenario, 33.4888, 126.4975)
-                awaitText("선택 날짜 전체 · 장소 3개 · 지도 핀 2개")
-                awaitText("지도 선택 · 제주도청")
+                // Text discovery can scroll through the interactive map and pan the camera.
                 assertMapCentered(scenario, 33.4888, 126.4975)
                 capture("06c-map-reload-keeps-selected-place")
+                awaitText("선택 날짜 전체 · 장소 3개 · 지도 핀 2개")
+                awaitText("지도 선택 · 제주도청")
                 click("외부 장소 검색")
                 awaitText("검색어")
                 capture("07-external-search-input")
