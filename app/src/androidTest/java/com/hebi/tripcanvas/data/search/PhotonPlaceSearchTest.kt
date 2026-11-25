@@ -3,6 +3,7 @@ package com.hebi.tripcanvas.data.search
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -29,6 +30,14 @@ class PhotonPlaceSearchTest {
         assertEquals("Photon/OSM", result.single().provider)
         assertEquals(33.51, result.single().latitude, 0.0001)
         assertEquals(126.49, result.single().longitude, 0.0001)
+    }
+
+    @Test
+    fun unapprovedSearchEndpointIsRejectedBeforeNetworkRequest() = runBlocking {
+        val service = PhotonPlaceSearch("https://invalid.example/api/")
+        assertFalse(service.available)
+        val failure = runCatching { service.search("제주국제공항") }.exceptionOrNull()
+        assertTrue(failure is IllegalStateException)
     }
 
     @Test
