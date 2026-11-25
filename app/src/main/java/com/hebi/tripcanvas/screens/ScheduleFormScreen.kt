@@ -2,7 +2,9 @@ package com.hebi.tripcanvas.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.KeyboardOptions
@@ -20,6 +22,8 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.input.KeyboardType
 import com.hebi.tripcanvas.data.ItineraryRepository
 import com.hebi.tripcanvas.data.PlaceRepository
@@ -163,7 +167,8 @@ fun ScheduleFormScreen(
 
     TripPageFrame(
         title = if (itemId == null) "일정 추가" else "일정 편집",
-        onBack = requestBack
+        onBack = requestBack,
+        contentSpacing = TripSpacing.md
     ) {
         when {
             trip == null || state == ScheduleFormState.Loading ||
@@ -215,30 +220,49 @@ fun ScheduleFormScreen(
                         }
                     )
                 }
-                TripTextField(
-                    value = input.startTime,
-                    onValueChange = {
-                        input = input.copy(startTime = it)
-                        errors = errors - ScheduleField.StartTime - ScheduleField.EndTime
-                    },
-                    label = "시작 시각",
-                    placeholder = "09:30",
-                    supportingText = errors[ScheduleField.StartTime],
-                    isError = errors.containsKey(ScheduleField.StartTime),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii)
-                )
-                TripTextField(
-                    value = input.endTime,
-                    onValueChange = {
-                        input = input.copy(endTime = it)
-                        errors = errors - ScheduleField.StartTime - ScheduleField.EndTime
-                    },
-                    label = "종료 시각",
-                    placeholder = "10:30",
-                    supportingText = errors[ScheduleField.EndTime],
-                    isError = errors.containsKey(ScheduleField.EndTime),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii)
-                )
+                val startTimeField: @Composable (Modifier) -> Unit = { modifier ->
+                    TripTextField(
+                        modifier = modifier,
+                        value = input.startTime,
+                        onValueChange = {
+                            input = input.copy(startTime = it)
+                            errors = errors - ScheduleField.StartTime - ScheduleField.EndTime
+                        },
+                        label = "시작 시각",
+                        placeholder = "09:30",
+                        supportingText = errors[ScheduleField.StartTime],
+                        isError = errors.containsKey(ScheduleField.StartTime),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii)
+                    )
+                }
+                val endTimeField: @Composable (Modifier) -> Unit = { modifier ->
+                    TripTextField(
+                        modifier = modifier,
+                        value = input.endTime,
+                        onValueChange = {
+                            input = input.copy(endTime = it)
+                            errors = errors - ScheduleField.StartTime - ScheduleField.EndTime
+                        },
+                        label = "종료 시각",
+                        placeholder = "10:30",
+                        supportingText = errors[ScheduleField.EndTime],
+                        isError = errors.containsKey(ScheduleField.EndTime),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii)
+                    )
+                }
+                BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    if (maxWidth >= 360.dp && LocalDensity.current.fontScale < 1.3f) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
+                            startTimeField(Modifier.weight(1f))
+                            endTimeField(Modifier.weight(1f))
+                        }
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)) {
+                            startTimeField(Modifier.fillMaxWidth())
+                            endTimeField(Modifier.fillMaxWidth())
+                        }
+                    }
+                }
                 TripSectionHeading(title = "장소", supportingText = "기존 장소 연결 또는 수동 등록")
                 val selectedPlace = places.firstOrNull { it.id == input.placeId }
                 Text(
