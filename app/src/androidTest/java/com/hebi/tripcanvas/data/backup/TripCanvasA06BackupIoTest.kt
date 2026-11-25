@@ -480,9 +480,20 @@ class TripCanvasA06BackupIoTest {
                 Environment.DIRECTORY_DOWNLOADS + "/TripCanvasQA"
             )
         }
-        return requireNotNull(
-            context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+        val resolver = context.contentResolver
+        val uri = requireNotNull(
+            resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
         ) { "Android MediaStore could not create a temporary QA document" }
+        try {
+            // MediaStore may create only the row on insert. Materialize the new,
+            // zero-byte file before testing the SAF export destination guard.
+            requireNotNull(resolver.openOutputStream(uri, "wt")).use { it.flush() }
+            assertEquals(-1, requireNotNull(resolver.openInputStream(uri)).use { it.read() })
+            return uri
+        } catch (failure: Throwable) {
+            runCatching { resolver.delete(uri, null, null) }
+            throw failure
+        }
     }
 
     private fun completeSnapshot(): TripBackupSnapshot {
