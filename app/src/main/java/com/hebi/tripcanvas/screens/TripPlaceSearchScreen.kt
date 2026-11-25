@@ -15,6 +15,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.hebi.tripcanvas.data.PlaceRepository
+import com.hebi.tripcanvas.data.network.QueryRateLimitedException
 import com.hebi.tripcanvas.data.search.PhotonPlaceSearch
 import com.hebi.tripcanvas.data.search.RemotePlace
 import com.hebi.tripcanvas.designsystem.components.TripEmptyState
@@ -55,7 +56,12 @@ fun TripPlaceSearchScreen(
         )
         TripTextField(
             value = query,
-            onValueChange = { query = it; error = null },
+            onValueChange = {
+                query = it
+                error = null
+                searched = false
+                results = emptyList()
+            },
             label = "검색어",
             placeholder = "예: 제주국제공항"
         )
@@ -65,18 +71,26 @@ fun TripPlaceSearchScreen(
             enabled = !searching && savingId == null && query.trim().length in 2..80,
             onClick = {
                 if (!searching) {
+                    val submitted = query.trim()
                     searching = true
                     searched = false
                     error = null
                     results = emptyList()
                     scope.launch {
                         try {
-                            results = searchService.search(query)
-                            searched = true
+                            val found = searchService.search(submitted)
+                            if (query.trim() == submitted) {
+                                results = found
+                                searched = true
+                            }
                         } catch (cancelled: CancellationException) {
                             throw cancelled
-                        } catch (failed: Exception) {
-                            error = failed.message ?: "장소 검색을 완료하지 못했습니다."
+                        } catch (limited: QueryRateLimitedException) {
+                            if (query.trim() == submitted) error = limited.message
+                        } catch (_: Exception) {
+                            if (query.trim() == submitted) {
+                                error = "장소 검색을 완료하지 못했습니다. 인터넷 연결을 확인하거나 직접 등록해 주세요."
+                            }
                         } finally {
                             searching = false
                         }

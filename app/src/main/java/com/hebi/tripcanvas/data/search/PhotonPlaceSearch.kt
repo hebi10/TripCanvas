@@ -1,12 +1,16 @@
 package com.hebi.tripcanvas.data.search
 
 import android.os.SystemClock
+import com.hebi.tripcanvas.data.network.ExpiringQueryCache
+import com.hebi.tripcanvas.data.network.QueryThrottle
+import com.hebi.tripcanvas.data.network.QueryRateLimitedException
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
@@ -22,23 +26,21 @@ class PhotonPlaceSearch(
     private val endpoint: String = "https://photon.komoot.io/api/"
 ) {
     private val mutex = Mutex()
-    private val cached = mutableMapOf<String, Pair<Long, List<RemotePlace>>>()
-    private var lastRequestAt = 0L
+    private val cached = ExpiringQueryCache<String, List<RemotePlace>>(64, 600_000L)
+    private val throttle = QueryThrottle(1_500L)
 
     suspend fun search(query: String): List<RemotePlace> = mutex.withLock {
         val term = query.trim()
         require(term.length in 2..80) { "검색어는 2~80자로 입력해 주세요." }
-        val cacheKey = term.lowercase()
-        val cachedResult = cached[cacheKey]
+        val cacheKey = term.lowercase(Locale.ROOT)
         val now = SystemClock.elapsedRealtime()
-        if (cachedResult != null && now - cachedResult.first < 10 * 60_000L) {
-            return@withLock cachedResult.second
-        }
-        val pause = 1_500L - (now - lastRequestAt)
+        cached[cacheKey, now]?.let { return@withLock it }
+        throttle.requireAvailable(now)
+        val pause = throttle.delayMillis(now)
         if (pause > 0L) delay(pause)
-        lastRequestAt = SystemClock.elapsedRealtime()
+        throttle.started(SystemClock.elapsedRealtime())
         val results = withContext(Dispatchers.IO) { request(term) }
-        cached[cacheKey] = SystemClock.elapsedRealtime() to results
+        cached.put(cacheKey, results, SystemClock.elapsedRealtime())
         results
     }
 
@@ -56,7 +58,11 @@ class PhotonPlaceSearch(
         try {
             when (connection.responseCode) {
                 200 -> Unit
-                429 -> throw IOException("검색 요청이 제한됐습니다. 잠시 후 다시 이용해 주세요.")
+                429 -> {
+                    throttle.rateLimited(SystemClock.elapsedRealtime(), connection.getHeaderField("Retry-After"),
+                        System.currentTimeMillis())
+                    throw QueryRateLimitedException()
+                }
                 else -> throw IOException("외부 장소 검색에 연결하지 못했습니다.")
             }
             val buffer = ByteArrayOutputStream()

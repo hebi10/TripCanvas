@@ -1,5 +1,6 @@
 package com.hebi.tripcanvas.data.route
 
+import com.hebi.tripcanvas.domain.TripRouteEstimate
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -22,6 +23,19 @@ class RouteEndpointPolicyTest {
             "https://routes.tripcanvas.com:8080/v1/routes",
             "https://routes.tripcanvas.com/v1/routes#anchor"
         ).forEach { assertFalse(it, RouteEndpointPolicy.approved(it)) }
+    }
+
+    @Test fun cachedRouteKeepsOriginalProviderFreshness() {
+        val now = 1_000_000L
+        val valid = TripRouteEstimate(2000L, 600L, "fixture provider", now)
+        assertTrue(isFreshRouteEstimate(valid, now))
+        assertTrue(isFreshRouteEstimate(valid.copy(queriedAtMillis = now - 600_000L), now))
+        assertFalse(isFreshRouteEstimate(valid.copy(queriedAtMillis = now - 600_001L), now))
+        assertTrue(isFreshRouteEstimate(valid.copy(queriedAtMillis = now + 60_000L), now))
+        assertFalse(isFreshRouteEstimate(valid.copy(queriedAtMillis = Long.MAX_VALUE), now))
+        assertFalse(isFreshRouteEstimate(valid.copy(provider = "x".repeat(101)), now))
+        assertFalse(isFreshRouteEstimate(valid.copy(provider = "bad\nname"), now))
+        assertFalse(isFreshRouteEstimate(valid.copy(distanceMeters = -1L), now))
     }
 
     @Test fun checksCoordinatesWithoutApproximation() {
