@@ -98,6 +98,8 @@ class TripCanvas3AMapTest {
                     scenario,
                     listOf(LatLng(33.5104, 126.4914), LatLng(33.4888, 126.4975))
                 )
+                capture("03-initial-map-light")
+                recordInitialMapRenderStatus()
                 capture("03-map-all-light")
                 val widthDp = (device.displayWidth / context.resources.displayMetrics.density).toInt()
                 if (classifyWindowWidth(widthDp) != TripWindowWidth.Compact) {
@@ -209,6 +211,30 @@ class TripCanvas3AMapTest {
             }
         } finally {
             device.executeShellCommand("settings put system font_scale 1.0")
+        }
+    }
+
+    private fun recordInitialMapRenderStatus() {
+        // The style and the pin source can exist before the background has rendered.
+        // Do not label a network-dependent screenshot as fully rendered without the UI signal.
+        val ready = By.textStartsWith("지도: OpenFreeMap")
+        val delayed = By.textStartsWith("지도 로딩이 지연되고 있습니다.")
+        val failed = By.textStartsWith("지도를 불러오지 못했습니다.")
+        val loading = By.textStartsWith("지도를 불러오는 중입니다.")
+        val state = when {
+            device.wait(Until.hasObject(ready), 20_000) -> "renderer-ready"
+            device.hasObject(delayed) -> "render-delayed"
+            device.hasObject(failed) -> "load-failed"
+            device.hasObject(loading) -> "still-loading"
+            else -> "status-not-visible"
+        }
+        File(evidenceDir(), "03-initial-map-render-status.txt").writeText(
+            "state=$state\n" +
+                "ready refers to the renderer callback; visual tile content must be checked in the PNG.\n"
+        )
+        if (state == "still-loading") {
+            capture("99-map-initial-render-timeout")
+            throw AssertionError("Initial map loading must report a delay or failure after timeout")
         }
     }
 
