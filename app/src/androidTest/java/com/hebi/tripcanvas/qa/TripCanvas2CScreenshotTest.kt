@@ -960,7 +960,7 @@ class TripCanvas2CScreenshotTest {
                         ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) == true
                 }
                 if (visible) device.pressBack()
-                navigator.clickVisible(By.text("비밀번호 확인 및 검증"), "첨부 백업 검증", "첨부 파일 포함 전체 복원")
+                navigator.clickVisible(By.text("비밀번호 확인 및 검증"), "첨부 백업 검증")
                 awaitText("첨부 파일 포함 전체 복원")
                 awaitText("첨부 원본 수", By.textContains("사진·예약 원본 1개"))
                 capture("s18-backup-attachment-verified")
@@ -976,6 +976,101 @@ class TripCanvas2CScreenshotTest {
             created.forEach { resolver.delete(it, null, null) }
             pass.fill('\u0000')
             archiveDb.close()
+        }
+    }
+
+    @Test
+    fun captureJournalPhotoAndZipExport() {
+        val resolver = context.contentResolver
+        val created = mutableListOf<android.net.Uri>()
+        fun newDocument(mime: String, suffix: String): android.net.Uri {
+            val uri = requireNotNull(resolver.insert(
+                android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                android.content.ContentValues().apply {
+                    put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME,
+                        "tripcanvas-qa-journal-${System.nanoTime()}.$suffix")
+                    put(android.provider.MediaStore.MediaColumns.MIME_TYPE, mime)
+                    put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH,
+                        android.os.Environment.DIRECTORY_DOWNLOADS + "/TripCanvasQA")
+                }
+            ))
+            created.add(uri)
+            requireNotNull(resolver.openOutputStream(uri, "wt")).use { it.flush() }
+            return uri
+        }
+        var monitor: android.app.Instrumentation.ActivityMonitor? = null
+        try {
+            val image = newDocument("image/png", "png")
+            val output = newDocument("application/zip", "zip")
+            val bitmap = android.graphics.Bitmap.createBitmap(640, 480, android.graphics.Bitmap.Config.ARGB_8888)
+            try {
+                val canvas = android.graphics.Canvas(bitmap)
+                canvas.drawColor(Color.rgb(80, 110, 140))
+                val paint = android.graphics.Paint().apply { color = Color.WHITE; textSize = 48f }
+                canvas.drawText("QA PHOTO", 80f, 240f, paint)
+                requireNotNull(resolver.openOutputStream(image, "wt")).use {
+                    check(bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it))
+                }
+            } finally {
+                bitmap.recycle()
+            }
+            val originalBytes = requireNotNull(resolver.openInputStream(image)).use { it.readBytes() }
+            runBlocking {
+                database.travelJournalDao().insertMoment(
+                    com.hebi.tripcanvas.data.local.TravelMomentEntity(
+                        "qa-journal-photo", "qa-trip", null, image.toString(),
+                        "QA photo record", 1000L
+                    )
+                )
+            }
+            val original = runBlocking { database.travelJournalDao().observeMoments("qa-trip").first() }
+            val pickerMonitor = object : android.app.Instrumentation.ActivityMonitor() {
+                override fun onStartActivity(intent: android.content.Intent): android.app.Instrumentation.ActivityResult? {
+                    if (intent.action != android.content.Intent.ACTION_CREATE_DOCUMENT) return null
+                    return android.app.Instrumentation.ActivityResult(
+                        android.app.Activity.RESULT_OK,
+                        android.content.Intent().setData(output)
+                            .addFlags(android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                    )
+                }
+            }
+            monitor = pickerMonitor
+            instrumentation.addMonitor(pickerMonitor)
+            ActivityScenario.launch(MainActivity::class.java).use {
+                awaitText("제주 주말 여행")
+                click("제주 주말 여행")
+                awaitText("여행 기록 열기")
+                navigator.clickVisible(By.desc("여행 기록 열기"), "여행 기록 열기", "새 기록")
+                awaitText("QA photo record")
+                awaitText("여행 기록 사진", By.desc("여행 기록 사진"))
+                capture("s20-journal-photo-preview")
+                awaitText("사진 원본 ZIP 저장")
+                navigator.clickVisible(By.text("사진 원본 ZIP 저장"), "사진 원본 ZIP 저장")
+                awaitText("사진 원본 1개 ZIP 내보내기 완료")
+                capture("s21-journal-zip-exported")
+                val entries = linkedMapOf<String, ByteArray>()
+                java.util.zip.ZipInputStream(requireNotNull(resolver.openInputStream(output))).use { zip ->
+                    while (true) {
+                        val entry = zip.nextEntry ?: break
+                        entries[entry.name] = zip.readBytes()
+                        zip.closeEntry()
+                    }
+                }
+                assertEquals(setOf("photos/000.png", "manifest.json"), entries.keys)
+                assertTrue(originalBytes.contentEquals(requireNotNull(entries["photos/000.png"])))
+                assertTrue(originalBytes.contentEquals(requireNotNull(resolver.openInputStream(image)).use { it.readBytes() }))
+                assertEquals(original, runBlocking { database.travelJournalDao().observeMoments("qa-trip").first() })
+                assertEquals(1, pickerMonitor.hits)
+                device.pressBack()
+                awaitText("작업 도구")
+                navigator.clickVisible(By.desc("리포트 열기"), "리포트 열기", "여행 요약")
+                awaitText("대표 기록 사진")
+                awaitText("여행 기록 사진", By.desc("여행 기록 사진"))
+                capture("s22-report-photo-preview")
+            }
+        } finally {
+            monitor?.let { instrumentation.removeMonitor(it) }
+            created.forEach { resolver.delete(it, null, null) }
         }
     }
 
