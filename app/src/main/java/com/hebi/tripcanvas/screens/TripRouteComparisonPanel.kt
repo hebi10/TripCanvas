@@ -10,6 +10,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -21,6 +22,7 @@ import androidx.compose.ui.Modifier
 import com.hebi.tripcanvas.data.local.ItineraryItemEntity
 import com.hebi.tripcanvas.data.local.PlaceEntity
 import com.hebi.tripcanvas.data.route.ConfiguredTripRouteProvider
+import com.hebi.tripcanvas.data.route.isFreshRouteEstimate
 import com.hebi.tripcanvas.designsystem.components.TripChoiceChip
 import com.hebi.tripcanvas.designsystem.components.TripPrimaryButton
 import com.hebi.tripcanvas.designsystem.components.TripSectionHeading
@@ -37,6 +39,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
@@ -52,12 +55,24 @@ internal fun TripRouteComparisonPanel(
     val scope = rememberCoroutineScope()
     var selectedMode by rememberSaveable { mutableStateOf(TripRouteMode.DRIVING.name) }
     val mode = TripRouteMode.valueOf(selectedMode)
-    val results = remember(selectedDate, mode, legs) { mutableStateMapOf<String, TripRouteEstimate>() }
-    var selectedLeg by remember(selectedDate, mode) { mutableStateOf<TripRouteLeg?>(null) }
-    var requesting by remember(selectedDate, mode) { mutableStateOf<String?>(null) }
-    var failed by remember(selectedDate, mode) { mutableStateOf<String?>(null) }
+    val results = remember(selectedDate, mode, legs, savedPlaces) {
+        mutableStateMapOf<Pair<String, String>, TripRouteEstimate>()
+    }
+    var selectedLeg by remember(selectedDate, mode, legs, savedPlaces) { mutableStateOf<TripRouteLeg?>(null) }
+    var requesting by remember(selectedDate, mode, legs, savedPlaces) { mutableStateOf<Pair<String, String>?>(null) }
+    var failed by remember(selectedDate, mode, legs, savedPlaces) { mutableStateOf<Pair<String, String>?>(null) }
 
-    fun legKey(leg: TripRouteLeg) = leg.fromPlaceId + ":" + leg.toPlaceId
+    // Expiry only updates local state. Never send a network request on a timer.
+    LaunchedEffect(results, results.isNotEmpty()) {
+        while (results.isNotEmpty()) {
+            val now = System.currentTimeMillis()
+            results.entries.filterNot { isFreshRouteEstimate(it.value, now) }
+                .map { it.key }.forEach { results.remove(it) }
+            if (results.isNotEmpty()) delay(15_000L)
+        }
+    }
+
+    fun legKey(leg: TripRouteLeg) = leg.fromPlaceId to leg.toPlaceId
 
     selectedLeg?.let { leg ->
         AlertDialog(
@@ -79,10 +94,11 @@ internal fun TripRouteComparisonPanel(
                     if (provider != null && from != null && to != null) {
                         requesting = key
                         failed = null
+                        results.remove(key)
                         scope.launch {
                             try {
                                 val result = provider.estimate(from, to, mode)
-                                if (result == null) failed = key
+                                if (result == null || !isFreshRouteEstimate(result, System.currentTimeMillis())) failed = key
                                 else results[key] = result
                             } catch (error: CancellationException) {
                                 throw error
@@ -172,6 +188,7 @@ internal fun TripRouteComparisonPanel(
                             TripPrimaryButton(
                                 label = if (requesting == key) "조회 중" else "경로 조회",
                                 modifier = Modifier.fillMaxWidth(),
+                                enabled = requesting == null,
                                 onClick = { if (requesting == null) selectedLeg = leg }
                             )
                         }
@@ -194,7 +211,7 @@ private fun formatRouteEstimate(estimate: TripRouteEstimate): String {
     } else {
         estimate.distanceMeters.toString() + " m"
     }
-    val minutes = (estimate.durationSeconds + 59L) / 60L
+    val minutes = estimate.durationSeconds / 60L + if (estimate.durationSeconds % 60L == 0L) 0L else 1L
     val fetched = DateTimeFormatter.ofPattern("yyyy.MM.dd HH:mm")
         .withZone(ZoneId.systemDefault())
         .format(Instant.ofEpochMilli(estimate.queriedAtMillis))
