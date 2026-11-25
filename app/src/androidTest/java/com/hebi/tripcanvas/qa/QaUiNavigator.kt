@@ -1,6 +1,8 @@
 package com.hebi.tripcanvas.qa
 
+import android.os.Build
 import android.os.SystemClock
+import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.BySelector
 import androidx.test.uiautomator.Direction
@@ -80,6 +82,10 @@ internal class QaUiNavigator(private val device: UiDevice) {
                 }
                 deliveredTaps++
                 device.waitForIdle()
+                if (expectedAfter != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    // Compose can render a toggled control before UiAutomator refreshes its cached label.
+                    InstrumentationRegistry.getInstrumentation().uiAutomation.clearCache()
+                }
                 if (expectedAfter == null ||
                     device.wait(Until.hasObject(By.text(expectedAfter)), 4000)
                 ) return
