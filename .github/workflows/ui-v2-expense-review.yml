@@ -9,6 +9,7 @@ on:
       - 'app/src/androidTest/**'
       - '.github/workflows/ui-v2-expense-review.yml'
       - '.github/scripts/run-3b-screen-qa.sh'
+      - '.github/scripts/run-design-expense-qa.sh'
       - '.github/scripts/run-design-evidence-qa.sh'
 
 permissions:
@@ -60,10 +61,10 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: true
-          script: bash .github/scripts/run-design-evidence-qa.sh .github/scripts/run-3b-screen-qa.sh 1080x2400 420
+          script: bash .github/scripts/run-design-evidence-qa.sh .github/scripts/run-design-expense-qa.sh 1080x2400 420
       - name: Require new expense and split evidence
         run: |
-          for name in f01-split-preview-light f02-rate-reset-confirm f03-rate-reset-cancel f04-expense-form-light f05-expense-form-dark-font160; do
+          for name in f01-split-preview-light f02-rate-reset-confirm f03-rate-reset-cancel f04-expense-form-light f05-expense-form-dark-font160 f06-ocr-before-selection f07-ocr-candidate-dialog f08-ocr-cancel-preserved f09-ocr-applied-unsaved f10-ocr-expense-saved; do
             test -s "qa-output/screenshots/qa3b/$name.png" || { echo "Missing expense evidence: $name"; exit 1; }
           done
       - name: Preserve raw evidence
