@@ -2,7 +2,7 @@ package com.hebi.tripcanvas.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -18,7 +18,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import com.hebi.tripcanvas.data.PlaceRepository
+import com.hebi.tripcanvas.data.TripRepository
 import com.hebi.tripcanvas.data.local.PlaceEntity
 import com.hebi.tripcanvas.designsystem.components.TripConfirmDialog
 import com.hebi.tripcanvas.designsystem.components.TripEmptyState
@@ -46,6 +49,7 @@ private sealed interface PlaceListState {
 @Composable
 fun PlaceListScreen(
     repository: PlaceRepository,
+    tripRepository: TripRepository,
     tripId: String,
     selectionMode: Boolean,
     onSelect: (String) -> Unit,
@@ -59,7 +63,10 @@ fun PlaceListScreen(
 ) {
     val p = TripDesign.palette
     val scope = rememberCoroutineScope()
-    var search by rememberSaveable { mutableStateOf("") }
+    val trip by remember(tripRepository, tripId) {
+        tripRepository.observeTrip(tripId)
+    }.collectAsState(initial = null)
+    var search by rememberSaveable(tripId, selectionMode) { mutableStateOf("") }
     var refresh by remember { mutableIntStateOf(0) }
     var deleting by remember { mutableStateOf(false) }
     var deleteFailed by remember { mutableStateOf(false) }
@@ -92,21 +99,24 @@ fun PlaceListScreen(
 
     TripPageFrame(
         title = if (selectionMode) "일정 장소 선택" else "저장 장소",
-        onBack = onBack
+        onBack = onBack,
+        contentSpacing = TripSpacing.sm,
+        bottomAction = {
+            TripPrimaryButton(
+                label = "새 장소 만들기",
+                onClick = onCreate,
+                enabled = !deleting,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
     ) {
         TripSectionHeading(
             title = if (selectionMode) "장소 연결" else "여행 장소",
-            supportingText = "저장한 장소와 외부 검색 결과를 이 여행에 연결할 수 있습니다."
-        )
-        TripSecondaryButton(
-            label = "지도에서 보기",
-            onClick = onMap,
-            modifier = Modifier.fillMaxWidth()
-        )
-        TripSecondaryButton(
-            label = "외부 장소 검색",
-            onClick = onExternalSearch,
-            modifier = Modifier.fillMaxWidth()
+            supportingText = listOfNotNull(
+                trip?.title,
+                if (selectionMode) "일정에 연결할 장소를 선택하세요."
+                else "저장한 장소를 검색하거나 직접 등록할 수 있습니다."
+            ).joinToString("\n")
         )
         TripTextField(
             value = search,
@@ -114,6 +124,14 @@ fun PlaceListScreen(
             label = "장소 검색",
             placeholder = "이름·주소·메모"
         )
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs),
+            verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
+        ) {
+            TripSecondaryButton(label = "지도에서 보기", onClick = onMap)
+            TripSecondaryButton(label = "외부 장소 검색", onClick = onExternalSearch)
+        }
         when (val result = state) {
             PlaceListState.Loading -> TripLoadingState("장소를 불러오는 중")
             PlaceListState.Failed -> TripErrorState(
@@ -144,37 +162,55 @@ fun PlaceListScreen(
                             if (place.address.isNotBlank()) {
                                 Text(place.address, style = MaterialTheme.typography.bodyMedium, color = p.textSecondary)
                             }
-                            if (place.provider != null) {
-                                Text(
-                                    "출처: " + place.provider,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = p.textSecondary
-                                )
-                            }
+                            Text(
+                                if (place.latitude != null && place.longitude != null) "좌표 등록됨" else "좌표 없음",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = p.textSecondary
+                            )
+                            Text(
+                                place.provider?.let { "출처: $it" } ?: "직접 등록한 장소",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = p.textSecondary
+                            )
                             if (place.note.isNotBlank()) {
                                 Text(place.note, style = MaterialTheme.typography.bodyMedium, color = p.textSecondary)
                             }
-                            Row(horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
-                                if (selectionMode) {
-                                    TripSecondaryButton(label = "선택", onClick = { onSelect(place.id) })
-                                }
-                                TripSecondaryButton(label = "상세", onClick = { onDetail(place.id) })
-                                TripSecondaryButton(label = "편집", onClick = { onEdit(place.id) })
-                                TripSecondaryButton(label = "삭제", onClick = {
-                                    deleteFailed = false
-                                    deleteTarget = place
-                                })
+                            if (selectionMode) {
+                                TripPrimaryButton(
+                                    label = "선택",
+                                    onClick = { onSelect(place.id) },
+                                    modifier = Modifier.fillMaxWidth().semantics {
+                                        contentDescription = "선택: ${place.name}"
+                                    }
+                                )
+                            }
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs),
+                                verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
+                            ) {
+                                TripSecondaryButton(
+                                    label = "상세", onClick = { onDetail(place.id) },
+                                    modifier = Modifier.semantics { contentDescription = "상세: ${place.name}" }
+                                )
+                                TripSecondaryButton(
+                                    label = "편집", onClick = { onEdit(place.id) },
+                                    modifier = Modifier.semantics { contentDescription = "편집: ${place.name}" }
+                                )
+                                TripSecondaryButton(
+                                    label = "삭제",
+                                    onClick = {
+                                        deleteFailed = false
+                                        deleteTarget = place
+                                    },
+                                    modifier = Modifier.semantics { contentDescription = "삭제: ${place.name}" }
+                                )
                             }
                         }
                     }
                 }
             }
         }
-        TripPrimaryButton(
-            label = "새 장소 만들기",
-            onClick = onCreate,
-            modifier = Modifier.fillMaxWidth()
-        )
     }
     deleteTarget?.let { target ->
         TripConfirmDialog(
