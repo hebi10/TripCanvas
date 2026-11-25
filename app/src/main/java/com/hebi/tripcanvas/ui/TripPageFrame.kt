@@ -27,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import com.hebi.tripcanvas.designsystem.components.TripDivider
 import com.hebi.tripcanvas.designsystem.icons.TripIcons
 import com.hebi.tripcanvas.designsystem.responsive.TripAdaptiveContainer
@@ -41,6 +42,7 @@ fun TripPageFrame(
     onBack: (() -> Unit)? = null,
     trailingActions: @Composable RowScope.() -> Unit = {},
     bottomAction: (@Composable ColumnScope.() -> Unit)? = null,
+    contentSpacing: Dp = TripSpacing.lg,
     content: @Composable ColumnScope.() -> Unit
 ) {
     val palette = TripDesign.palette
@@ -95,7 +97,7 @@ fun TripPageFrame(
                             .verticalScroll(rememberScrollState())
                             .padding(
                                 horizontal = horizontalGutter,
-                                vertical = TripSpacing.lg
+                                vertical = contentSpacing
                             ),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
@@ -103,7 +105,7 @@ fun TripPageFrame(
                             modifier = Modifier
                                 .widthIn(max = TripSizes.maximumContentWidth)
                                 .fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(TripSpacing.lg),
+                            verticalArrangement = Arrangement.spacedBy(contentSpacing),
                             content = content
                         )
                     }

@@ -157,6 +157,7 @@ fun TripWorkspaceScreen(
 
     TripPageFrame(
         title = "여행 작업 공간",
+        contentSpacing = TripSpacing.sm,
         onBack = onBack,
         trailingActions = {
             if (loaded != null) {
@@ -422,15 +423,32 @@ private fun WorkspaceOverview(
                     WorkspaceMetric("현재 여행일", dayLabel, "", Modifier.weight(1f))
                 }
                 TripDivider()
-                WorkspaceMetric("사용 경비", spent, expenseDetail)
-                usage?.let { TripProgressIndicator(it.fraction, "예산 사용률 " + it.percentage, warning = it.overBudget) }
-                TripDivider()
-                WorkspaceMetric("준비물 완료", checklistValue, checklistDetail)
-                if (!isPreview && checklist.isNotEmpty()) {
-                    TripProgressIndicator(checklistCompletionFraction(completed, checklist.size), "준비 완료 " + checklistValue)
+                val moneyBlock: @Composable (Modifier) -> Unit = { modifier ->
+                    Column(modifier, verticalArrangement = Arrangement.spacedBy(TripSpacing.xxs)) {
+                        WorkspaceMetric("사용 경비", spent, expenseDetail)
+                        usage?.let { TripProgressIndicator(it.fraction, "예산 사용률 " + it.percentage, warning = it.overBudget) }
+                    }
+                }
+                val packingBlock: @Composable (Modifier) -> Unit = { modifier ->
+                    Column(modifier, verticalArrangement = Arrangement.spacedBy(TripSpacing.xxs)) {
+                        WorkspaceMetric("준비물 완료", checklistValue, checklistDetail)
+                        if (!isPreview && checklist.isNotEmpty()) {
+                            TripProgressIndicator(checklistCompletionFraction(completed, checklist.size), "준비 완료 " + checklistValue)
+                        }
+                    }
+                }
+                if (LocalDensity.current.fontScale < 1.4f) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TripSpacing.sm)) {
+                        moneyBlock(Modifier.weight(1.4f))
+                        packingBlock(Modifier.weight(1f))
+                    }
+                } else {
+                    moneyBlock(Modifier.fillMaxWidth())
+                    TripDivider()
+                    packingBlock(Modifier.fillMaxWidth())
                 }
                 TripDivider()
-                WorkspaceMetric("다음 일정", nextTitle, nextDetail)
+                WorkspaceMetric("다음 일정", nextTitle, nextDetail, compact = LocalDensity.current.fontScale < 1.4f)
             }
         }
     }

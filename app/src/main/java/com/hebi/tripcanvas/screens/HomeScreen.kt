@@ -51,6 +51,7 @@ import com.hebi.tripcanvas.domain.displayMoney
 import com.hebi.tripcanvas.domain.budgetUsageProgress
 import com.hebi.tripcanvas.domain.checklistCompletionFraction
 import java.math.BigDecimal
+import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.combine
 import com.hebi.tripcanvas.data.local.TripEntity
 import com.hebi.tripcanvas.designsystem.components.TripChoiceChip
@@ -115,6 +116,7 @@ fun HomeScreen(
 
     TripPageFrame(
         title = "TripCanvas",
+        contentSpacing = TripSpacing.sm,
         trailingActions = {
             IconButton(
                 onClick = { searchVisible = !searchVisible; if (!searchVisible) search = "" },
@@ -141,16 +143,20 @@ fun HomeScreen(
                 placeholder = "여행명 또는 목적지"
             )
         }
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs),
-            verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
-        ) {
-            TripListFilter.entries.forEach { filter ->
-                TripChoiceChip(
-                    label = filter.label,
-                    selected = filter == selectedFilter,
-                    onClick = { selectedFilter = filter }
-                )
+        if (LocalDensity.current.fontScale < 1.4f) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TripSpacing.xxs)) {
+                TripListFilter.entries.forEach { filter ->
+                    TripChoiceChip(label = filter.label, selected = filter == selectedFilter,
+                        onClick = { selectedFilter = filter }, modifier = Modifier.weight(1f))
+                }
+            }
+        } else {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs),
+                verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
+                TripListFilter.entries.forEach { filter ->
+                    TripChoiceChip(label = filter.label, selected = filter == selectedFilter,
+                        onClick = { selectedFilter = filter })
+                }
             }
         }
         TripPrimaryButton(
@@ -364,35 +370,50 @@ private fun HomeTripMetrics(summary: HomeTripSummary, currency: String) {
     val p = TripDesign.palette
     val budget = summary.budget?.takeIf { it.currencyCode == currency }
     val usage = budget?.let { budgetUsageProgress(summary.spent, BigDecimal(it.amountDecimal)) }
+    val expenseMetric: @Composable (Modifier) -> Unit = { modifier ->
+        HomeMetric("경비", displayMoney(summary.spent.toPlainString(), currency), modifier) {
+            usage?.let {
+                TripProgressIndicator(it.fraction, "예산 사용률 " + it.percentage, warning = it.overBudget)
+                Text(it.percentage, style = MaterialTheme.typography.bodySmall,
+                    color = if (it.overBudget) p.warning else p.textSecondary)
+            }
+        }
+    }
+    val packingMetric: @Composable (Modifier) -> Unit = { modifier ->
+        HomeMetric("준비물", summary.completed.toString() + " / " + summary.total, modifier) {
+            if (summary.total > 0) {
+                TripProgressIndicator(checklistCompletionFraction(summary.completed, summary.total),
+                    "준비 완료 " + summary.completed + " / " + summary.total)
+                Text((summary.completed * 100.0 / summary.total).roundToInt().toString() + "%",
+                    style = MaterialTheme.typography.bodySmall, color = p.textSecondary)
+            }
+        }
+    }
     Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
         if (LocalDensity.current.fontScale >= 1.4f) {
             HomeMetric("일정", summary.schedules.toString() + "개")
-            HomeMetric("경비", displayMoney(summary.spent.toPlainString(), currency))
-            HomeMetric("준비물", summary.completed.toString() + " / " + summary.total)
+            expenseMetric(Modifier.fillMaxWidth())
+            packingMetric(Modifier.fillMaxWidth())
         } else {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TripSpacing.sm)) {
                 HomeMetric("일정", summary.schedules.toString() + "개", Modifier.weight(1f))
-                HomeMetric("경비", displayMoney(summary.spent.toPlainString(), currency), Modifier.weight(1.65f))
-                HomeMetric("준비물", summary.completed.toString() + " / " + summary.total, Modifier.weight(1f))
+                expenseMetric(Modifier.weight(1.65f))
+                packingMetric(Modifier.weight(1f))
             }
         }
-        usage?.let {
-            TripProgressIndicator(it.fraction, "예산 사용률 " + it.percentage, warning = it.overBudget)
-            Text("예산 " + displayMoney(requireNotNull(budget).amountDecimal, currency) + " · " + it.percentage,
-                style = MaterialTheme.typography.bodySmall, color = if (it.overBudget) p.warning else p.textSecondary)
-        }
+        if (budget != null) Text("예산 " + displayMoney(budget.amountDecimal, currency),
+            style = MaterialTheme.typography.bodySmall, color = p.textSecondary)
         if (summary.unconverted) Text("미환산 외화 제외", style = MaterialTheme.typography.bodySmall, color = p.textSecondary)
-        if (summary.total > 0) TripProgressIndicator(
-            checklistCompletionFraction(summary.completed, summary.total),
-            "준비 완료 " + summary.completed + " / " + summary.total
-        )
     }
 }
 
 @Composable
-private fun HomeMetric(label: String, value: String, modifier: Modifier = Modifier) {
+private fun HomeMetric(label: String, value: String, modifier: Modifier = Modifier,
+    detail: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit = {}
+) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(TripSpacing.xxs)) {
         Text(label, style = MaterialTheme.typography.labelMedium, color = TripDesign.palette.textSecondary)
         Text(value, style = MaterialTheme.typography.titleMedium, color = TripDesign.palette.textPrimary)
+        detail()
     }
 }

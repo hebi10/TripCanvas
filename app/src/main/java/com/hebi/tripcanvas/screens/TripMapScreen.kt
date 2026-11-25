@@ -26,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
@@ -122,7 +123,8 @@ fun TripMapScreen(
         if (retained != selectedId) selectedId = retained
     }
 
-    TripPageFrame(title = "여행 지도", onBack = onBack) {
+    val compactMapHeight = (LocalConfiguration.current.screenHeightDp * 0.40f).coerceIn(240f, 360f).dp
+    TripPageFrame(title = "여행 지도", onBack = onBack, contentSpacing = TripSpacing.sm) {
         if (trip == null) {
             TripEmptyState("여행 정보를 확인하는 중", "잠시 후 다시 확인해 주세요.")
         } else {
@@ -141,11 +143,6 @@ fun TripMapScreen(
                 }
             }
             Text(
-                "핀 구분: 확정 일정 / 후보 일정 / 저장 장소. 좌표가 없는 장소는 목록에서 확인합니다.",
-                style = MaterialTheme.typography.bodySmall,
-                color = p.textSecondary
-            )
-            Text(
                 "선택 날짜 " + (if (selectedDate == "all") "전체" else selectedDate) +
                     " · 장소 ${visiblePlaces.size}개 · 지도 핀 ${pins.size}개",
                 style = MaterialTheme.typography.labelMedium,
@@ -160,9 +157,11 @@ fun TripMapScreen(
                         TripMapPane(
                             pins = pins,
                             selectedId = selectedId,
-                            mapHeight = 360.dp,
+                            mapHeight = compactMapHeight,
                             onPinClick = { selectedId = it }
                         )
+                        Text("핀 구분: 확정 일정 / 후보 일정 / 저장 장소. 좌표가 없는 장소는 목록에서 확인합니다.",
+                            style = MaterialTheme.typography.bodySmall, color = p.textSecondary)
                         focusedPlace?.let { place ->
                             TripMapSelectedPlace(
                                 place = place,
@@ -200,6 +199,8 @@ fun TripMapScreen(
                                 mapHeight = 470.dp,
                                 onPinClick = { selectedId = it }
                             )
+                            Text("핀 구분: 확정 일정 / 후보 일정 / 저장 장소. 좌표가 없는 장소는 목록에서 확인합니다.",
+                                style = MaterialTheme.typography.bodySmall, color = p.textSecondary)
                         }
                         Column(
                             modifier = Modifier.weight(2f),
