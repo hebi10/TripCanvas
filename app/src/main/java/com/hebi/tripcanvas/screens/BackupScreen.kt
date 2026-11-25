@@ -334,6 +334,7 @@ fun BackupScreen(
                 )
                 Text(
                     "안전 백업은 같은 기기에서만 이용할 수 있습니다. 다음 복원 시 최신 복원 직전 상태로 교체되며, " +
+                        "현재 여행을 삭제해도 안전 백업은 남을 수 있으므로 이 화면에서 별도로 삭제하세요. " +
                         "앱 데이터 삭제·앱 제거 시 사라집니다. 사진·예약 문서 원본은 포함하지 않고 연결 정보만 보존합니다.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = p.textSecondary
