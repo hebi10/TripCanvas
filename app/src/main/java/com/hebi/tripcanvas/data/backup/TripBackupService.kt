@@ -2,6 +2,7 @@ package com.hebi.tripcanvas.data.backup
 
 import android.content.Context
 import android.net.Uri
+import androidx.room.withTransaction
 import com.hebi.tripcanvas.data.local.TripBackupSnapshot
 import com.hebi.tripcanvas.data.local.TripDatabase
 import java.io.ByteArrayOutputStream
@@ -9,15 +10,19 @@ import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.charset.CodingErrorAction
 import java.nio.charset.StandardCharsets
+import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class BackupPasswordRequired : IllegalArgumentException("암호화 백업 비밀번호가 필요합니다.")
 
 class TripBackupService(
     private val context: Context,
-    private val database: TripDatabase
+    private val database: TripDatabase,
+    private val checkpointStore: RestoreCheckpointStore = DeviceRestoreCheckpointStore(context.applicationContext)
 ) {
     suspend fun export(uri: Uri): TripBackupSnapshot = withContext(Dispatchers.IO) {
         val snapshot = database.backupDao().snapshot()
@@ -106,8 +111,67 @@ class TripBackupService(
         }
     }
 
+    suspend fun hasRestoreCheckpoint(): Boolean = withContext(Dispatchers.IO) {
+        restoreMutex.withLock { checkpointStore.exists() }
+    }
+
+    suspend fun previewRestoreCheckpoint(): RestoreCheckpoint = withContext(Dispatchers.IO) {
+        restoreMutex.withLock {
+            requireNotNull(checkpointStore.load()) { "복원 전 안전 백업이 없습니다." }
+                .also(RestoreCheckpointCodec::validate)
+        }
+    }
+
+    suspend fun deleteRestoreCheckpoint() = withContext(Dispatchers.IO) {
+        restoreMutex.withLock { checkpointStore.delete() }
+    }
+
     suspend fun restore(snapshot: TripBackupSnapshot) = withContext(Dispatchers.IO) {
         TripBackupCodec.validate(snapshot)
-        database.backupDao().replaceAll(snapshot)
+        restoreMutex.withLock {
+            database.withTransaction {
+                saveCurrentCheckpoint()
+                database.backupDao().replaceAll(snapshot)
+            }
+        }
+    }
+
+    suspend fun restoreCheckpoint(checkpoint: RestoreCheckpoint) = withContext(Dispatchers.IO) {
+        RestoreCheckpointCodec.validate(checkpoint)
+        restoreMutex.withLock {
+            require(checkpointStore.load() == checkpoint) {
+                "안전 백업이 변경되었습니다. 다시 확인해 주세요."
+            }
+            database.withTransaction {
+                saveCurrentCheckpoint()
+                val dao = database.backupDao()
+                dao.replaceAll(checkpoint.snapshot)
+                dao.insertBookingAttachments(checkpoint.attachments)
+            }
+        }
+    }
+
+    private suspend fun saveCurrentCheckpoint() {
+        try {
+            val dao = database.backupDao()
+            val checkpoint = RestoreCheckpoint(
+                id = UUID.randomUUID().toString(),
+                createdAtMillis = System.currentTimeMillis(),
+                snapshot = dao.snapshot(),
+                attachments = dao.allBookingAttachments()
+            )
+            RestoreCheckpointCodec.validate(checkpoint)
+            checkpointStore.save(checkpoint)
+            require(checkpointStore.load() == checkpoint)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            // Fail closed before replacing any Room rows.
+            throw RestoreSafetyBackupFailed()
+        }
+    }
+
+    private companion object {
+        val restoreMutex = Mutex()
     }
 }
