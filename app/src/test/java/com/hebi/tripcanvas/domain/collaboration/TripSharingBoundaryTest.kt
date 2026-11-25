@@ -84,6 +84,7 @@ class TripSharingBoundaryTest {
             { gateway.requestInvite("trip-a", "guest", TripMemberRole.VIEWER) },
             { gateway.revokeInvite("trip-a", "invite-a") },
             { gateway.acceptInvite("invite-a") },
+            { gateway.declineInvite("invite-a") },
             { gateway.leaveTrip("trip-a") },
             { gateway.changeMemberRole("trip-a", "guest", TripMemberRole.EDITOR) },
             { gateway.revokeMember("trip-a", "guest") },
