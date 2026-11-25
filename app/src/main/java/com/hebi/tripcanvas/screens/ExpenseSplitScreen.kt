@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -19,15 +20,18 @@ import com.hebi.tripcanvas.data.ExpenseRepository
 import com.hebi.tripcanvas.data.TripFinanceRepository
 import com.hebi.tripcanvas.data.TripRepository
 import com.hebi.tripcanvas.designsystem.components.TripChoiceChip
+import com.hebi.tripcanvas.designsystem.components.TripConfirmDialog
 import com.hebi.tripcanvas.designsystem.components.TripErrorState
 import com.hebi.tripcanvas.designsystem.components.TripLoadingState
 import com.hebi.tripcanvas.designsystem.components.TripPrimaryButton
 import com.hebi.tripcanvas.designsystem.components.TripSecondaryButton
 import com.hebi.tripcanvas.designsystem.components.TripSectionHeading
+import com.hebi.tripcanvas.designsystem.components.TripSurfacePanel
 import com.hebi.tripcanvas.designsystem.components.TripTextField
 import com.hebi.tripcanvas.designsystem.theme.TripDesign
 import com.hebi.tripcanvas.designsystem.tokens.TripSpacing
 import com.hebi.tripcanvas.domain.SplitMode
+import com.hebi.tripcanvas.domain.allocateShares
 import com.hebi.tripcanvas.domain.convertedMinor
 import com.hebi.tripcanvas.domain.displayMinor
 import com.hebi.tripcanvas.domain.validCurrency
@@ -68,6 +72,7 @@ fun ExpenseSplitScreen(
     var mode by remember(expenseId) { mutableStateOf(SplitMode.EQUAL) }
     var values by remember(expenseId) { mutableStateOf<Map<String, String>>(emptyMap()) }
     var saving by remember { mutableStateOf(false) }
+    var showRateOnlyConfirm by remember(expenseId) { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(expense?.id, shares) {
@@ -93,7 +98,11 @@ fun ExpenseSplitScreen(
         }
     }
 
-    TripPageFrame(title = "환율·분담 설정", onBack = { if (!saving) onBack() }) {
+    TripPageFrame(
+        title = "환율·분담 설정",
+        onBack = { if (!saving) onBack() },
+        contentSpacing = TripSpacing.md
+    ) {
         val current = expense
         val tripInfo = trip
         if (current == null || tripInfo == null || !hydrated) {
@@ -144,19 +153,7 @@ fun ExpenseSplitScreen(
                     label = "환율만 저장 (기존 분담 초기화)",
                     enabled = !saving,
                     modifier = Modifier.fillMaxWidth(),
-                    onClick = {
-                        saving = true; error = null
-                        scope.launch {
-                            try {
-                                finance.saveRate(tripId, expenseId, rate, rateDate)
-                                onSaved()
-                            } catch (cancelled: CancellationException) {
-                                throw cancelled
-                            } catch (failed: Exception) {
-                                error = failed.message ?: "환율을 저장할 수 없습니다."
-                            } finally { saving = false }
-                        }
-                    }
+                    onClick = { showRateOnlyConfirm = true }
                 )
             } else {
                 Text(
@@ -169,7 +166,10 @@ fun ExpenseSplitScreen(
                 supportingText = "실제 결제한 로컬 동행자 1명을 선택해 주세요."
             )
             if (people.isEmpty()) Text("먼저 동행자를 등록해 주세요.", color = palette.textSecondary)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs),
+                verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
+            ) {
                 people.forEach { person ->
                     TripChoiceChip(
                         label = person.displayName,
@@ -187,7 +187,10 @@ fun ExpenseSplitScreen(
                 title = "부담 참가자",
                 supportingText = "선택한 순서로 균등 분담의 잔여 최소 단위를 배정합니다."
             )
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs),
+                verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
+            ) {
                 people.forEach { person ->
                     TripChoiceChip(
                         label = person.displayName,
@@ -199,7 +202,10 @@ fun ExpenseSplitScreen(
                 }
             }
             TripSectionHeading(title = "분담 방식")
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs),
+                verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
+            ) {
                 SplitMode.entries.forEach { option ->
                     TripChoiceChip(
                         label = option.label,
@@ -218,6 +224,46 @@ fun ExpenseSplitScreen(
                             " 부담액 (" + tripInfo.currencyCode + ")",
                         placeholder = if (mode == SplitMode.PERCENT) "예: 50" else "예: 12000"
                     )
+                }
+            }
+            val preview = if (estimate != null && chosen.isNotEmpty() && chosen.size <= 100 &&
+                chosen.all { id -> people.any { it.id == id } }) {
+                runCatching {
+                    allocateShares(
+                        estimate, mode, chosen.map { id -> id to values[id].orEmpty() },
+                        tripInfo.currencyCode
+                    )
+                }.getOrNull()
+            } else null
+            TripSectionHeading(
+                title = "분담 미리보기",
+                supportingText = "확정 전 계산 결과입니다. 저장된 분담 내역이 아닙니다."
+            )
+            TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(TripSpacing.sm),
+                    verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
+                ) {
+                    when {
+                        estimate == null -> Text("환산 금액을 먼저 확인해 주세요.", color = palette.textSecondary)
+                        chosen.isEmpty() -> Text("부담 참가자를 선택해 주세요.", color = palette.textSecondary)
+                        preview == null -> Text("참가자와 분담 비율 또는 금액 합계를 확인해 주세요.", color = palette.textSecondary)
+                        else -> {
+                            preview.forEach { allocation ->
+                                val person = people.first { it.id == allocation.participantId }
+                                Text(
+                                    person.displayName + " · " + displayMinor(allocation.amountMinor, tripInfo.currencyCode),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = palette.textPrimary
+                                )
+                            }
+                            Text(
+                                "분담 합계: " + displayMinor(preview.sumOf { it.amountMinor }, tripInfo.currencyCode),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = palette.textPrimary
+                            )
+                        }
+                    }
                 }
             }
             Text(
@@ -256,5 +302,31 @@ fun ExpenseSplitScreen(
                 }
             )
         }
+    }
+    if (showRateOnlyConfirm) {
+        TripConfirmDialog(
+            title = "환율만 저장",
+            message = "환율만 저장하면 기존 결제자와 분담 내역이 초기화됩니다. 원래 지출 금액과 통화는 유지됩니다.",
+            confirmLabel = "환율만 저장",
+            destructive = true,
+            onConfirm = {
+                showRateOnlyConfirm = false
+                if (!saving) {
+                    saving = true
+                    error = null
+                    scope.launch {
+                        try {
+                            finance.saveRate(tripId, expenseId, rate, rateDate)
+                            onSaved()
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (failed: Exception) {
+                            error = failed.message ?: "환율을 저장할 수 없습니다."
+                        } finally { saving = false }
+                    }
+                }
+            },
+            onDismiss = { showRateOnlyConfirm = false }
+        )
     }
 }
