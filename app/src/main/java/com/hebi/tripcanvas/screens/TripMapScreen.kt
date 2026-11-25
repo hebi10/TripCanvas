@@ -25,10 +25,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -49,9 +53,11 @@ import com.hebi.tripcanvas.designsystem.responsive.TripWindowWidth
 import com.hebi.tripcanvas.designsystem.theme.TripDesign
 import com.hebi.tripcanvas.designsystem.tokens.TripSpacing
 import com.hebi.tripcanvas.ui.TripPageFrame
+import kotlinx.coroutines.delay
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
@@ -66,6 +72,8 @@ import org.maplibre.android.style.layers.PropertyFactory
 import org.maplibre.android.style.sources.GeoJsonSource
 
 private data class PlacePin(val place: PlaceEntity, val label: String)
+
+private enum class InitialMapRender { Loading, Delayed, Failed, Ready }
 
 private const val PIN_SOURCE = "tripcanvas-place-source"
 private const val PIN_CONFIRMED = "tripcanvas-place-confirmed"
@@ -122,13 +130,14 @@ fun TripMapScreen(
         if (retained != selectedId) selectedId = retained
     }
 
-    TripPageFrame(title = "여행 지도", onBack = onBack) {
+    val compactMapHeight = (LocalConfiguration.current.screenHeightDp * 0.40f).coerceIn(240f, 360f).dp
+    TripPageFrame(title = "여행 지도", onBack = onBack, contentSpacing = TripSpacing.sm) {
         if (trip == null) {
             TripEmptyState("여행 정보를 확인하는 중", "잠시 후 다시 확인해 주세요.")
         } else {
             TripSectionHeading(
                 title = requireNotNull(trip).title,
-                supportingText = "여행에 저장된 장소와 일정의 연결 상태를 지도에서 확인합니다."
+                supportingText = "저장한 장소 · 날짜별 일정"
             )
             FlowRow(horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
                 TripChoiceChip("전체", selectedDate == "all", onClick = { selectedDate = "all" })
@@ -140,11 +149,6 @@ fun TripMapScreen(
                     )
                 }
             }
-            Text(
-                "핀 구분: 확정 일정 / 후보 일정 / 저장 장소. 좌표가 없는 장소는 목록에서 확인합니다.",
-                style = MaterialTheme.typography.bodySmall,
-                color = p.textSecondary
-            )
             Text(
                 "선택 날짜 " + (if (selectedDate == "all") "전체" else selectedDate) +
                     " · 장소 ${visiblePlaces.size}개 · 지도 핀 ${pins.size}개",
@@ -160,9 +164,11 @@ fun TripMapScreen(
                         TripMapPane(
                             pins = pins,
                             selectedId = selectedId,
-                            mapHeight = 340.dp,
+                            mapHeight = compactMapHeight,
                             onPinClick = { selectedId = it }
                         )
+                        Text("핀 구분: 확정 일정 / 후보 일정 / 저장 장소. 좌표가 없는 장소는 목록에서 확인합니다.",
+                            style = MaterialTheme.typography.bodySmall, color = p.textSecondary)
                         focusedPlace?.let { place ->
                             TripMapSelectedPlace(
                                 place = place,
@@ -174,6 +180,7 @@ fun TripMapScreen(
                             modifier = Modifier.fillMaxWidth(),
                             onClick = onSearch
                         )
+                        TripRouteComparisonPanel(selectedDate = selectedDate, schedules = schedules, savedPlaces = savedPlaces)
                         TripMapPlacesPane(
                             visiblePlaces = visiblePlaces,
                             dateItems = dateItems,
@@ -199,6 +206,8 @@ fun TripMapScreen(
                                 mapHeight = 470.dp,
                                 onPinClick = { selectedId = it }
                             )
+                            Text("핀 구분: 확정 일정 / 후보 일정 / 저장 장소. 좌표가 없는 장소는 목록에서 확인합니다.",
+                                style = MaterialTheme.typography.bodySmall, color = p.textSecondary)
                         }
                         Column(
                             modifier = Modifier.weight(2f),
@@ -225,13 +234,13 @@ fun TripMapScreen(
                             )
                         }
                     }
+                    TripRouteComparisonPanel(
+                        selectedDate = selectedDate,
+                        schedules = schedules,
+                        savedPlaces = savedPlaces
+                    )
                 }
             }
-            TripRouteComparisonPanel(
-                selectedDate = selectedDate,
-                schedules = schedules,
-                savedPlaces = savedPlaces
-            )
         }
     }
 }
@@ -243,7 +252,6 @@ private fun TripMapPane(
     mapHeight: Dp,
     onPinClick: (String) -> Unit
 ) {
-    val p = TripDesign.palette
     Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
         if (pins.isEmpty()) {
             TripEmptyState(
@@ -252,12 +260,6 @@ private fun TripMapPane(
             )
         } else {
             TripMapCanvas(pins, selectedId, mapHeight, onSelected = onPinClick)
-            Text(
-                "지도: OpenFreeMap · © OpenStreetMap contributors. " +
-                    "지도 타일은 인터넷 연결이 필요합니다. 오프라인에서는 장소 목록을 확인하세요.",
-                style = MaterialTheme.typography.bodySmall,
-                color = p.textSecondary
-            )
         }
     }
 }
@@ -403,6 +405,26 @@ private fun TripMapCanvas(
         MapView(context).apply { onCreate(null as Bundle?) }
     }
     var map by remember { mutableStateOf<MapLibreMap?>(null) }
+    var mapSize by remember { mutableStateOf(IntSize.Zero) }
+    val pinInsetPx = with(LocalDensity.current) { 40.dp.roundToPx() }
+    var initialRender by remember(mapView) { mutableStateOf(InitialMapRender.Loading) }
+    var initialViewportConfigured by remember(mapView) { mutableStateOf(false) }
+    val renderListener = remember(mapView) {
+        MapView.OnDidFinishRenderingFrameListener { fully, _, _ ->
+            if (fully && initialViewportConfigured && initialRender != InitialMapRender.Ready) {
+                initialRender = InitialMapRender.Ready
+            }
+        }
+    }
+    val failureListener = remember(mapView) {
+        MapView.OnDidFailLoadingMapListener {
+            if (initialRender != InitialMapRender.Ready) initialRender = InitialMapRender.Failed
+        }
+    }
+    LaunchedEffect(mapView) {
+        delay(12_000)
+        if (initialRender == InitialMapRender.Loading) initialRender = InitialMapRender.Delayed
+    }
     DisposableEffect(lifecycle, mapView) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
@@ -419,6 +441,8 @@ private fun TripMapCanvas(
         if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) mapView.onResume()
         onDispose {
             lifecycle.removeObserver(observer)
+            mapView.removeOnDidFinishRenderingFrameListener(renderListener)
+            mapView.removeOnDidFailLoadingMapListener(failureListener)
             mapView.onPause()
             mapView.onStop()
             mapView.onDestroy()
@@ -427,6 +451,8 @@ private fun TripMapCanvas(
     AndroidView(
         factory = {
             mapView.apply {
+                addOnDidFinishRenderingFrameListener(renderListener)
+                addOnDidFailLoadingMapListener(failureListener)
                 getMapAsync { ready ->
                     ready.setStyle(
                         Style.Builder().fromUri("https://tiles.openfreemap.org/styles/liberty")
@@ -434,7 +460,20 @@ private fun TripMapCanvas(
                 }
             }
         },
-        modifier = Modifier.fillMaxWidth().height(mapHeight)
+        modifier = Modifier.fillMaxWidth().height(mapHeight).onSizeChanged { mapSize = it }
+    )
+    val loadingMessage = when (initialRender) {
+        InitialMapRender.Loading -> "지도를 불러오는 중입니다."
+        InitialMapRender.Delayed -> "지도 로딩이 지연되고 있습니다. 연결을 확인하거나 장소 목록을 이용해 주세요."
+        InitialMapRender.Failed -> "지도를 불러오지 못했습니다. 연결을 확인하거나 장소 목록을 이용해 주세요."
+        InitialMapRender.Ready -> null
+    }
+    Text(
+        (loadingMessage?.plus("\n") ?: "") +
+            "지도: OpenFreeMap · © OpenStreetMap contributors. " +
+            "지도 타일은 인터넷 연결이 필요합니다. 오프라인에서는 장소 목록을 확인하세요.",
+        style = MaterialTheme.typography.bodySmall,
+        color = TripDesign.palette.textSecondary
     )
     val currentOnSelected by rememberUpdatedState(onSelected)
     DisposableEffect(map) {
@@ -458,9 +497,10 @@ private fun TripMapCanvas(
             onDispose { ready.removeOnMapClickListener(listener) }
         }
     }
-    LaunchedEffect(map, pins, selectedId) {
+    LaunchedEffect(map, pins, selectedId, mapSize, pinInsetPx) {
         val ready = map ?: return@LaunchedEffect
         val style = ready.style ?: return@LaunchedEffect
+        if (initialRender != InitialMapRender.Ready) initialViewportConfigured = false
         val features = pins.map { item ->
             val attributes = JsonObject().apply {
                 addProperty("placeId", item.place.id)
@@ -523,19 +563,41 @@ private fun TripMapCanvas(
                 )
             }
         }
-        val target = pins.firstOrNull { it.place.id == selectedId }
-            ?: pins.firstOrNull()
-        if (target != null) {
-            ready.moveCamera(
+        val focusedPin = pins.firstOrNull { it.place.id == selectedId }
+        val positions = pins.map { item ->
+            LatLng(requireNotNull(item.place.latitude), requireNotNull(item.place.longitude))
+        }.distinct()
+        when {
+            focusedPin != null -> ready.moveCamera(
                 CameraUpdateFactory.newLatLngZoom(
                     LatLng(
-                        requireNotNull(target.place.latitude),
-                        requireNotNull(target.place.longitude)
+                        requireNotNull(focusedPin.place.latitude),
+                        requireNotNull(focusedPin.place.longitude)
                     ),
                     12.0
                 )
             )
+            positions.size == 1 -> ready.moveCamera(
+                CameraUpdateFactory.newLatLngZoom(positions.single(), 12.0)
+            )
+            positions.size > 1 && mapSize.width > 0 && mapSize.height > 0 -> {
+                val bounds = LatLngBounds.Builder().includes(positions).build()
+                val padding = minOf(pinInsetPx, minOf(mapSize.width, mapSize.height) / 4)
+                val camera = ready.getCameraForLatLngBounds(
+                    bounds, intArrayOf(padding, padding, padding, padding)
+                )
+                if (camera != null && camera.target != null) {
+                    ready.moveCamera(
+                        CameraUpdateFactory.newLatLngZoom(
+                            requireNotNull(camera.target), minOf(camera.zoom, 12.0)
+                        )
+                    )
+                } else {
+                    ready.moveCamera(CameraUpdateFactory.newLatLngBounds(bounds, padding))
+                }
+            }
         }
+        initialViewportConfigured = positions.isNotEmpty() && mapSize.width > 0 && mapSize.height > 0
     }
 }
 

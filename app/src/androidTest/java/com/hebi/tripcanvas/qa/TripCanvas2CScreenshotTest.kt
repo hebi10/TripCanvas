@@ -47,6 +47,7 @@ class TripCanvas2CScreenshotTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val context: Context = instrumentation.targetContext
     private val device: UiDevice = UiDevice.getInstance(instrumentation)
+    private val navigator = QaUiNavigator(device)
     private val database: TripDatabase by lazy { TripDatabase.get(context) }
 
     @Before
@@ -110,10 +111,15 @@ class TripCanvas2CScreenshotTest {
     fun captureRealMainActivityAndExerciseMvp() {
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
             awaitText("제주 주말 여행")
+            awaitText("KRW 12,500")
+            awaitText("1 / 3")
             capture("01-home-light")
             assertStatusBarBackground(dark = false)
-            click("완료")
-            awaitText("완료된 여행이 없습니다")
+            val today = LocalDate.now(ZoneId.of("Asia/Seoul"))
+            val emptyFilter = if (today.isAfter(LocalDate.parse("2026-11-22"))) "예정" else "완료"
+            val emptyTitle = if (emptyFilter == "예정") "예정된 여행이 없습니다" else "완료된 여행이 없습니다"
+            click(emptyFilter)
+            awaitText(emptyTitle)
             capture("01a-home-filter-empty")
             click("전체")
             awaitText("제주 주말 여행")
@@ -161,6 +167,7 @@ class TripCanvas2CScreenshotTest {
             click("일정 열기")
             capture("02d-schedule-after-click")
             awaitText("여행 일정")
+            click("11/20 금")
             awaitText("11월 20일 · 금요일")
             awaitText("11월 20일 · 금요일")
             awaitText("공항 도착")
@@ -205,7 +212,7 @@ class TripCanvas2CScreenshotTest {
             awaitText("작업 도구")
             awaitText("저장 장소 관리")
             capture("02c-workspace-tools-last-light")
-            click("저장 장소 관리")
+            navigator.clickVisible(By.desc("저장 장소 관리"), "저장 장소 관리", expectedAfter = "여행 장소")
             awaitText("여행 장소")
             capture("02e-workspace-places-route")
             device.pressBack()
@@ -226,7 +233,13 @@ class TripCanvas2CScreenshotTest {
                 device.wait(Until.hasObject(By.desc("준비 완료 1개 / 전체 3개")), 5000)
             )
             capture("03-checklist-light")
-            click("미완료")
+            selectChecklistFilter(
+                label = "완료", visible = listOf("여권"), hidden = listOf("충전기", "상비약")
+            )
+            capture("03a-checklist-completed-filter")
+            selectChecklistFilter(
+                label = "미완료", visible = listOf("충전기", "상비약"), hidden = listOf("여권")
+            )
             capture("04-checklist-incomplete-filter")
             openChecklistActions("충전기")
             val moveWhileFiltered = device.wait(Until.findObject(By.text("위로")), 3000)
@@ -243,7 +256,9 @@ class TripCanvas2CScreenshotTest {
                 runBlocking { database.checklistDao().ordered("qa-trip").map { it.id } }
             )
             if (device.hasObject(By.text("수정"))) device.pressBack()
-            click("전체")
+            selectChecklistFilter(
+                label = "전체", visible = listOf("여권", "충전기", "상비약"), hidden = emptyList()
+            )
             click("준비물 추가")
             awaitText("준비물 이름 *")
             capture("05-checklist-add-dialog")
@@ -338,12 +353,7 @@ class TripCanvas2CScreenshotTest {
             device.pressBack()
             awaitText("암호화 백업 내보내기")
             awaitText("평문 JSON 내보내기")
-            click("평문 JSON 내보내기")
-            val pickerOpened = (0 until 25).any {
-                if (device.currentPackageName != "com.hebi.tripcanvas") true
-                else { Thread.sleep(300); false }
-            }
-            assertTrue("Android document picker did not become foreground", pickerOpened)
+            openAndroidDocumentPicker("평문 JSON 내보내기", "save")
             capture("13-android-file-save-picker")
             device.pressBack()
             awaitText("백업·복원")
@@ -352,12 +362,7 @@ class TripCanvas2CScreenshotTest {
                 database.tripDao().findById("qa-trip") != null
             })
             capture("14-backup-cancelled")
-            click("백업 파일 선택 및 검증")
-            val importPickerOpened = (0 until 25).any {
-                if (device.currentPackageName != "com.hebi.tripcanvas") true
-                else { Thread.sleep(300); false }
-            }
-            assertTrue("Android import document picker did not become foreground", importPickerOpened)
+            openAndroidDocumentPicker("백업 파일 선택 및 검증", "import")
             capture("14a-backup-import-picker")
             device.pressBack()
             awaitText("백업·복원")
@@ -390,6 +395,7 @@ class TripCanvas2CScreenshotTest {
             capture("16-workspace-dark")
             click("일정 열기")
             awaitText("여행 일정")
+            click("11/20 금")
             awaitText("11월 20일 · 금요일")
             awaitText("공항 도착")
             capture("16c-schedule-dark")
@@ -446,6 +452,7 @@ class TripCanvas2CScreenshotTest {
             capture("21-workspace-dark-font160")
             click("일정 열기")
             awaitText("여행 일정")
+            click("11/20 금")
             awaitText("11월 20일 · 금요일")
             capture("21c-schedule-dark-font160-top")
             awaitText("공항 도착")
@@ -558,6 +565,41 @@ class TripCanvas2CScreenshotTest {
         return false
     }
 
+    private fun selectChecklistFilter(label: String, visible: List<String>, hidden: List<String>) {
+        // Compose FilterChip exposes checked state on the clickable parent, not selected on its text.
+        val selector = By.text(label)
+        val selected = By.checkable(true).checked(true).clickable(true).hasChild(By.text(label))
+        try {
+            awaitText(label, selector)
+            navigator.clickVisible(selector, "준비물 $label 필터")
+            assertTrue(
+                "준비물 $label 필터의 선택 상태가 반영되어야 합니다.",
+                device.wait(Until.hasObject(selected), 5000)
+            )
+            visible.forEach { title ->
+                awaitText(title, By.desc("$title 준비 여부"))
+            }
+            hidden.forEach { title ->
+                assertTrue(
+                    "준비물 $label 필터에서 $title 항목이 사라져야 합니다.",
+                    device.wait(Until.gone(By.desc("$title 준비 여부")), 5000)
+                )
+                assertTrue(
+                    "준비물 $label 필터에서 $title 문구가 보이지 않아야 합니다.",
+                    device.wait(Until.gone(By.text(title)), 5000)
+                )
+            }
+        } catch (error: AssertionError) {
+            val dir = File(context.getExternalFilesDir(null), "qa")
+            dir.mkdirs()
+            runCatching {
+                device.takeScreenshot(File(dir, "99-checklist-filter-failure.png"))
+                device.dumpWindowHierarchy(File(dir, "99-checklist-filter-hierarchy.xml"))
+            }
+            throw error
+        }
+    }
+
     private fun openChecklistActions(itemTitle: String) {
         awaitText(itemTitle)
         val action = device.wait(
@@ -612,15 +654,24 @@ class TripCanvas2CScreenshotTest {
     private fun awaitText(text: String, selector: BySelector = uiSelector(text)) {
         dismissSystemAnr()
         if (device.wait(Until.hasObject(selector), 5000)) return
-        repeat(6) {
-            dismissSystemAnr()
-            swipeUp()
-            if (device.wait(Until.hasObject(selector), 1200)) return
-        }
-        repeat(6) {
-            dismissSystemAnr()
-            swipeDown()
-            if (device.wait(Until.hasObject(selector), 1200)) return
+        for (direction in listOf(Direction.DOWN, Direction.UP)) {
+            repeat(12) {
+                dismissSystemAnr()
+                // Scroll the actual Compose viewport rather than crossing a nested clickable card.
+                val scroll = device.findObject(By.scrollable(true))
+                val moved = if (scroll != null) {
+                    try {
+                        scroll.scroll(direction, 0.75f)
+                    } catch (_: StaleObjectException) {
+                        false
+                    }
+                } else false
+                if (!moved) {
+                    if (direction == Direction.DOWN) swipeUp() else swipeDown()
+                }
+                device.waitForIdle()
+                if (device.wait(Until.hasObject(selector), 1200)) return
+            }
         }
         val diagnosticDir = File(context.getExternalFilesDir(null), "qa")
         diagnosticDir.mkdirs()
@@ -644,6 +695,29 @@ class TripCanvas2CScreenshotTest {
             File(diagnosticDir, "99-failed-preferences-error.txt").writeText(it.stackTraceToString())
         }
         fail("Android 화면에서 다음 문구를 찾지 못했습니다: $text")
+    }
+
+    private fun openAndroidDocumentPicker(label: String, kind: String) {
+        val documentPackages = setOf("com.android.documentsui", "com.google.android.documentsui")
+        awaitText(label)
+        repeat(2) { attempt ->
+            if (device.currentPackageName in documentPackages) return
+            assertEquals("Document picker must be launched from TripCanvas", context.packageName, device.currentPackageName)
+            navigator.clickVisible(By.text(label), label)
+            repeat(30) {
+                if (device.currentPackageName in documentPackages) return
+                Thread.sleep(300)
+            }
+            if (attempt == 0 && device.currentPackageName == context.packageName) {
+                // Retry only when the action has not left the app.
+                awaitText(label)
+            } else {
+                capture("99-document-picker-$kind-failure")
+                val dir = File(context.getExternalFilesDir(null), "qa")
+                runCatching { device.dumpWindowHierarchy(File(dir, "99-document-picker-$kind-hierarchy.xml")) }
+                fail("Android $kind document picker not confirmed; foreground=" + device.currentPackageName)
+            }
+        }
     }
 
     private fun openScreen(button: String, expectedTitle: String) {

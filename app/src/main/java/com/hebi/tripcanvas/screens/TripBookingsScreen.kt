@@ -2,10 +2,15 @@ package com.hebi.tripcanvas.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.hebi.tripcanvas.designsystem.components.TripChoiceChip
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -64,16 +69,39 @@ fun TripBookingsScreen(
     var deleteTarget by remember { mutableStateOf<BookingEntity?>(null) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var filter by rememberSaveable(tripId) { mutableStateOf("all") }
+    val filtered = bookings.filter { filter == "all" || it.type == filter }
 
-    TripPageFrame(title = "예약 자료", onBack = onBack) {
+    TripPageFrame(
+        title = "예약 자료",
+        contentSpacing = TripSpacing.sm,
+        onBack = onBack,
+        bottomAction = {
+            TripPrimaryButton(label = "예약 추가", modifier = Modifier.fillMaxWidth(),
+                enabled = !busy, onClick = onCreate)
+        }
+    ) {
         TripSectionHeading(
             title = "예약 " + bookings.size + "건",
             supportingText = "항공·숙소·교통·입장권 예약 정보를 보관합니다. 실제 예약·결제는 제공하지 않습니다."
         )
-        if (bookings.isEmpty()) {
-            TripEmptyState("등록된 예약이 없습니다", "예약 정보를 직접 추가해 주세요.")
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs),
+            verticalArrangement = Arrangement.spacedBy(TripSpacing.xxs)
+        ) {
+            TripChoiceChip("전체", filter == "all", onClick = { filter = "all" })
+            BookingType.entries.forEach { type ->
+                TripChoiceChip(type.label, filter == type.name, onClick = { filter = type.name })
+            }
         }
-        bookings.forEach { booking ->
+        if (filtered.isEmpty()) {
+            TripEmptyState(
+                if (bookings.isEmpty()) "등록된 예약이 없습니다" else "선택한 유형의 예약이 없습니다",
+                "예약 정보를 직접 추가하거나 다른 유형을 선택해 주세요."
+            )
+        }
+        filtered.forEach { booking ->
             key(booking.id) {
                 BookingListCard(
                     booking = booking,
@@ -84,12 +112,7 @@ fun TripBookingsScreen(
                 )
             }
         }
-        TripPrimaryButton(
-            label = "예약 추가",
-            modifier = Modifier.fillMaxWidth(),
-            onClick = onCreate
-        )
-        if (error != null) {
+         if (error != null) {
             TripErrorState("예약 작업 오류", requireNotNull(error), onRetry = { error = null })
         }
     }
@@ -144,8 +167,12 @@ private fun BookingListCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs)
             ) {
-                TripStatusTag(BookingType.valueOf(booking.type).label)
-                Spacer(modifier = Modifier.weight(1f))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TripSpacing.xxs)) {
+                    Text(BookingType.valueOf(booking.type).label, style = MaterialTheme.typography.labelMedium,
+                        color = palette.textSecondary)
+                    Text(booking.title, style = MaterialTheme.typography.titleLarge,
+                        color = palette.textPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
                 Box {
                     IconButton(
                         onClick = { menuExpanded = true },
@@ -175,14 +202,7 @@ private fun BookingListCard(
                     }
                 }
             }
-            Text(
-                booking.title,
-                style = MaterialTheme.typography.titleLarge,
-                color = palette.textPrimary,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
+             Text(
                 "예약 일정 · " + bookingDateLabel(booking.startAtLocal),
                 style = MaterialTheme.typography.bodyMedium,
                 color = palette.textSecondary
@@ -199,11 +219,10 @@ private fun BookingListCard(
                     color = palette.textSecondary
                 )
             }
-            TripSecondaryButton(
-                label = "예약 상세·편집",
-                modifier = Modifier.fillMaxWidth(),
-                onClick = onEdit
-            )
+            TextButton(onClick = onEdit, enabled = !busy,
+                modifier = Modifier.align(Alignment.End).sizeIn(minHeight = TripSizes.minimumTouchTarget)) {
+                Text("예약 상세·편집", color = palette.textPrimary)
+            }
         }
     }
 }

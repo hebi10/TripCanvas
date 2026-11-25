@@ -7,6 +7,18 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.DateRange
+import androidx.compose.material.icons.outlined.ShoppingCart
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Place
+import androidx.compose.material.icons.outlined.List
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -41,6 +53,15 @@ import com.hebi.tripcanvas.designsystem.components.TripErrorState
 import com.hebi.tripcanvas.designsystem.components.TripLoadingState
 import com.hebi.tripcanvas.designsystem.components.TripStatusTag
 import com.hebi.tripcanvas.designsystem.components.TripSurfacePanel
+import com.hebi.tripcanvas.designsystem.components.TripProgressIndicator
+import com.hebi.tripcanvas.designsystem.components.TripDivider
+import com.hebi.tripcanvas.domain.budgetUsageProgress
+import com.hebi.tripcanvas.domain.checklistCompletionFraction
+import androidx.compose.ui.platform.LocalDensity
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 import com.hebi.tripcanvas.designsystem.responsive.TripAdaptiveContainer
 import com.hebi.tripcanvas.designsystem.responsive.TripWindowWidth
 import com.hebi.tripcanvas.designsystem.theme.TripDesign
@@ -136,6 +157,7 @@ fun TripWorkspaceScreen(
 
     TripPageFrame(
         title = "여행 작업 공간",
+        contentSpacing = TripSpacing.sm,
         onBack = onBack,
         trailingActions = {
             if (loaded != null) {
@@ -365,6 +387,20 @@ private fun WorkspaceOverview(
         budgetDetail
     }
     val completed = checklist.count { it.checked }
+    val usage = if (trip != null && totals != null && budget?.currencyCode == trip.currencyCode) {
+        budgetUsageProgress(totals.baseSpent, BigDecimal(requireNotNull(budget).amountDecimal))
+    } else null
+    val dayLabel = trip?.let {
+        val start = LocalDate.parse(it.startDate)
+        val end = LocalDate.parse(it.endDate)
+        val days = ChronoUnit.DAYS.between(start, end) + 1
+        val today = Instant.now().atZone(ZoneId.of(it.timeZoneId)).toLocalDate()
+        when {
+            today.isBefore(start) -> "출발 D-" + ChronoUnit.DAYS.between(today, start)
+            today.isAfter(end) -> "여행 완료 · " + days + "일"
+            else -> "Day " + (ChronoUnit.DAYS.between(start, today) + 1) + " / " + days
+        }
+    } ?: "데이터 없음"
     val checklistValue = if (isPreview) "데이터 없음" else "$completed / ${checklist.size}"
     val checklistDetail = when {
         isPreview -> "실제 준비물 상태를 표시합니다."
@@ -378,26 +414,41 @@ private fun WorkspaceOverview(
             color = p.textPrimary
         )
         TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
-            TripAdaptiveContainer(modifier = Modifier.fillMaxWidth()) { width ->
-                if (width == TripWindowWidth.Compact) {
-                    Column(
-                        modifier = Modifier.padding(TripSpacing.sm),
-                        verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
-                    ) {
-                        WorkspaceMetric("다음 일정", nextTitle, nextDetail, compact = true)
-                        WorkspaceMetric("사용 경비", spent, expenseDetail, compact = true)
-                        WorkspaceMetric("준비물 완료", checklistValue, checklistDetail, compact = true)
-                    }
-                } else {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(TripSpacing.md),
-                        horizontalArrangement = Arrangement.spacedBy(TripSpacing.md)
-                    ) {
-                        WorkspaceMetric("다음 일정", nextTitle, nextDetail, Modifier.weight(1f))
-                        WorkspaceMetric("사용 경비", spent, expenseDetail, Modifier.weight(1f))
-                        WorkspaceMetric("준비물 완료", checklistValue, checklistDetail, Modifier.weight(1f))
+            Column(
+                modifier = Modifier.padding(TripSpacing.sm),
+                verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
+            ) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TripSpacing.md)) {
+                    WorkspaceMetric("여행 일정", if (isPreview) "데이터 없음" else schedules.size.toString() + "개", "등록된 일정", Modifier.weight(1f))
+                    WorkspaceMetric("현재 여행일", dayLabel, "", Modifier.weight(1f))
+                }
+                TripDivider()
+                val moneyBlock: @Composable (Modifier) -> Unit = { modifier ->
+                    Column(modifier, verticalArrangement = Arrangement.spacedBy(TripSpacing.xxs)) {
+                        WorkspaceMetric("사용 경비", spent, expenseDetail)
+                        usage?.let { TripProgressIndicator(it.fraction, "예산 사용률 " + it.percentage, warning = it.overBudget) }
                     }
                 }
+                val packingBlock: @Composable (Modifier) -> Unit = { modifier ->
+                    Column(modifier, verticalArrangement = Arrangement.spacedBy(TripSpacing.xxs)) {
+                        WorkspaceMetric("준비물 완료", checklistValue, checklistDetail)
+                        if (!isPreview && checklist.isNotEmpty()) {
+                            TripProgressIndicator(checklistCompletionFraction(completed, checklist.size), "준비 완료 " + checklistValue)
+                        }
+                    }
+                }
+                if (LocalDensity.current.fontScale < 1.4f) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TripSpacing.sm)) {
+                        moneyBlock(Modifier.weight(1.4f))
+                        packingBlock(Modifier.weight(1f))
+                    }
+                } else {
+                    moneyBlock(Modifier.fillMaxWidth())
+                    TripDivider()
+                    packingBlock(Modifier.fillMaxWidth())
+                }
+                TripDivider()
+                WorkspaceMetric("다음 일정", nextTitle, nextDetail, compact = LocalDensity.current.fontScale < 1.4f)
             }
         }
     }
@@ -443,7 +494,7 @@ private fun WorkspaceMetric(
                 overflow = TextOverflow.Ellipsis
             )
         }
-        Text(
+        if (supportingText.isNotBlank()) Text(
             supportingText,
             style = MaterialTheme.typography.bodySmall,
             color = p.textSecondary
@@ -547,7 +598,7 @@ private fun WorkspaceToolRows(
     width: TripWindowWidth,
     compactPrimary: Boolean = false
 ) {
-    if (width == TripWindowWidth.Compact && !compactPrimary) {
+    if (width == TripWindowWidth.Compact && LocalDensity.current.fontScale >= 1.4f) {
         Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)) {
             tools.forEach { tool ->
                 WorkspaceToolCard(tool, modifier = Modifier.fillMaxWidth())
@@ -563,13 +614,13 @@ private fun WorkspaceToolRows(
                     WorkspaceToolCard(
                         pair[0],
                         modifier = Modifier.weight(1f),
-                        compactPrimary = compactPrimary && width == TripWindowWidth.Compact
+                        compactPrimary = width == TripWindowWidth.Compact
                     )
                     if (pair.size == 2) {
                         WorkspaceToolCard(
                             pair[1],
                             modifier = Modifier.weight(1f),
-                            compactPrimary = compactPrimary && width == TripWindowWidth.Compact
+                            compactPrimary = width == TripWindowWidth.Compact
                         )
                     }
                 }
@@ -597,25 +648,29 @@ private fun WorkspaceToolCard(
         tonalElevation = 0.dp,
         shadowElevation = 0.dp
     ) {
-        Column(
-            modifier = Modifier.padding(
-                horizontal = TripSpacing.md,
-                vertical = TripSpacing.sm
-            ),
-            verticalArrangement = Arrangement.spacedBy(TripSpacing.xxs)
+        Row(
+            modifier = Modifier.padding(TripSpacing.sm),
+            horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                tool.title,
-                style = MaterialTheme.typography.titleMedium,
-                color = p.textPrimary
-            )
-            Text(
-                tool.description,
-                style = MaterialTheme.typography.bodySmall,
-                color = p.textSecondary,
-                maxLines = if (compactPrimary) 2 else Int.MAX_VALUE,
-                overflow = TextOverflow.Ellipsis
-            )
+            val icon = when (tool.actionLabel) {
+                "일정 열기" -> Icons.Outlined.DateRange
+                "경비 열기" -> Icons.Outlined.ShoppingCart
+                "준비물 열기" -> Icons.Outlined.CheckCircle
+                "지도 열기", "저장 장소 관리" -> Icons.Outlined.Place
+                "오늘의 여행 열기" -> Icons.Outlined.DateRange
+                "여행 기록 열기" -> Icons.Outlined.FavoriteBorder
+                "예약 열기" -> Icons.Outlined.Email
+                "동행자 열기" -> Icons.Outlined.Person
+                "정산 열기", "리포트 열기" -> Icons.Outlined.List
+                else -> Icons.Outlined.Info
+            }
+            Icon(icon, contentDescription = null, tint = p.textPrimary, modifier = Modifier.size(22.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TripSpacing.xxs)) {
+                Text(tool.title, style = MaterialTheme.typography.titleMedium, color = p.textPrimary)
+                Text(tool.description, style = MaterialTheme.typography.bodySmall, color = p.textSecondary,
+                    maxLines = if (compactPrimary) 2 else Int.MAX_VALUE, overflow = TextOverflow.Ellipsis)
+            }
         }
     }
 }

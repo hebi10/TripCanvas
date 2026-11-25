@@ -3,6 +3,7 @@ package com.hebi.tripcanvas.screens
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.KeyboardOptions
@@ -23,6 +24,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import com.hebi.tripcanvas.data.TripPeriodConflictException
@@ -254,18 +257,25 @@ private fun TripFormFields(
         title = "여행 기간·목적지",
         supportingText = "시작일·종료일은 필수이며 기존 일정이 기간 밖으로 밀리면 변경이 차단됩니다."
     )
-    TripDateField(
-        label = "시작일 *",
-        date = input.startDate,
-        error = errors[TripField.StartDate],
-        onDateSelected = { onChange(input.copy(startDate = it)) }
-    )
-    TripDateField(
-        label = "종료일 *",
-        date = input.endDate,
-        error = errors[TripField.EndDate],
-        onDateSelected = { onChange(input.copy(endDate = it)) }
-    )
+    val startField: @Composable () -> Unit = {
+        TripDateField(label = "시작일 *", date = input.startDate,
+            error = errors[TripField.StartDate],
+            onDateSelected = { onChange(input.copy(startDate = it)) })
+    }
+    val endField: @Composable () -> Unit = {
+        TripDateField(label = "종료일 *", date = input.endDate,
+            error = errors[TripField.EndDate],
+            onDateSelected = { onChange(input.copy(endDate = it)) })
+    }
+    if (LocalConfiguration.current.screenWidthDp >= 400 && LocalDensity.current.fontScale < 1.3f) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
+            Column(Modifier.weight(1f)) { startField() }
+            Column(Modifier.weight(1f)) { endField() }
+        }
+    } else {
+        startField()
+        endField()
+    }
     TripTextField(
         value = input.country,
         onValueChange = { onChange(input.copy(country = it)) },

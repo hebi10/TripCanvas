@@ -40,6 +40,8 @@ import com.hebi.tripcanvas.data.TripRepository
 import com.hebi.tripcanvas.data.local.ChecklistItemEntity
 import com.hebi.tripcanvas.designsystem.components.TripChoiceChip
 import com.hebi.tripcanvas.designsystem.components.TripConfirmDialog
+import com.hebi.tripcanvas.designsystem.components.TripDivider
+import androidx.compose.ui.platform.LocalDensity
 import com.hebi.tripcanvas.designsystem.components.TripEmptyState
 import com.hebi.tripcanvas.designsystem.components.TripErrorState
 import com.hebi.tripcanvas.designsystem.components.TripLoadingState
@@ -75,7 +77,7 @@ fun ChecklistScreen(
 ) {
     val p = TripDesign.palette
     val scope = rememberCoroutineScope()
-    var incompleteOnly by rememberSaveable(tripId) { mutableStateOf(false) }
+    var filter by rememberSaveable(tripId) { mutableStateOf("all") }
     var editing by remember { mutableStateOf<ChecklistItemEntity?>(null) }
     var showEditor by remember { mutableStateOf(false) }
     var draft by remember { mutableStateOf("") }
@@ -120,7 +122,15 @@ fun ChecklistScreen(
         }
     }
 
-    TripPageFrame(title = "준비물", onBack = onBack) {
+    TripPageFrame(
+        title = "준비물",
+        onBack = onBack,
+        contentSpacing = TripSpacing.sm,
+        bottomAction = {
+            TripPrimaryButton(label = "준비물 추가", modifier = Modifier.fillMaxWidth(),
+                enabled = !saving && trip != null && state is ChecklistState.Ready, onClick = { edit(null) })
+        }
+    ) {
         TripSectionHeading(
             title = trip?.title ?: "여행 준비물",
             supportingText = "체크 상태와 항목 순서는 기기에 저장됩니다."
@@ -146,51 +156,54 @@ fun ChecklistScreen(
                         description = "준비 완료 ${completed}개 / 전체 ${total}개"
                     )
                 }
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
-                    TripChoiceChip(
-                        label = "전체",
-                        selected = !incompleteOnly,
-                        onClick = { incompleteOnly = false }
-                    )
-                    TripChoiceChip(
-                        label = "미완료",
-                        selected = incompleteOnly,
-                        onClick = { incompleteOnly = true }
-                    )
+                val filters = listOf("all" to "전체", "remaining" to "미완료", "completed" to "완료")
+                if (LocalDensity.current.fontScale < 1.4f) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TripSpacing.xxs)) {
+                        filters.forEach { (key, label) ->
+                            TripChoiceChip(label, filter == key, onClick = { filter = key },
+                                modifier = Modifier.weight(1f))
+                        }
+                    }
+                } else {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
+                        filters.forEach { (key, label) -> TripChoiceChip(label, filter == key, onClick = { filter = key }) }
+                    }
                 }
-                TripPrimaryButton(
-                    label = "준비물 추가",
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !saving,
-                    onClick = { edit(null) }
-                )
-                val filtered = if (incompleteOnly) result.items.filterNot { it.checked } else result.items
+                val filtered = when (filter) {
+                    "remaining" -> result.items.filterNot { it.checked }
+                    "completed" -> result.items.filter { it.checked }
+                    else -> result.items
+                }
                 if (filtered.isEmpty()) {
                     TripEmptyState(
-                        title = if (total == 0) "준비물이 없습니다" else "남은 준비물이 없습니다",
+                        title = when {
+                            total == 0 -> "준비물이 없습니다"
+                            filter == "completed" -> "완료된 준비물이 없습니다"
+                            else -> "남은 준비물이 없습니다"
+                        },
                         description = if (total == 0) "새 준비물을 추가해 주세요."
                             else "필터를 변경하거나 새 준비물을 추가할 수 있습니다."
                     )
                 } else {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
-                    ) {
-                        filtered.forEachIndexed { index, item ->
-                            ChecklistItemRow(
-                                item = item,
-                                disabled = saving,
-                                canMoveUp = !incompleteOnly && index > 0,
-                                canMoveDown = !incompleteOnly && index < filtered.lastIndex,
-                                onCheckedChange = { checked ->
-                                    applyOperation { repository.setChecked(tripId, item.id, checked) }
-                                },
-                                onEdit = { edit(item) },
-                                onMove = { offset ->
-                                    applyOperation { repository.move(tripId, item.id, offset) }
-                                },
-                                onDelete = { deleteTarget = item }
-                            )
+                    TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
+                        Column {
+                            filtered.forEachIndexed { index, item ->
+                                if (index > 0) TripDivider()
+                                ChecklistItemRow(
+                                    item = item,
+                                    disabled = saving,
+                                    canMoveUp = filter == "all" && index > 0,
+                                    canMoveDown = filter == "all" && index < filtered.lastIndex,
+                                    onCheckedChange = { checked ->
+                                        applyOperation { repository.setChecked(tripId, item.id, checked) }
+                                    },
+                                    onEdit = { edit(item) },
+                                    onMove = { offset ->
+                                        applyOperation { repository.move(tripId, item.id, offset) }
+                                    },
+                                    onDelete = { deleteTarget = item }
+                                )
+                            }
                         }
                     }
                 }
@@ -286,76 +299,74 @@ private fun ChecklistItemRow(
     val p = TripDesign.palette
     var showMenu by remember(item.id) { mutableStateOf(false) }
 
-    TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
-        Row(
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = TripSpacing.xs, vertical = TripSpacing.xxs),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs)
+    ) {
+        Checkbox(
+            checked = item.checked,
+            onCheckedChange = onCheckedChange,
+            enabled = !disabled,
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = TripSpacing.sm, vertical = TripSpacing.xxs),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs)
-        ) {
-            Checkbox(
-                checked = item.checked,
-                onCheckedChange = onCheckedChange,
+                .size(TripSizes.minimumTouchTarget)
+                .semantics { contentDescription = "${item.title} 준비 여부" },
+            colors = CheckboxDefaults.colors(
+                checkedColor = p.primaryAction,
+                uncheckedColor = p.outline,
+                checkmarkColor = p.onPrimaryAction
+            )
+        )
+        Text(
+            text = item.title,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyLarge,
+            color = if (item.checked) p.textSecondary else p.textPrimary,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+        Box {
+            IconButton(
+                onClick = { showMenu = true },
                 enabled = !disabled,
                 modifier = Modifier
                     .size(TripSizes.minimumTouchTarget)
-                    .semantics { contentDescription = "${item.title} 준비 여부" },
-                colors = CheckboxDefaults.colors(
-                    checkedColor = p.primaryAction,
-                    uncheckedColor = p.outline,
-                    checkmarkColor = p.onPrimaryAction
+                    .semantics { contentDescription = "${item.title} 준비물 메뉴" }
+            ) {
+                Icon(
+                    imageVector = TripIcons.MoreVert,
+                    contentDescription = null,
+                    tint = p.textPrimary
                 )
-            )
-            Text(
-                text = item.title,
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.bodyLarge,
-                color = if (item.checked) p.textSecondary else p.textPrimary,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            Box {
-                IconButton(
-                    onClick = { showMenu = true },
-                    enabled = !disabled,
-                    modifier = Modifier
-                        .size(TripSizes.minimumTouchTarget)
-                        .semantics { contentDescription = "${item.title} 준비물 메뉴" }
-                ) {
-                    Icon(
-                        imageVector = TripIcons.MoreVert,
-                        contentDescription = null,
-                        tint = p.textPrimary
-                    )
-                }
-                DropdownMenu(
-                    expanded = showMenu && !disabled,
-                    onDismissRequest = { showMenu = false },
-                    containerColor = p.surface,
-                    tonalElevation = 0.dp,
-                    shadowElevation = 0.dp,
-                    border = BorderStroke(1.dp, p.outline)
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("수정") },
-                        onClick = { showMenu = false; onEdit() }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("위로") },
-                        enabled = canMoveUp,
-                        onClick = { showMenu = false; onMove(-1) }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("아래로") },
-                        enabled = canMoveDown,
-                        onClick = { showMenu = false; onMove(1) }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("삭제", color = p.error) },
-                        onClick = { showMenu = false; onDelete() }
-                    )
-                }
+            }
+            DropdownMenu(
+                expanded = showMenu && !disabled,
+                onDismissRequest = { showMenu = false },
+                containerColor = p.surface,
+                tonalElevation = 0.dp,
+                shadowElevation = 0.dp,
+                border = BorderStroke(1.dp, p.outline)
+            ) {
+                DropdownMenuItem(
+                    text = { Text("수정") },
+                    onClick = { showMenu = false; onEdit() }
+                )
+                DropdownMenuItem(
+                    text = { Text("위로") },
+                    enabled = canMoveUp,
+                    onClick = { showMenu = false; onMove(-1) }
+                )
+                DropdownMenuItem(
+                    text = { Text("아래로") },
+                    enabled = canMoveDown,
+                    onClick = { showMenu = false; onMove(1) }
+                )
+                DropdownMenuItem(
+                    text = { Text("삭제", color = p.error) },
+                    onClick = { showMenu = false; onDelete() }
+                )
             }
         }
     }

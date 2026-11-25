@@ -94,6 +94,12 @@ class TripCanvas3AMapTest {
                 click("지도 열기")
                 awaitText("여행 지도")
                 awaitRenderedMapPins(scenario)
+                assertOverviewPinsInsideMap(
+                    scenario,
+                    listOf(LatLng(33.5104, 126.4914), LatLng(33.4888, 126.4975))
+                )
+                capture("03-initial-map-light")
+                recordInitialMapRenderStatus()
                 capture("03-map-all-light")
                 val widthDp = (device.displayWidth / context.resources.displayMetrics.density).toInt()
                 if (classifyWindowWidth(widthDp) != TripWindowWidth.Compact) {
@@ -208,6 +214,30 @@ class TripCanvas3AMapTest {
         }
     }
 
+    private fun recordInitialMapRenderStatus() {
+        // The style and the pin source can exist before the background has rendered.
+        // Do not label a network-dependent screenshot as fully rendered without the UI signal.
+        val ready = By.textStartsWith("지도: OpenFreeMap")
+        val delayed = By.textStartsWith("지도 로딩이 지연되고 있습니다.")
+        val failed = By.textStartsWith("지도를 불러오지 못했습니다.")
+        val loading = By.textStartsWith("지도를 불러오는 중입니다.")
+        val state = when {
+            device.wait(Until.hasObject(ready), 20_000) -> "renderer-ready"
+            device.hasObject(delayed) -> "render-delayed"
+            device.hasObject(failed) -> "load-failed"
+            device.hasObject(loading) -> "still-loading"
+            else -> "status-not-visible"
+        }
+        File(evidenceDir(), "03-initial-map-render-status.txt").writeText(
+            "state=$state\n" +
+                "ready refers to the renderer callback; visual tile content must be checked in the PNG.\n"
+        )
+        if (state == "still-loading") {
+            capture("99-map-initial-render-timeout")
+            throw AssertionError("Initial map loading must report a delay or failure after timeout")
+        }
+    }
+
     private fun awaitRenderedMapPins(scenario: ActivityScenario<MainActivity>) {
         repeat(30) {
             val loaded = AtomicReference(false)
@@ -235,6 +265,51 @@ class TripCanvas3AMapTest {
         }
         capture("99-map-pin-layer-not-ready")
         throw AssertionError("MapLibre style and actual place-pin layer did not become ready")
+    }
+
+    private fun assertOverviewPinsInsideMap(
+        scenario: ActivityScenario<MainActivity>,
+        positions: List<LatLng>
+    ) {
+        var lastGeometry = "Map view unavailable"
+        repeat(20) {
+            val geometry = AtomicReference<String?>(null)
+            val inside = AtomicReference(false)
+            val latch = CountDownLatch(1)
+            scenario.onActivity { activity ->
+                val view = findMapView(activity.window.decorView)
+                val visible = Rect()
+                if (view == null || !view.getGlobalVisibleRect(visible)) {
+                    latch.countDown()
+                } else {
+                    val safe = Rect(visible)
+                    val margin = (32 * view.resources.displayMetrics.density).toInt()
+                    safe.inset(margin, margin)
+                    val location = IntArray(2)
+                    view.getLocationOnScreen(location)
+                    view.getMapAsync { map ->
+                        val points = positions.map { coordinate ->
+                            val projected = map.projection.toScreenLocation(coordinate)
+                            (location[0] + projected.x.toInt()) to
+                                (location[1] + projected.y.toInt())
+                        }
+                        geometry.set("Visible map: $visible\nSafe map: $safe\nPins: $points")
+                        inside.set(!safe.isEmpty && points.all { (x, y) -> safe.contains(x, y) })
+                        latch.countDown()
+                    }
+                }
+            }
+            assertTrue("MapLibre overview projection timed out", latch.await(5, TimeUnit.SECONDS))
+            lastGeometry = geometry.get() ?: lastGeometry
+            if (inside.get()) {
+                File(evidenceDir(), "03-overview-pin-geometry.txt").writeText(lastGeometry)
+                return
+            }
+            SystemClock.sleep(250)
+        }
+        File(evidenceDir(), "03-overview-pin-geometry.txt").writeText(lastGeometry)
+        capture("99-map-overview-pins-outside-safe-bounds")
+        throw AssertionError("Overview map pins must fit inside the visible map with a safe margin: $lastGeometry")
     }
 
     private fun assertMapCentered(
