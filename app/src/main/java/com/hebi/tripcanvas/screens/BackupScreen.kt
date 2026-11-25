@@ -36,6 +36,7 @@ import com.hebi.tripcanvas.data.TripRepository
 import com.hebi.tripcanvas.data.backup.BackupPasswordRequired
 import com.hebi.tripcanvas.data.backup.EncryptedTripBackup
 import com.hebi.tripcanvas.data.backup.PortableAttachmentBackupService
+import com.hebi.tripcanvas.data.backup.PortableAttachmentPreview
 import com.hebi.tripcanvas.data.backup.RestoreCheckpoint
 import com.hebi.tripcanvas.data.backup.RestoreSafetyBackupFailed
 import com.hebi.tripcanvas.data.backup.TripBackupCodec
@@ -87,6 +88,8 @@ fun BackupScreen(
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     var exportDialog by remember { mutableStateOf(false) }
     var mediaExportDialog by remember { mutableStateOf(false) }
+    var mediaImportUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingMedia by remember { mutableStateOf<PendingMediaRestore?>(null) }
     var importUri by remember { mutableStateOf<Uri?>(null) }
     var exportPassword by remember { mutableStateOf<CharArray?>(null) }
     var mediaPassword by remember { mutableStateOf<CharArray?>(null) }
@@ -94,6 +97,7 @@ fun BackupScreen(
         onDispose {
             exportPassword?.fill('\u0000')
             mediaPassword?.fill('\u0000')
+            pendingMedia?.password?.fill('\u0000')
         }
     }
     BackHandler(enabled = busy) {}
@@ -161,6 +165,36 @@ fun BackupScreen(
                 error = "파일 저장에 실패했습니다. 저장 공간과 접근 권한을 확인하고 불완전한 백업 파일은 사용하지 마세요."
             } finally {
                 password?.fill('\u0000')
+                busy = false
+            }
+        }
+    }
+
+    fun previewMedia(uri: Uri, password: CharArray) {
+        if (busy) {
+            password.fill('\u0000')
+            return
+        }
+        busy = true
+        error = null
+        status = null
+        pending = null
+        pendingCheckpoint = null
+        pendingMedia?.password?.fill('\u0000')
+        pendingMedia = null
+        var transferred = false
+        scope.launch {
+            try {
+                val preview = mediaService.preview(uri, password)
+                pendingMedia = PendingMediaRestore(uri, preview, password)
+                transferred = true
+                status = "첨부 백업 검증을 완료했습니다. 내용을 확인한 뒤 복원을 승인해 주세요."
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                error = "비밀번호가 올바르지 않거나 첨부 백업 파일이 손상되었거나 지원되지 않습니다. 기존 데이터는 변경되지 않았습니다."
+            } finally {
+                if (!transferred) password.fill('\u0000')
                 busy = false
             }
         }
@@ -255,6 +289,17 @@ fun BackupScreen(
         }
     }
 
+    val mediaImportPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri == null) {
+            error = null
+            status = "파일 선택을 취소했습니다. 기존 여행 데이터는 변경되지 않았습니다."
+        } else if (!busy) {
+            mediaImportUri = uri
+        }
+    }
+
     if (exportDialog) {
         BackupPasswordDialog(
             exporting = true,
@@ -276,6 +321,19 @@ fun BackupScreen(
                 mediaPassword?.fill('\u0000')
                 mediaPassword = password
                 mediaPicker.launch("TripCanvas_media_" + LocalDate.now().toString() + ".tcm")
+            }
+        )
+    }
+    mediaImportUri?.let { uri ->
+        BackupPasswordDialog(
+            exporting = false,
+            onDismiss = {
+                mediaImportUri = null
+                status = "복원을 취소했습니다. 기존 여행 데이터는 유지됩니다."
+            },
+            onConfirm = { password ->
+                mediaImportUri = null
+                previewMedia(uri, password)
             }
         )
     }
@@ -339,7 +397,7 @@ fun BackupScreen(
                 Text(
                     "첨부 포함 암호화 백업(.tcm)은 사진·예약 문서의 실제 원본을 포함합니다. " +
                         "최대 100개, 개별 10MB, 원본 합계 20MB이며 열 수 없는 원본이 있으면 저장하지 않습니다. " +
-                        "이 형식의 앱 내 복원은 아직 지원되지 않습니다.",
+                        "첨부 포함 백업 복원에서 원본과 연결 정보를 다시 복구할 수 있습니다.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = p.textSecondary
                 )
@@ -367,8 +425,8 @@ fun BackupScreen(
                     color = p.textPrimary
                 )
                 Text(
-                    "암호화 백업과 기존 JSON 백업을 지원합니다. 파일 선택만으로 기존 데이터는 바뀌지 않습니다. " +
-                        "앱 테마·예약 문서 및 사진 원본은 포함되지 않으므로 원본을 별도로 보관하세요.",
+                    "기존 JSON 및 .tcb 백업은 원본 파일을 포함하지 않습니다. .tcm 첨부 포함 백업은 아래 전용 버튼으로 복원합니다. " +
+                        "파일 선택이나 검증만으로 기존 데이터는 바뀌지 않습니다.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = p.textSecondary
                 )
@@ -381,6 +439,18 @@ fun BackupScreen(
                             arrayOf("application/json", "text/plain", "application/octet-stream")
                         )
                     }
+                )
+                TripSecondaryButton(
+                    label = "첨부 포함 백업 선택 및 검증",
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !busy,
+                    onClick = { mediaImportPicker.launch(arrayOf("application/octet-stream", "*/*")) }
+                )
+                Text(
+                    "복원한 원본은 앱 전용 저장소에 복사합니다. 같은 기기의 안전 백업이 참조하는 파일도 유지하며 " +
+                        "복원 파일 저장 한도는 200MB입니다. 앱 제거 또는 앱 데이터 삭제 시 복원 파일도 사라집니다.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = p.textSecondary
                 )
             }
         }
@@ -472,6 +542,52 @@ fun BackupScreen(
         )
     }
 
+    pendingMedia?.let { request ->
+        TripConfirmDialog(
+            title = "첨부 파일 포함 전체 복원",
+            message = "검증 완료: 여행 " + request.preview.snapshot.trips.size +
+                "개, 데이터 " + request.preview.snapshot.totalRows +
+                "건, 사진·예약 원본 " + request.preview.media.size + "개.\n\n" +
+                "현재 여행 데이터 전체를 교체합니다. 기존 상태를 안전 백업에 저장한 후에만 진행하며, " +
+                "첨부 원본은 앱 전용 저장소에 새로 복사합니다. 진행하시겠습니까?",
+            confirmLabel = if (busy) "복원 중" else "전체 교체 및 첨부 복원",
+            destructive = true,
+            enabled = !busy,
+            onDismiss = {
+                if (!busy) {
+                    request.password.fill('\u0000')
+                    pendingMedia = null
+                    status = "복원을 취소했습니다. 기존 여행 데이터는 유지됩니다."
+                }
+            },
+            onConfirm = {
+                if (!busy) {
+                    busy = true
+                    status = null
+                    error = null
+                    // Ownership transfers to this coroutine; the dialog is disabled while busy.
+                    pendingMedia = null
+                    scope.launch {
+                        try {
+                            mediaService.restore(request.uri, request.password, request.preview, service)
+                            status = "첨부 포함 복원을 완료했습니다. 이전 상태는 안전 백업에서 확인할 수 있습니다."
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (_: RestoreSafetyBackupFailed) {
+                            error = "안전 백업을 저장하거나 검증하지 못해 복원을 중단했습니다. 기존 데이터는 변경되지 않았습니다."
+                        } catch (_: Exception) {
+                            error = "첨부 복원에 실패했습니다. 저장 공간과 백업 파일을 확인하세요. 기존 데이터는 변경되지 않았습니다."
+                        } finally {
+                            request.password.fill('\u0000')
+                            busy = false
+                            refreshCheckpointAvailability()
+                        }
+                    }
+                }
+            }
+        )
+    }
+
     pending?.let { snapshot ->
         val checkpoint = pendingCheckpoint
         val savedAt = checkpoint?.let {
@@ -537,6 +653,12 @@ fun BackupScreen(
     }
 }
 
+
+private data class PendingMediaRestore(
+    val uri: Uri,
+    val preview: PortableAttachmentPreview,
+    val password: CharArray
+)
 
 @Composable
 private fun BackupPasswordDialog(
