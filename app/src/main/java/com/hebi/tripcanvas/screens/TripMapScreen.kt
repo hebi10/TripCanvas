@@ -1,6 +1,7 @@
 package com.hebi.tripcanvas.screens
 
 import android.os.Bundle
+import android.util.Log
 import android.graphics.Color
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +20,8 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -26,6 +29,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
@@ -53,6 +59,9 @@ import com.hebi.tripcanvas.ui.TripPageFrame
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.geometry.LatLngBounds
+import org.maplibre.android.tile.TileOperation
+import kotlinx.coroutines.delay
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
@@ -246,6 +255,7 @@ private fun TripMapPane(
     onPinClick: (String) -> Unit
 ) {
     val p = TripDesign.palette
+    var reload by remember { mutableIntStateOf(0) }
     Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
         if (pins.isEmpty()) {
             TripEmptyState(
@@ -253,7 +263,9 @@ private fun TripMapPane(
                 description = "좌표가 있는 장소를 추가하거나 날짜를 바꿔 주세요."
             )
         } else {
-            TripMapCanvas(pins, selectedId, mapHeight, onSelected = onPinClick)
+            key(reload) {
+                TripMapCanvas(pins, selectedId, mapHeight, onSelected = onPinClick, onRetry = { reload++ })
+            }
             Text(
                 "지도: OpenFreeMap · © OpenStreetMap contributors. " +
                     "지도 타일은 인터넷 연결이 필요합니다. 오프라인에서는 장소 목록을 확인하세요.",
@@ -396,7 +408,8 @@ private fun TripMapCanvas(
     pins: List<PlacePin>,
     selectedId: String,
     mapHeight: Dp,
-    onSelected: (String) -> Unit
+    onSelected: (String) -> Unit,
+    onRetry: () -> Unit
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -404,15 +417,59 @@ private fun TripMapCanvas(
         MapLibre.getInstance(context.applicationContext)
         MapView(context).apply { onCreate(null as Bundle?) }
     }
-    var map by remember { mutableStateOf<MapLibreMap?>(null) }
+    var map by remember(mapView) { mutableStateOf<MapLibreMap?>(null) }
+    var viewport by remember(mapView) { mutableStateOf(IntSize.Zero) }
+    var parsedTile by remember(mapView) { mutableStateOf(false) }
+    var fullyRendered by remember(mapView) { mutableStateOf(false) }
+    var tileError by remember(mapView) { mutableStateOf(false) }
+    var styleError by remember(mapView) { mutableStateOf(false) }
+    var timedOut by remember(mapView) { mutableStateOf(false) }
+    val paddingPx = with(LocalDensity.current) { 40.dp.roundToPx() }
+    // Style and local pin layers alone do not prove that geographic tiles loaded.
+    DisposableEffect(mapView) {
+        val failure = MapView.OnDidFailLoadingMapListener {
+            if (!styleError) Log.w("TripCanvasMap", "map-style-load-failed")
+            styleError = true
+        }
+        val rendered = MapView.OnDidFinishRenderingMapListener { fully ->
+            if (fully) fullyRendered = true
+        }
+        val tiles = MapView.OnTileActionListener { operation, _, _, _, _, _, _ ->
+            if (operation == TileOperation.EndParse && !parsedTile) {
+                parsedTile = true
+                Log.i("TripCanvasMap", "basemap-tile-parsed")
+            }
+            if (operation == TileOperation.Error && !tileError) {
+                tileError = true
+                // Deliberately do not log tile coordinates, URLs or raw provider errors.
+                Log.w("TripCanvasMap", "basemap-tile-error")
+            }
+        }
+        mapView.addOnDidFailLoadingMapListener(failure)
+        mapView.addOnDidFinishRenderingMapListener(rendered)
+        mapView.addOnTileActionListener(tiles)
+        onDispose {
+            mapView.removeOnDidFailLoadingMapListener(failure)
+            mapView.removeOnDidFinishRenderingMapListener(rendered)
+            mapView.removeOnTileActionListener(tiles)
+        }
+    }
+    LaunchedEffect(mapView) {
+        delay(12_000L)
+        timedOut = true
+    }
     DisposableEffect(lifecycle, mapView) {
+        var destroyed = false
         val observer = LifecycleEventObserver { _, event ->
-            when (event) {
+            if (!destroyed) when (event) {
                 Lifecycle.Event.ON_START -> mapView.onStart()
                 Lifecycle.Event.ON_RESUME -> mapView.onResume()
                 Lifecycle.Event.ON_PAUSE -> mapView.onPause()
                 Lifecycle.Event.ON_STOP -> mapView.onStop()
-                Lifecycle.Event.ON_DESTROY -> mapView.onDestroy()
+                Lifecycle.Event.ON_DESTROY -> {
+                    destroyed = true
+                    mapView.onDestroy()
+                }
                 else -> Unit
             }
         }
@@ -421,9 +478,12 @@ private fun TripMapCanvas(
         if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) mapView.onResume()
         onDispose {
             lifecycle.removeObserver(observer)
-            mapView.onPause()
-            mapView.onStop()
-            mapView.onDestroy()
+            if (!destroyed) {
+                destroyed = true
+                mapView.onPause()
+                mapView.onStop()
+                mapView.onDestroy()
+            }
         }
     }
     AndroidView(
@@ -436,8 +496,28 @@ private fun TripMapCanvas(
                 }
             }
         },
-        modifier = Modifier.fillMaxWidth().height(mapHeight)
+        modifier = Modifier.fillMaxWidth().height(mapHeight).onSizeChanged { viewport = it }
     )
+    val status = when {
+        styleError -> MapBackgroundLoadState.Failed
+        parsedTile && fullyRendered -> MapBackgroundLoadState.Ready
+        tileError || timedOut -> MapBackgroundLoadState.Unconfirmed
+        else -> MapBackgroundLoadState.Loading
+    }
+    if (status != MapBackgroundLoadState.Ready) {
+        Text(
+            when (status) {
+                MapBackgroundLoadState.Failed -> "지도를 불러오지 못했습니다. 아래 저장 장소 목록을 이용할 수 있습니다."
+                MapBackgroundLoadState.Unconfirmed -> "지도 배경 로딩을 확인하지 못했습니다. 인터넷 연결을 확인하거나 아래 장소 목록을 이용해 주세요."
+                else -> "지도 배경을 불러오는 중입니다."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = TripDesign.palette.textSecondary
+        )
+        if (status == MapBackgroundLoadState.Failed || status == MapBackgroundLoadState.Unconfirmed) {
+            TripSecondaryButton(label = "지도 다시 불러오기", onClick = onRetry)
+        }
+    }
     val currentOnSelected by rememberUpdatedState(onSelected)
     DisposableEffect(map) {
         val ready = map
@@ -525,21 +605,30 @@ private fun TripMapCanvas(
                 )
             }
         }
-        val target = pins.firstOrNull { it.place.id == selectedId }
-            ?: pins.firstOrNull()
-        if (target != null) {
-            ready.moveCamera(
-                CameraUpdateFactory.newLatLngZoom(
-                    LatLng(
-                        requireNotNull(target.place.latitude),
-                        requireNotNull(target.place.longitude)
-                    ),
-                    12.0
-                )
-            )
+    }
+    // Wait for a measured viewport; a bounds camera update before layout is invalid.
+    LaunchedEffect(map, pins, selectedId, viewport) {
+        val ready = map ?: return@LaunchedEffect
+        if (viewport.width <= 0 || viewport.height <= 0) return@LaunchedEffect
+        val coordinates = pins.map {
+            LatLng(requireNotNull(it.place.latitude), requireNotNull(it.place.longitude))
+        }.distinct()
+        val focused = pins.firstOrNull { it.place.id == selectedId }?.let {
+            LatLng(requireNotNull(it.place.latitude), requireNotNull(it.place.longitude))
+        }
+        when {
+            focused != null -> ready.moveCamera(CameraUpdateFactory.newLatLngZoom(focused, 12.0))
+            coordinates.size == 1 -> ready.moveCamera(CameraUpdateFactory.newLatLngZoom(coordinates.first(), 12.0))
+            coordinates.size > 1 -> {
+                val bounds = LatLngBounds.Builder().includes(coordinates).build()
+                val inset = paddingPx.coerceAtMost(minOf(viewport.width, viewport.height) / 5)
+                ready.moveCamera(CameraUpdateFactory.newLatLngBounds(bounds, inset))
+            }
         }
     }
 }
+
+private enum class MapBackgroundLoadState { Loading, Ready, Unconfirmed, Failed }
 
 internal fun retainedMapPlaceSelection(
     selectedId: String,

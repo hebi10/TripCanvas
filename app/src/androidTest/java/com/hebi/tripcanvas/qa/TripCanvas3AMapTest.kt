@@ -94,6 +94,8 @@ class TripCanvas3AMapTest {
                 click("지도 열기")
                 awaitText("여행 지도")
                 awaitRenderedMapPins(scenario)
+                assertAllSavedPinsInViewport(scenario)
+                recordMapBackgroundEvidence()
                 capture("03-map-all-light")
                 val widthDp = (device.displayWidth / context.resources.displayMetrics.density).toInt()
                 if (classifyWindowWidth(widthDp) != TripWindowWidth.Compact) {
@@ -235,6 +237,50 @@ class TripCanvas3AMapTest {
         }
         capture("99-map-pin-layer-not-ready")
         throw AssertionError("MapLibre style and actual place-pin layer did not become ready")
+    }
+
+    private fun assertAllSavedPinsInViewport(scenario: ActivityScenario<MainActivity>) {
+        val coords = listOf(LatLng(33.5104, 126.4914), LatLng(33.4888, 126.4975))
+        repeat(20) {
+            val projected = AtomicReference<String?>(null)
+            val latch = CountDownLatch(1)
+            scenario.onActivity { activity ->
+                val view = findMapView(activity.window.decorView)
+                if (view == null) {
+                    latch.countDown()
+                } else {
+                    view.getMapAsync { map ->
+                        val points = coords.map(map.projection::toScreenLocation)
+                        val margin = 20f * view.resources.displayMetrics.density
+                        if (points.all { p -> p.x >= margin && p.y >= margin &&
+                            p.x <= view.width - margin && p.y <= view.height - margin }) {
+                            projected.set("All saved pins inside measured viewport with 20dp inset")
+                        }
+                        latch.countDown()
+                    }
+                }
+            }
+            latch.await(3, TimeUnit.SECONDS)
+            projected.get()?.let {
+                File(evidenceDir(), "03-all-pins-viewport.txt").writeText(it)
+                return
+            }
+            SystemClock.sleep(350)
+        }
+        capture("99-map-pins-outside-viewport")
+        throw AssertionError("All saved map pins must fit within the measured viewport")
+    }
+
+    private fun recordMapBackgroundEvidence() {
+        // Pins may remain functional when the external provider is unavailable.
+        // Preserve an explicit background status instead of treating style readiness as tile proof.
+        val diagnostic = device.executeShellCommand("logcat -d -s TripCanvasMap:I")
+            .lineSequence().filter { it.contains("basemap-tile-parsed") ||
+                it.contains("basemap-tile-error") || it.contains("map-style-load-failed") }.toList()
+        File(evidenceDir(), "03-basemap-events.txt").writeText(
+            if (diagnostic.isEmpty()) "No tile-completion or error event observed at capture time"
+            else diagnostic.joinToString("\n")
+        )
     }
 
     private fun assertMapCentered(
