@@ -32,6 +32,8 @@ jobs:
             script: .github/scripts/run-3a-map-qa.sh
           - suite: finance-booking
             script: .github/scripts/run-3b-screen-qa.sh
+          - suite: first-launch
+            script: .github/scripts/run-design-start-qa.sh
     steps:
       - uses: actions/checkout@v4
         with:
