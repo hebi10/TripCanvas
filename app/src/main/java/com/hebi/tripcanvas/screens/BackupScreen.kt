@@ -1,5 +1,6 @@
 package com.hebi.tripcanvas.screens
 
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -7,9 +8,15 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -22,7 +29,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import com.hebi.tripcanvas.data.TripRepository
+import com.hebi.tripcanvas.data.backup.BackupPasswordRequired
+import com.hebi.tripcanvas.data.backup.EncryptedTripBackup
 import com.hebi.tripcanvas.data.backup.TripBackupCodec
 import com.hebi.tripcanvas.data.backup.TripBackupService
 import com.hebi.tripcanvas.data.local.TripBackupSnapshot
@@ -34,6 +45,7 @@ import com.hebi.tripcanvas.designsystem.components.TripPrimaryButton
 import com.hebi.tripcanvas.designsystem.components.TripSecondaryButton
 import com.hebi.tripcanvas.designsystem.components.TripSectionHeading
 import com.hebi.tripcanvas.designsystem.components.TripSurfacePanel
+import com.hebi.tripcanvas.designsystem.components.TripTextField
 import com.hebi.tripcanvas.designsystem.theme.TripDesign
 import com.hebi.tripcanvas.designsystem.tokens.TripSpacing
 import com.hebi.tripcanvas.ui.TripPageFrame
@@ -60,35 +72,92 @@ fun BackupScreen(
     var busy by remember { mutableStateOf(false) }
     var status by rememberSaveable { mutableStateOf<String?>(null) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
+    var exportDialog by remember { mutableStateOf(false) }
+    var importUri by remember { mutableStateOf<Uri?>(null) }
+    var exportPassword by remember { mutableStateOf<CharArray?>(null) }
+    DisposableEffect(Unit) {
+        onDispose { exportPassword?.fill('\u0000') }
+    }
     BackHandler(enabled = busy) {}
 
-    val exportPicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("application/json")
-    ) { uri ->
+    fun saveBackup(uri: Uri?, encrypted: Boolean, password: CharArray?) {
         if (uri == null) {
+            password?.fill('\u0000')
             error = null
             status = "파일 저장을 취소했습니다. 기존 여행 데이터는 변경되지 않았습니다."
-        } else if (!busy) {
-            busy = true
-            error = null
-            status = null
-            scope.launch {
-                try {
-                    val saved = service.export(uri)
-                    status = "백업 완료: 여행 " + saved.trips.size + "개, 전체 자료 " +
-                        saved.totalRows + "건"
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (failed: IllegalArgumentException) {
-                    error = "백업 파일이 10MB를 초과했습니다. 데이터 양을 확인해 주세요."
-                } catch (failed: Exception) {
-                    error = "파일 저장에 실패했습니다. 사용 가능한 저장 공간과 접근 권한을 확인해 주세요."
-                } finally {
-                    busy = false
-                }
+            return
+        }
+        if (busy || (encrypted && password == null)) {
+            password?.fill('\u0000')
+            error = "백업을 다시 시작해 주세요. 암호화 비밀번호 없이 파일을 저장하지 않습니다."
+            return
+        }
+        busy = true
+        error = null
+        status = null
+        scope.launch {
+            try {
+                val saved = if (encrypted) service.exportEncrypted(uri, requireNotNull(password))
+                    else service.export(uri)
+                status = "백업 완료: 여행 " + saved.trips.size + "개, 전체 자료 " +
+                    saved.totalRows + "건"
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: IllegalArgumentException) {
+                error = "백업 데이터 용량 또는 비밀번호를 확인해 주세요."
+            } catch (_: Exception) {
+                error = "파일 저장에 실패했습니다. 저장 공간과 접근 권한을 확인하고 불완전한 백업 파일은 사용하지 마세요."
+            } finally {
+                password?.fill('\u0000')
+                busy = false
             }
         }
     }
+
+    fun previewBackup(uri: Uri, password: CharArray? = null) {
+        if (busy) {
+            password?.fill('\u0000')
+            return
+        }
+        busy = true
+        error = null
+        status = null
+        pending = null
+        scope.launch {
+            try {
+                pending = service.preview(uri, password)
+                status = "복원할 내용을 확인한 뒤 최종 적용을 선택해 주세요."
+            } catch (_: BackupPasswordRequired) {
+                importUri = uri
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: IOException) {
+                error = "파일을 열지 못했습니다. 파일 접근 권한을 확인해 주세요."
+            } catch (failed: IllegalArgumentException) {
+                error = if (failed.message?.contains("허용 범위") == true) {
+                    "파일 크기가 10MB 제한을 초과했습니다."
+                } else {
+                    "비밀번호가 올바르지 않거나 백업 파일이 손상되었거나 지원하지 않는 버전입니다."
+                }
+            } catch (_: Exception) {
+                error = "백업 파일을 검증하지 못했습니다."
+            } finally {
+                password?.fill('\u0000')
+                busy = false
+            }
+        }
+    }
+
+    val encryptedPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/octet-stream")
+    ) { uri ->
+        val password = exportPassword
+        exportPassword = null
+        saveBackup(uri, encrypted = true, password = password)
+    }
+    val exportPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri -> saveBackup(uri, encrypted = false, password = null) }
 
     val importPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -96,38 +165,41 @@ fun BackupScreen(
         if (uri == null) {
             error = null
             status = "파일 선택을 취소했습니다. 기존 여행 데이터는 변경되지 않았습니다."
-        } else if (!busy) {
-            busy = true
-            error = null
-            status = null
-            pending = null
-            scope.launch {
-                try {
-                    pending = service.preview(uri)
-                    status = "복원할 내용을 확인한 뒤 최종 적용을 선택해 주세요."
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (failed: IOException) {
-                    error = "파일을 열지 못했습니다. 파일 접근 권한을 확인해 주세요."
-                } catch (failed: IllegalArgumentException) {
-                    error = if (failed.message?.contains("허용 범위") == true) {
-                        "파일 크기가 10MB 제한을 초과했습니다."
-                    } else {
-                        "백업 파일이 손상되었거나 지원하지 않는 버전입니다."
-                    }
-                } catch (failed: Exception) {
-                    error = "백업 파일이 손상되었거나 지원되지 않는 버전입니다."
-                } finally {
-                    busy = false
-                }
-            }
+        } else {
+            previewBackup(uri)
         }
+    }
+
+    if (exportDialog) {
+        BackupPasswordDialog(
+            exporting = true,
+            onDismiss = { exportDialog = false },
+            onConfirm = { password ->
+                exportDialog = false
+                exportPassword?.fill('\u0000')
+                exportPassword = password
+                encryptedPicker.launch("TripCanvas_backup_" + LocalDate.now().toString() + ".tcb")
+            }
+        )
+    }
+    importUri?.let { uri ->
+        BackupPasswordDialog(
+            exporting = false,
+            onDismiss = {
+                importUri = null
+                status = "복원을 취소했습니다. 기존 여행 데이터는 유지됩니다."
+            },
+            onConfirm = { password ->
+                importUri = null
+                previewBackup(uri, password)
+            }
+        )
     }
 
     TripPageFrame(title = "백업·복원", onBack = { if (!busy) onBack() }) {
         TripSectionHeading(
             title = "로컬 데이터 백업",
-            supportingText = "1단계 · 여행·장소·일정·준비물·경비·예산·동행자·정산·예약 정보를 JSON 파일로 내보냅니다."
+            supportingText = "1단계 · 여행·일정·경비·정산·예약·기록 데이터를 비밀번호로 보호하여 내보냅니다."
         )
         TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
             Column(
@@ -146,13 +218,19 @@ fun BackupScreen(
                     color = p.textSecondary
                 )
                 Text(
-                    "백업 파일은 암호화되지 않습니다. 예약 확인번호·동행자 이름·메모가 " +
-                        "포함될 수 있습니다. 안전하게 보관하고 파일 공유에 주의하세요.",
+                    "암호화 백업은 비밀번호를 알아야 복원할 수 있습니다. 비밀번호를 잊으면 복구할 수 없습니다. " +
+                        "평문 JSON은 예약 확인번호·동행자 정보가 노출될 수 있으므로 안전하게 보관하세요.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = p.textSecondary
                 )
                 TripPrimaryButton(
-                    label = "백업 파일 내보내기",
+                    label = "암호화 백업 내보내기",
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = { exportDialog = true }
+                )
+                TripSecondaryButton(
+                    label = "평문 JSON 내보내기",
                     enabled = !busy,
                     modifier = Modifier.fillMaxWidth(),
                     onClick = {
@@ -179,8 +257,8 @@ fun BackupScreen(
                     color = p.textPrimary
                 )
                 Text(
-                    "파일 선택만으로 기존 데이터가 바뀌지 않습니다. 앱 테마·예약 문서 원본·파일 URI는 " +
-                        "백업에서 제외되므로 복원 후 문서를 다시 연결해 주세요.",
+                    "암호화 백업과 기존 JSON 백업을 지원합니다. 파일 선택만으로 기존 데이터는 바뀌지 않습니다. " +
+                        "앱 테마·예약 문서 및 사진 원본은 포함되지 않으므로 원본을 별도로 보관하세요.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = p.textSecondary
                 )
@@ -260,4 +338,56 @@ fun BackupScreen(
             }
         )
     }
+}
+
+
+@Composable
+private fun BackupPasswordDialog(
+    exporting: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: (CharArray) -> Unit
+) {
+    var password by remember { mutableStateOf("") }
+    var confirmation by remember { mutableStateOf("") }
+    val valid = password.length in EncryptedTripBackup.MIN_PASSWORD_LENGTH..EncryptedTripBackup.MAX_PASSWORD_LENGTH &&
+        password.any { !it.isWhitespace() } && (!exporting || password == confirmation)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (exporting) "암호화 백업 비밀번호 설정" else "암호화 백업 비밀번호 입력") },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)
+            ) {
+                Text(if (exporting) "12~128자의 충분히 긴 비밀번호를 설정하세요. 분실 시 복원할 수 없습니다."
+                    else "백업을 생성할 때 설정한 비밀번호를 입력해 주세요.")
+                TripTextField(
+                    value = password,
+                    onValueChange = { if (it.length <= EncryptedTripBackup.MAX_PASSWORD_LENGTH) password = it },
+                    label = "백업 비밀번호",
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+                )
+                if (exporting) {
+                    TripTextField(
+                        value = confirmation,
+                        onValueChange = { if (it.length <= EncryptedTripBackup.MAX_PASSWORD_LENGTH) confirmation = it },
+                        label = "비밀번호 확인",
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        isError = confirmation.isNotEmpty() && confirmation != password
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = valid, onClick = {
+                val selected = password.toCharArray()
+                password = ""
+                confirmation = ""
+                onConfirm(selected)
+            }) { Text(if (exporting) "저장 위치 선택" else "비밀번호 확인 및 검증") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } }
+    )
 }

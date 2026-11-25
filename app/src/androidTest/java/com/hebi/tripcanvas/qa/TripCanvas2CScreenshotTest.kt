@@ -331,9 +331,14 @@ class TripCanvas2CScreenshotTest {
             awaitText("로컬 백업·복원")
             capture("11-settings-light")
             click("로컬 백업·복원")
-            awaitText("백업 파일 내보내기")
+            awaitText("암호화 백업 내보내기")
             capture("12-backup-restore-light")
-            click("백업 파일 내보내기")
+            click("암호화 백업 내보내기")
+            awaitText("암호화 백업 비밀번호 설정")
+            device.pressBack()
+            awaitText("암호화 백업 내보내기")
+            awaitText("평문 JSON 내보내기")
+            click("평문 JSON 내보내기")
             val pickerOpened = (0 until 25).any {
                 if (device.currentPackageName != "com.hebi.tripcanvas") true
                 else { Thread.sleep(300); false }
@@ -412,7 +417,7 @@ class TripCanvas2CScreenshotTest {
             awaitText("로컬 백업·복원")
             capture("18a-settings-dark")
             click("로컬 백업·복원")
-            awaitText("백업 파일 내보내기")
+            awaitText("암호화 백업 내보내기")
             capture("19-backup-dark")
             device.pressBack()
             awaitText("설정")
