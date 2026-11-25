@@ -19,6 +19,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.heightIn
+import com.hebi.tripcanvas.designsystem.tokens.TripSizes
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.style.TextOverflow
 import com.hebi.tripcanvas.data.ExpenseRepository
@@ -114,6 +117,7 @@ fun ExpenseListScreen(
     TripPageFrame(
         title = "예산·경비",
         onBack = onBack,
+        contentSpacing = TripSpacing.sm,
         bottomAction = {
             TripPrimaryButton(label = "지출 추가", modifier = Modifier.fillMaxWidth(),
                 enabled = trip != null && state is ExpenseListState.Ready && !working, onClick = onNew)
@@ -125,7 +129,7 @@ fun ExpenseListScreen(
         } else {
             TripSectionHeading(
                 title = current.title,
-                supportingText = "기본 통화 " + current.currencyCode + " · 여행별 지출 내역"
+                supportingText = "기본 통화 " + current.currencyCode
             )
             when (val result = state) {
                 ExpenseListState.Loading -> TripLoadingState("지출 내역을 불러오는 중")
@@ -156,16 +160,22 @@ fun ExpenseListScreen(
                         ) + " 초과"
                         else -> displayMoney(remaining.toPlainString(), current.currencyCode) + " 남음"
                     }
-                    TripSectionHeading(
-                        title = "예산 현황",
-                        supportingText = "기본 통화 ${current.currencyCode} · 환산 가능한 지출만 합산합니다."
-                    )
+                    TripSectionHeading(title = "예산 현황")
                     TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
                         Column(
-                            modifier = Modifier.padding(TripSpacing.md),
-                            verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)
+                            modifier = Modifier.padding(TripSpacing.sm),
+                            verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
                         ) {
-                            Text("지출 합계", style = MaterialTheme.typography.labelLarge, color = p.textSecondary)
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Text("지출 합계", Modifier.weight(1f), style = MaterialTheme.typography.labelLarge, color = p.textSecondary)
+                                TextButton(onClick = {
+                                    budgetInput = budget?.amountDecimal.orEmpty()
+                                    budgetError = null
+                                    showBudgetEditor = true
+                                }, modifier = Modifier.heightIn(min = TripSizes.minimumTouchTarget)) {
+                                    Text("예산 설정·변경", color = p.textPrimary)
+                                }
+                            }
                             Text(spentValue, style = MaterialTheme.typography.headlineMedium, color = p.textPrimary)
                             FlowRow(
                                 modifier = Modifier.fillMaxWidth(),
@@ -221,27 +231,21 @@ fun ExpenseListScreen(
                                     color = p.textSecondary
                                 )
                             }
-                            TripSecondaryButton(
-                                label = "예산 설정·변경",
-                                onClick = {
-                                    budgetInput = budget?.amountDecimal.orEmpty()
-                                    budgetError = null
-                                    showBudgetEditor = true
-                                }
-                            )
+                            Text("환산 가능한 지출만 합산합니다.",
+                                style = MaterialTheme.typography.bodySmall, color = p.textSecondary)
                         }
                     }
                     if (totals.unconvertedByCurrency.isNotEmpty()) {
-                        TripSectionHeading(
-                            title = "환산 필요",
-                            supportingText = "환율이 없는 다른 통화는 기본 통화 합계·예산에서 제외합니다."
-                        )
-                        totals.unconvertedByCurrency.forEach { (code, amount) ->
-                            Text(
-                                displayMoney(amount.toPlainString(), code),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = p.textSecondary
-                            )
+                        TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(TripSpacing.xs), verticalArrangement = Arrangement.spacedBy(TripSpacing.xxs)) {
+                                Text("환산 필요", style = MaterialTheme.typography.titleSmall, color = p.warning)
+                                Text("환율 없는 지출은 합계·예산에서 제외합니다.",
+                                    style = MaterialTheme.typography.bodySmall, color = p.textSecondary)
+                                totals.unconvertedByCurrency.forEach { (code, amount) ->
+                                    Text(displayMoney(amount.toPlainString(), code),
+                                        style = MaterialTheme.typography.bodySmall, color = p.textSecondary)
+                                }
+                            }
                         }
                     }
                      TripSectionHeading(
@@ -265,8 +269,8 @@ fun ExpenseListScreen(
                                 rows.forEach { item ->
                                     TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
                                         Column(
-                                            modifier = Modifier.padding(TripSpacing.md),
-                                            verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
+                                            modifier = Modifier.padding(TripSpacing.sm),
+                                            verticalArrangement = Arrangement.spacedBy(TripSpacing.xxs)
                                         ) {
                                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TripSpacing.sm)) {
                                                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TripSpacing.xxs)) {
@@ -296,19 +300,19 @@ fun ExpenseListScreen(
                                             } else if (item.currencyCode != current.currencyCode) {
                                                 Text("환산 필요", color = p.textSecondary)
                                             }
-                                            FlowRow(horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
-                                                TripSecondaryButton(
-                                                    label = "환율·분담",
-                                                    onClick = { onSplit(item.id) }
-                                                )
-                                                TripSecondaryButton(
-                                                    label = "편집",
-                                                    onClick = { onEdit(item.id) }
-                                                )
-                                                TripSecondaryButton(
-                                                    label = "삭제",
-                                                    onClick = { deleteTarget = item }
-                                                )
+                                            FlowRow(horizontalArrangement = Arrangement.spacedBy(TripSpacing.xxs)) {
+                                                TextButton(onClick = { onSplit(item.id) },
+                                                    modifier = Modifier.heightIn(min = TripSizes.minimumTouchTarget)) {
+                                                    Text("환율·분담", color = p.textPrimary)
+                                                }
+                                                TextButton(onClick = { onEdit(item.id) },
+                                                    modifier = Modifier.heightIn(min = TripSizes.minimumTouchTarget)) {
+                                                    Text("편집", color = p.textPrimary)
+                                                }
+                                                TextButton(onClick = { deleteTarget = item },
+                                                    modifier = Modifier.heightIn(min = TripSizes.minimumTouchTarget)) {
+                                                    Text("삭제", color = p.error)
+                                                }
                                             }
                                         }
                                     }

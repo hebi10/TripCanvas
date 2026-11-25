@@ -47,6 +47,7 @@ class TripCanvas2CScreenshotTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val context: Context = instrumentation.targetContext
     private val device: UiDevice = UiDevice.getInstance(instrumentation)
+    private val navigator = QaUiNavigator(device)
     private val database: TripDatabase by lazy { TripDatabase.get(context) }
 
     @Before
@@ -349,12 +350,7 @@ class TripCanvas2CScreenshotTest {
             device.pressBack()
             awaitText("암호화 백업 내보내기")
             awaitText("평문 JSON 내보내기")
-            click("평문 JSON 내보내기")
-            val pickerOpened = (0 until 25).any {
-                if (device.currentPackageName != "com.hebi.tripcanvas") true
-                else { Thread.sleep(300); false }
-            }
-            assertTrue("Android document picker did not become foreground", pickerOpened)
+            openAndroidDocumentPicker("평문 JSON 내보내기", "save")
             capture("13-android-file-save-picker")
             device.pressBack()
             awaitText("백업·복원")
@@ -363,12 +359,7 @@ class TripCanvas2CScreenshotTest {
                 database.tripDao().findById("qa-trip") != null
             })
             capture("14-backup-cancelled")
-            click("백업 파일 선택 및 검증")
-            val importPickerOpened = (0 until 25).any {
-                if (device.currentPackageName != "com.hebi.tripcanvas") true
-                else { Thread.sleep(300); false }
-            }
-            assertTrue("Android import document picker did not become foreground", importPickerOpened)
+            openAndroidDocumentPicker("백업 파일 선택 및 검증", "import")
             capture("14a-backup-import-picker")
             device.pressBack()
             awaitText("백업·복원")
@@ -657,6 +648,29 @@ class TripCanvas2CScreenshotTest {
             File(diagnosticDir, "99-failed-preferences-error.txt").writeText(it.stackTraceToString())
         }
         fail("Android 화면에서 다음 문구를 찾지 못했습니다: $text")
+    }
+
+    private fun openAndroidDocumentPicker(label: String, kind: String) {
+        val documentPackages = setOf("com.android.documentsui", "com.google.android.documentsui")
+        awaitText(label)
+        repeat(2) { attempt ->
+            if (device.currentPackageName in documentPackages) return
+            assertEquals("Document picker must be launched from TripCanvas", context.packageName, device.currentPackageName)
+            navigator.clickVisible(By.text(label), label)
+            repeat(30) {
+                if (device.currentPackageName in documentPackages) return
+                Thread.sleep(300)
+            }
+            if (attempt == 0 && device.currentPackageName == context.packageName) {
+                // Retry only when the action has not left the app.
+                awaitText(label)
+            } else {
+                capture("99-document-picker-$kind-failure")
+                val dir = File(context.getExternalFilesDir(null), "qa")
+                runCatching { device.dumpWindowHierarchy(File(dir, "99-document-picker-$kind-hierarchy.xml")) }
+                fail("Android $kind document picker not confirmed; foreground=" + device.currentPackageName)
+            }
+        }
     }
 
     private fun openScreen(button: String, expectedTitle: String) {

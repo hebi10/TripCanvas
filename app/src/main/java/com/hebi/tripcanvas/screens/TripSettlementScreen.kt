@@ -124,7 +124,7 @@ fun TripSettlementScreen(
             }
             if (report.transfers.isNotEmpty()) {
                 TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(TripSpacing.md), verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)) {
+                    Column(Modifier.padding(TripSpacing.sm), verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
                         report.transfers.forEach { transfer ->
                             val names = peopleById[transfer.fromParticipantId]?.displayName.orEmpty() +
                                 " → " + peopleById[transfer.toParticipantId]?.displayName.orEmpty()
@@ -144,6 +144,40 @@ fun TripSettlementScreen(
                             }
                         }
                         Text("실제 송금은 진행되지 않습니다.", style = MaterialTheme.typography.bodySmall, color = palette.textSecondary)
+                    }
+                }
+            }
+            if (people.isEmpty()) {
+                TripEmptyState("등록한 동행자가 없습니다", "로컬 동행자를 먼저 등록해 주세요.")
+            }
+            TripSectionHeading(
+                title = "참가자별 지불·부담",
+                supportingText = "분담이 확정된 " + report.includedExpenses + "건에 대한 금액"
+            )
+            if (report.balances.isNotEmpty()) TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(TripSpacing.sm), verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
+                    report.balances.forEachIndexed { index, balance ->
+                        if (index > 0) com.hebi.tripcanvas.designsystem.components.TripDivider()
+                        Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.xxs)) {
+                        Text(
+                            balance.displayName,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = palette.textPrimary
+                        )
+                        Text(
+                            "지불 " + displayMinor(balance.paidMinor, report.baseCurrencyCode) +
+                                " · 부담 " + displayMinor(balance.owedMinor, report.baseCurrencyCode),
+                            color = palette.textSecondary
+                        )
+                        Text(
+                            if (balance.netMinor >= 0) {
+                                "받을 금액 " + displayMinor(balance.netMinor, report.baseCurrencyCode)
+                            } else {
+                                "낼 금액 " + displayMinor(-balance.netMinor, report.baseCurrencyCode)
+                            },
+                            color = palette.textPrimary
+                        )
+                        }
                     }
                 }
             }
@@ -184,40 +218,6 @@ fun TripSettlementScreen(
                         }
                     }
                 )
-            }
-            if (people.isEmpty()) {
-                TripEmptyState("등록한 동행자가 없습니다", "로컬 동행자를 먼저 등록해 주세요.")
-            }
-            TripSectionHeading(
-                title = "참가자별 지불·부담",
-                supportingText = "분담이 확정된 " + report.includedExpenses + "건에 대한 금액"
-            )
-            if (report.balances.isNotEmpty()) TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(TripSpacing.md), verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)) {
-                    report.balances.forEachIndexed { index, balance ->
-                        if (index > 0) com.hebi.tripcanvas.designsystem.components.TripDivider()
-                        Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.xxs)) {
-                        Text(
-                            balance.displayName,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = palette.textPrimary
-                        )
-                        Text(
-                            "지불 " + displayMinor(balance.paidMinor, report.baseCurrencyCode) +
-                                " · 부담 " + displayMinor(balance.owedMinor, report.baseCurrencyCode),
-                            color = palette.textSecondary
-                        )
-                        Text(
-                            if (balance.netMinor >= 0) {
-                                "받을 금액 " + displayMinor(balance.netMinor, report.baseCurrencyCode)
-                            } else {
-                                "낼 금액 " + displayMinor(-balance.netMinor, report.baseCurrencyCode)
-                            },
-                            color = palette.textPrimary
-                        )
-                        }
-                    }
-                }
             }
             TripSecondaryButton(
                 label = "동행자 관리",

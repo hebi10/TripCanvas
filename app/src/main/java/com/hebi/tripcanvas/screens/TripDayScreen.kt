@@ -34,6 +34,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -140,6 +142,7 @@ fun TripDayScreen(
     TripPageFrame(
         title = "여행 일정",
         onBack = onBack,
+        contentSpacing = TripSpacing.sm,
         bottomAction = {
             if (trip != null) TripPrimaryButton(
                 label = "일정 추가",
@@ -173,17 +176,26 @@ fun TripDayScreen(
                     " · " + current.timeZoneId
             )
             if (selected != null) {
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs),
-                    verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
-                ) {
-                    visibleScheduleDates(start, end, selected).forEach { date ->
+                val dates = visibleScheduleDates(start, end, selected)
+                BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    val chip: @Composable (LocalDate, Modifier) -> Unit = { date, modifier ->
                         TripChoiceChip(
                             label = "${date.monthValue}/${date.dayOfMonth} " +
                                 date.dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.KOREAN),
                             selected = date == selected,
-                            onClick = { selectedDate = date.toString() }
+                            onClick = { selectedDate = date.toString() },
+                            modifier = modifier
                         )
+                    }
+                    if (dates.size in 1..4 && maxWidth >= 340.dp && LocalDensity.current.fontScale < 1.3f) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TripSpacing.xxs)) {
+                            dates.forEach { date -> chip(date, Modifier.weight(1f)) }
+                        }
+                    } else {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs),
+                            verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
+                            dates.forEach { date -> chip(date, Modifier) }
+                        }
                     }
                 }
                 if (scheduleUsesDatePicker(start, end)) TripDateField(
@@ -413,7 +425,7 @@ private fun ScheduleTimelineRow(
         modifier = Modifier
             .fillMaxWidth()
             .drawBehind {
-                val axisX = 76.dp.toPx()
+                val axisX = 68.dp.toPx()
                 val dotY = 24.dp.toPx()
                 val lineWidth = 1.dp.toPx()
                 if (!isFirst) {
@@ -428,7 +440,7 @@ private fun ScheduleTimelineRow(
         verticalAlignment = Alignment.Top
     ) {
         Column(
-            modifier = Modifier.width(64.dp).padding(top = TripSpacing.sm),
+            modifier = Modifier.width(60.dp).padding(top = TripSpacing.sm),
             verticalArrangement = Arrangement.spacedBy(TripSpacing.xxs)
         ) {
             Text(
@@ -453,7 +465,7 @@ private fun ScheduleTimelineRow(
                 )
             }
         }
-        Spacer(Modifier.width(24.dp))
+        Spacer(Modifier.width(16.dp))
         ScheduleRow(
             item = item,
             placeName = placeName,
@@ -517,12 +529,12 @@ private fun ScheduleRow(
             .zIndex(if (dragY == 0f) 0f else 1f)
     ) {
         Column(
-            modifier = Modifier.padding(TripSpacing.md),
-            verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
+            modifier = Modifier.padding(TripSpacing.xs),
+            verticalArrangement = Arrangement.spacedBy(TripSpacing.xxs)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Top,
+                verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs)
             ) {
                 Text("≡", modifier = dragHandle, style = MaterialTheme.typography.headlineSmall, color = p.textSecondary)
