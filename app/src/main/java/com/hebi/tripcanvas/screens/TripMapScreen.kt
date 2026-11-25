@@ -432,7 +432,10 @@ private fun TripMapCanvas(
             styleError = true
         }
         val rendered = MapView.OnDidFinishRenderingMapListener { fully ->
-            if (fully) fullyRendered = true
+            if (fully && parsedTile && !fullyRendered) {
+                fullyRendered = true
+                Log.i("TripCanvasMap", "basemap-render-after-tile")
+            }
         }
         val tiles = MapView.OnTileActionListener { operation, _, _, _, _, _, _ ->
             if (operation == TileOperation.EndParse && !parsedTile) {

@@ -274,13 +274,26 @@ class TripCanvas3AMapTest {
     private fun recordMapBackgroundEvidence() {
         // Pins may remain functional when the external provider is unavailable.
         // Preserve an explicit background status instead of treating style readiness as tile proof.
-        val diagnostic = device.executeShellCommand("logcat -d -s TripCanvasMap:I")
-            .lineSequence().filter { it.contains("basemap-tile-parsed") ||
-                it.contains("basemap-tile-error") || it.contains("map-style-load-failed") }.toList()
-        File(evidenceDir(), "03-basemap-events.txt").writeText(
-            if (diagnostic.isEmpty()) "No tile-completion or error event observed at capture time"
-            else diagnostic.joinToString("\n")
-        )
+        var evidence = "No background render event observed"
+        repeat(30) {
+            val diagnostic = device.executeShellCommand("logcat -d -s TripCanvasMap:I")
+                .lineSequence().filter { it.contains("basemap-tile-parsed") ||
+                    it.contains("basemap-render-after-tile") || it.contains("basemap-tile-error") ||
+                    it.contains("map-style-load-failed") }.toList()
+            if (diagnostic.isNotEmpty()) evidence = diagnostic.joinToString("\n")
+            val fallback = device.hasObject(By.textContains("지도 배경 로딩을 확인하지 못했습니다")) ||
+                device.hasObject(By.textContains("지도를 불러오지 못했습니다"))
+            if (diagnostic.any { it.contains("basemap-render-after-tile") } || fallback) {
+                File(evidenceDir(), "03-basemap-events.txt").writeText(
+                    evidence + "\nFallback visible: " + fallback
+                )
+                return
+            }
+            SystemClock.sleep(500)
+        }
+        File(evidenceDir(), "03-basemap-events.txt").writeText(evidence)
+        capture("99-basemap-status-not-confirmed")
+        throw AssertionError("Neither background render nor explicit load-failure state was observed")
     }
 
     private fun assertMapCentered(
