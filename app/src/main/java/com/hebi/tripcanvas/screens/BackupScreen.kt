@@ -35,6 +35,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import com.hebi.tripcanvas.data.TripRepository
 import com.hebi.tripcanvas.data.backup.BackupPasswordRequired
 import com.hebi.tripcanvas.data.backup.EncryptedTripBackup
+import com.hebi.tripcanvas.data.backup.PortableAttachmentBackupService
 import com.hebi.tripcanvas.data.backup.RestoreCheckpoint
 import com.hebi.tripcanvas.data.backup.RestoreSafetyBackupFailed
 import com.hebi.tripcanvas.data.backup.TripBackupCodec
@@ -70,6 +71,9 @@ fun BackupScreen(
     val service = remember(context, database) {
         TripBackupService(context.applicationContext, database)
     }
+    val mediaService = remember(context, database) {
+        PortableAttachmentBackupService(context.applicationContext, database)
+    }
     val scope = rememberCoroutineScope()
     val p = TripDesign.palette
     val existing by remember(tripRepository) { tripRepository.trips }
@@ -82,10 +86,15 @@ fun BackupScreen(
     var status by rememberSaveable { mutableStateOf<String?>(null) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     var exportDialog by remember { mutableStateOf(false) }
+    var mediaExportDialog by remember { mutableStateOf(false) }
     var importUri by remember { mutableStateOf<Uri?>(null) }
     var exportPassword by remember { mutableStateOf<CharArray?>(null) }
+    var mediaPassword by remember { mutableStateOf<CharArray?>(null) }
     DisposableEffect(Unit) {
-        onDispose { exportPassword?.fill('\u0000') }
+        onDispose {
+            exportPassword?.fill('\u0000')
+            mediaPassword?.fill('\u0000')
+        }
     }
     BackHandler(enabled = busy) {}
 
@@ -203,6 +212,38 @@ fun BackupScreen(
         ActivityResultContracts.CreateDocument("application/json")
     ) { uri -> saveBackup(uri, encrypted = false, password = null) }
 
+    val mediaPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/octet-stream")
+    ) { uri ->
+        val password = mediaPassword
+        mediaPassword = null
+        if (uri == null) {
+            password?.fill('\u0000')
+            error = null
+            status = "파일 저장을 취소했습니다. 기존 여행 데이터는 변경되지 않았습니다."
+        } else if (busy || password == null) {
+            password?.fill('\u0000')
+            error = "첨부 백업을 다시 시작해 주세요. 비밀번호 없이 저장하지 않습니다."
+        } else {
+            busy = true
+            error = null
+            status = null
+            scope.launch {
+                try {
+                    val result = mediaService.export(uri, password)
+                    status = "첨부 포함 백업 완료: 여행 " + result.trips + "개, 원본 " + result.files + "개"
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    error = "첨부 백업에 실패했습니다. 파일 형식·용량·원본 접근 권한 및 새 저장 위치를 확인하세요. 불완전한 백업 파일은 사용하지 마세요."
+                } finally {
+                    password.fill('\u0000')
+                    busy = false
+                }
+            }
+        }
+    }
+
     val importPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -223,6 +264,18 @@ fun BackupScreen(
                 exportPassword?.fill('\u0000')
                 exportPassword = password
                 encryptedPicker.launch("TripCanvas_backup_" + LocalDate.now().toString() + ".tcb")
+            }
+        )
+    }
+    if (mediaExportDialog) {
+        BackupPasswordDialog(
+            exporting = true,
+            onDismiss = { mediaExportDialog = false },
+            onConfirm = { password ->
+                mediaExportDialog = false
+                mediaPassword?.fill('\u0000')
+                mediaPassword = password
+                mediaPicker.launch("TripCanvas_media_" + LocalDate.now().toString() + ".tcm")
             }
         )
     }
@@ -282,6 +335,19 @@ fun BackupScreen(
                             "TripCanvas_backup_" + LocalDate.now().toString() + ".json"
                         )
                     }
+                )
+                Text(
+                    "첨부 포함 암호화 백업(.tcm)은 사진·예약 문서의 실제 원본을 포함합니다. " +
+                        "최대 100개, 개별 10MB, 원본 합계 20MB이며 열 수 없는 원본이 있으면 저장하지 않습니다. " +
+                        "이 형식의 앱 내 복원은 아직 지원되지 않습니다.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = p.textSecondary
+                )
+                TripSecondaryButton(
+                    label = "첨부 포함 암호화 백업 내보내기",
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = { mediaExportDialog = true }
                 )
             }
         }
