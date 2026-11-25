@@ -233,12 +233,13 @@ class TripCanvas2CScreenshotTest {
                 device.wait(Until.hasObject(By.desc("준비 완료 1개 / 전체 3개")), 5000)
             )
             capture("03-checklist-light")
-            click("완료")
-            awaitText("여권")
-            assertTrue("완료 필터에서 미완료 항목은 보이지 않아야 합니다.", !device.hasObject(By.text("충전기")))
+            selectChecklistFilter(
+                label = "완료", visible = listOf("여권"), hidden = listOf("충전기", "상비약")
+            )
             capture("03a-checklist-completed-filter")
-            click("전체")
-            click("미완료")
+            selectChecklistFilter(
+                label = "미완료", visible = listOf("충전기", "상비약"), hidden = listOf("여권")
+            )
             capture("04-checklist-incomplete-filter")
             openChecklistActions("충전기")
             val moveWhileFiltered = device.wait(Until.findObject(By.text("위로")), 3000)
@@ -255,7 +256,9 @@ class TripCanvas2CScreenshotTest {
                 runBlocking { database.checklistDao().ordered("qa-trip").map { it.id } }
             )
             if (device.hasObject(By.text("수정"))) device.pressBack()
-            click("전체")
+            selectChecklistFilter(
+                label = "전체", visible = listOf("여권", "충전기", "상비약"), hidden = emptyList()
+            )
             click("준비물 추가")
             awaitText("준비물 이름 *")
             capture("05-checklist-add-dialog")
@@ -560,6 +563,41 @@ class TripCanvas2CScreenshotTest {
             Thread.sleep(250)
         }
         return false
+    }
+
+    private fun selectChecklistFilter(label: String, visible: List<String>, hidden: List<String>) {
+        // FilterChip uses a selectable state; the actual tap and rendered list must agree.
+        val selector = By.text(label)
+        val selected = By.text(label).selected(true)
+        try {
+            awaitText(label, selector)
+            navigator.clickVisible(selector, "준비물 $label 필터")
+            assertTrue(
+                "준비물 $label 필터의 선택 상태가 반영되어야 합니다.",
+                device.wait(Until.hasObject(selected), 5000)
+            )
+            visible.forEach { title ->
+                awaitText(title, By.desc("$title 준비 여부"))
+            }
+            hidden.forEach { title ->
+                assertTrue(
+                    "준비물 $label 필터에서 $title 항목이 사라져야 합니다.",
+                    device.wait(Until.gone(By.desc("$title 준비 여부")), 5000)
+                )
+                assertTrue(
+                    "준비물 $label 필터에서 $title 문구가 보이지 않아야 합니다.",
+                    device.wait(Until.gone(By.text(title)), 5000)
+                )
+            }
+        } catch (error: AssertionError) {
+            val dir = File(context.getExternalFilesDir(null), "qa")
+            dir.mkdirs()
+            runCatching {
+                device.takeScreenshot(File(dir, "99-checklist-filter-failure.png"))
+                device.dumpWindowHierarchy(File(dir, "99-checklist-filter-hierarchy.xml"))
+            }
+            throw error
+        }
     }
 
     private fun openChecklistActions(itemTitle: String) {
