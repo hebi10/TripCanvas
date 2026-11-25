@@ -22,7 +22,11 @@ import com.hebi.tripcanvas.data.local.TripEntity
 import com.hebi.tripcanvas.data.local.TripParticipantEntity
 import com.hebi.tripcanvas.data.local.TripSettlementEntity
 import com.hebi.tripcanvas.domain.calculateSettlement
+import java.io.File
+import java.io.IOException
 import java.nio.charset.StandardCharsets
+import java.security.KeyStore
+import java.util.UUID
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -51,7 +55,7 @@ class TripCanvasA06BackupIoTest {
             )
             assertEquals(1, booking.attachments("a06-booking").first().size)
 
-            val service = TripBackupService(context, db)
+            val service = TripBackupService(context, db, TestCheckpointStore())
             assertEquals(expected, service.export(uri))
             val exportedText = context.contentResolver.openInputStream(uri)!!.use {
                 it.reader(StandardCharsets.UTF_8).readText()
@@ -98,7 +102,7 @@ class TripCanvasA06BackupIoTest {
                 it.write("{\"format\":\"wrong\",\"version\":99}".toByteArray(StandardCharsets.UTF_8))
             }
 
-            val service = TripBackupService(context, db)
+            val service = TripBackupService(context, db, TestCheckpointStore())
             assertTrue(runCatching { service.preview(uri) }.isFailure)
             assertEquals(existing, db.backupDao().snapshot())
         } finally {
@@ -116,7 +120,7 @@ class TripCanvasA06BackupIoTest {
         try {
             val expected = completeSnapshot()
             db.backupDao().replaceAll(expected)
-            val service = TripBackupService(context, db)
+            val service = TripBackupService(context, db, TestCheckpointStore())
             assertEquals(expected, service.exportEncrypted(uri, password))
             val encrypted = context.contentResolver.openInputStream(uri)!!.use { it.readBytes() }
             assertTrue(EncryptedTripBackup.isEncrypted(encrypted))
@@ -143,6 +147,118 @@ class TripCanvasA06BackupIoTest {
             context.contentResolver.delete(uri, null, null)
             db.close()
         }
+    }
+
+    @Test
+    fun automaticCheckpointRestoresPreviousRowsAndSameDeviceAttachmentLinks() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(context, TripDatabase::class.java).build()
+        val unique = UUID.randomUUID().toString()
+        val file = File(context.cacheDir, "tripcanvas-qa-checkpoint-" + unique)
+        val alias = "tripcanvas.qa.checkpoint." + unique
+        val store = DeviceRestoreCheckpointStore(context, file, alias)
+        try {
+            val previous = completeSnapshot()
+            db.backupDao().replaceAll(previous)
+            val booking = BookingRepository(db.bookingDao(), db.tripDao())
+            booking.attachDocument("a06-trip", "a06-booking",
+                "content://qa-a06.invalid/documents/private.pdf",
+                "test-document.pdf", "application/pdf")
+            val attachments = db.backupDao().allBookingAttachments()
+            val replacement = previous.copy(trips = previous.trips.map { it.copy(title = "QA 새 여행명") })
+            val service = TripBackupService(context, db, store)
+            assertFalse(service.hasRestoreCheckpoint())
+
+            service.restore(replacement)
+            assertEquals(replacement, db.backupDao().snapshot())
+            assertTrue(db.backupDao().allBookingAttachments().isEmpty())
+            assertTrue(service.hasRestoreCheckpoint())
+            val encrypted = file.readBytes()
+            assertFalse(String(encrypted, Charsets.ISO_8859_1).contains("QA-REFERENCE-EXAMPLE"))
+            assertFalse(String(encrypted, Charsets.ISO_8859_1).contains("test-document.pdf"))
+
+            // Reload the encrypted checkpoint using a new service/store instance.
+            val reopened = TripBackupService(context, db, DeviceRestoreCheckpointStore(context, file, alias))
+            val checkpoint = reopened.previewRestoreCheckpoint()
+            assertEquals(previous, checkpoint.snapshot)
+            assertEquals(attachments, checkpoint.attachments)
+            assertEquals(replacement, db.backupDao().snapshot())
+
+            reopened.restoreCheckpoint(checkpoint)
+            assertEquals(previous, db.backupDao().snapshot())
+            assertEquals(attachments, db.backupDao().allBookingAttachments())
+            val next = reopened.previewRestoreCheckpoint()
+            assertEquals(replacement, next.snapshot)
+            assertTrue(next.attachments.isEmpty())
+            assertFalse(next.id == checkpoint.id)
+            assertTrue(runCatching { reopened.restoreCheckpoint(checkpoint) }.isFailure)
+            assertEquals(previous, db.backupDao().snapshot())
+            assertEquals(attachments, db.backupDao().allBookingAttachments())
+
+            val tampered = file.readBytes().also {
+                it[it.lastIndex] = (it.last().toInt() xor 1).toByte()
+            }
+            file.writeBytes(tampered)
+            assertTrue(runCatching { reopened.previewRestoreCheckpoint() }.isFailure)
+            assertEquals(previous, db.backupDao().snapshot())
+            reopened.deleteRestoreCheckpoint()
+            assertFalse(reopened.hasRestoreCheckpoint())
+            assertEquals(previous, db.backupDao().snapshot())
+            assertEquals(attachments, db.backupDao().allBookingAttachments())
+        } finally {
+            runCatching { store.delete() }
+            runCatching { KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry(alias) }
+            db.close()
+        }
+    }
+
+    @Test
+    fun failedCheckpointWriteOrReadbackBlocksDestructiveReplacement() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(context, TripDatabase::class.java).build()
+        try {
+            val previous = completeSnapshot()
+            db.backupDao().replaceAll(previous)
+            val booking = BookingRepository(db.bookingDao(), db.tripDao())
+            booking.attachDocument("a06-trip", "a06-booking",
+                "content://qa-a06.invalid/documents/private.pdf",
+                "test-document.pdf", "application/pdf")
+            val attachments = db.backupDao().allBookingAttachments()
+            val replacement = previous.copy(trips = previous.trips.map { it.copy(title = "QA 새 여행명") })
+            val store = TestCheckpointStore()
+            val service = TripBackupService(context, db, store)
+            store.failSave = true
+            assertTrue(runCatching { service.restore(replacement) }.exceptionOrNull() is RestoreSafetyBackupFailed)
+            assertEquals(previous, db.backupDao().snapshot())
+            assertEquals(attachments, db.backupDao().allBookingAttachments())
+
+            store.failSave = false
+            store.failReadback = true
+            assertTrue(runCatching { service.restore(replacement) }.exceptionOrNull() is RestoreSafetyBackupFailed)
+            assertEquals(previous, db.backupDao().snapshot())
+            assertEquals(attachments, db.backupDao().allBookingAttachments())
+
+            store.failReadback = false
+            service.restore(replacement)
+            val checkpoint = service.previewRestoreCheckpoint()
+            store.failSave = true
+            assertTrue(runCatching { service.restoreCheckpoint(checkpoint) }.exceptionOrNull() is RestoreSafetyBackupFailed)
+            assertEquals(replacement, db.backupDao().snapshot())
+            assertTrue(db.backupDao().allBookingAttachments().isEmpty())
+        } finally {
+            db.close()
+        }
+    }
+
+    private class TestCheckpointStore : RestoreCheckpointStore {
+        private var saved: RestoreCheckpoint? = null
+        var failSave = false
+        var failReadback = false
+        override fun exists(): Boolean = saved != null
+        override fun save(checkpoint: RestoreCheckpoint) {
+            if (failSave) throw IOException("QA simulated write failure")
+            saved = checkpoint
+        }
+        override fun load(): RestoreCheckpoint? = if (failReadback) null else saved
+        override fun delete() { saved = null }
     }
 
     private fun createTestDocument(): Uri {
