@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -29,6 +31,7 @@ import com.hebi.tripcanvas.designsystem.components.TripSurfacePanel
 import com.hebi.tripcanvas.designsystem.components.TripTextField
 import com.hebi.tripcanvas.designsystem.theme.TripDesign
 import com.hebi.tripcanvas.designsystem.tokens.TripSpacing
+import com.hebi.tripcanvas.domain.collaboration.TripSharingBoundary
 import com.hebi.tripcanvas.ui.TripPageFrame
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -50,11 +53,12 @@ fun TripParticipantsScreen(
     var target by remember { mutableStateOf<TripParticipantEntity?>(null) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var showSharingReview by remember(tripId) { mutableStateOf(false) }
 
     TripPageFrame(title = "동행자 관리", onBack = onBack) {
         TripSectionHeading(
             title = "로컬 동행자 " + participants.size + "명",
-            supportingText = "계정이나 초대 없이 이 여행에서만 사용합니다. 동명이인도 각각 등록할 수 있습니다."
+            supportingText = "정산에 사용하는 기기 내 참가자입니다. 공동 여행 계정과 별개이며 동명이인도 각각 등록할 수 있습니다."
         )
         if (participants.isEmpty()) {
             TripEmptyState(
@@ -98,6 +102,31 @@ fun TripParticipantsScreen(
                 editor = null; draft = ""; error = null; showEditor = true
             }
         )
+        TripSectionHeading(
+            title = "공동 여행",
+            supportingText = "서버 미연결 · 현재 여행은 이 기기에만 저장됩니다."
+        )
+        TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier.padding(TripSpacing.md),
+                verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)
+            ) {
+                Text(
+                    "계정 없이 기존 여행과 정산을 계속 이용할 수 있습니다. 공동 여행의 로그인·초대·동기화는 운영 서버가 연결된 후 제공됩니다.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = palette.textSecondary
+                )
+                TripSecondaryButton(
+                    label = "공유 범위 미리보기",
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !busy,
+                    onClick = { showSharingReview = true }
+                )
+            }
+        }
+    }
+    if (showSharingReview) {
+        TripSharingReviewDialog(onDismiss = { showSharingReview = false })
     }
     if (showEditor) {
         AlertDialog(
@@ -169,4 +198,38 @@ fun TripParticipantsScreen(
             }
         )
     }
+}
+
+
+@Composable
+private fun TripSharingReviewDialog(onDismiss: () -> Unit) {
+    val palette = TripDesign.palette
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("공동 여행 공유 범위 미리보기") },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)
+            ) {
+                Text("현재 서버는 연결되지 않았습니다. 아래는 공동 여행 연결 전 검토할 공유 항목입니다. 이 화면에서는 데이터가 전송되지 않습니다.")
+                TripSharingBoundary.reviewSections.forEach { section ->
+                    Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
+                        Text(section.label, style = MaterialTheme.typography.titleSmall, color = palette.textPrimary)
+                        Text(section.description, style = MaterialTheme.typography.bodyMedium, color = palette.textSecondary)
+                    }
+                }
+                Text(TripSharingBoundary.excludedDescription, style = MaterialTheme.typography.bodyMedium, color = palette.textSecondary)
+                Text("예정된 권한", style = MaterialTheme.typography.titleSmall)
+                Text("소유자: 초대·역할 관리 및 여행 편집", style = MaterialTheme.typography.bodyMedium)
+                Text("편집자: 허용된 공동 데이터 편집", style = MaterialTheme.typography.bodyMedium)
+                Text("열람자: 허용된 공동 데이터 조회", style = MaterialTheme.typography.bodyMedium)
+                Text("실제 공유 전 별도의 범위 확인과 사용자 승인이 필요합니다. 로컬 동행자와 기존 정산 기록은 유지됩니다.",
+                    style = MaterialTheme.typography.bodyMedium, color = palette.textSecondary)
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("닫기", color = palette.primaryAction) } },
+        shape = RectangleShape,
+        containerColor = palette.surface
+    )
 }
