@@ -25,11 +25,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -53,6 +56,7 @@ import com.hebi.tripcanvas.ui.TripPageFrame
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
@@ -405,6 +409,8 @@ private fun TripMapCanvas(
         MapView(context).apply { onCreate(null as Bundle?) }
     }
     var map by remember { mutableStateOf<MapLibreMap?>(null) }
+    var mapSize by remember { mutableStateOf(IntSize.Zero) }
+    val pinInsetPx = with(LocalDensity.current) { 40.dp.roundToPx() }
     DisposableEffect(lifecycle, mapView) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
@@ -436,7 +442,7 @@ private fun TripMapCanvas(
                 }
             }
         },
-        modifier = Modifier.fillMaxWidth().height(mapHeight)
+        modifier = Modifier.fillMaxWidth().height(mapHeight).onSizeChanged { mapSize = it }
     )
     val currentOnSelected by rememberUpdatedState(onSelected)
     DisposableEffect(map) {
@@ -460,7 +466,7 @@ private fun TripMapCanvas(
             onDispose { ready.removeOnMapClickListener(listener) }
         }
     }
-    LaunchedEffect(map, pins, selectedId) {
+    LaunchedEffect(map, pins, selectedId, mapSize, pinInsetPx) {
         val ready = map ?: return@LaunchedEffect
         val style = ready.style ?: return@LaunchedEffect
         val features = pins.map { item ->
@@ -525,18 +531,39 @@ private fun TripMapCanvas(
                 )
             }
         }
-        val target = pins.firstOrNull { it.place.id == selectedId }
-            ?: pins.firstOrNull()
-        if (target != null) {
-            ready.moveCamera(
+        val focusedPin = pins.firstOrNull { it.place.id == selectedId }
+        val positions = pins.map { item ->
+            LatLng(requireNotNull(item.place.latitude), requireNotNull(item.place.longitude))
+        }.distinct()
+        when {
+            focusedPin != null -> ready.moveCamera(
                 CameraUpdateFactory.newLatLngZoom(
                     LatLng(
-                        requireNotNull(target.place.latitude),
-                        requireNotNull(target.place.longitude)
+                        requireNotNull(focusedPin.place.latitude),
+                        requireNotNull(focusedPin.place.longitude)
                     ),
                     12.0
                 )
             )
+            positions.size == 1 -> ready.moveCamera(
+                CameraUpdateFactory.newLatLngZoom(positions.single(), 12.0)
+            )
+            positions.size > 1 && mapSize.width > 0 && mapSize.height > 0 -> {
+                val bounds = LatLngBounds.Builder().includes(positions).build()
+                val padding = minOf(pinInsetPx, minOf(mapSize.width, mapSize.height) / 4)
+                val camera = ready.getCameraForLatLngBounds(
+                    bounds, intArrayOf(padding, padding, padding, padding)
+                )
+                if (camera != null && camera.target != null) {
+                    ready.moveCamera(
+                        CameraUpdateFactory.newLatLngZoom(
+                            requireNotNull(camera.target), minOf(camera.zoom, 12.0)
+                        )
+                    )
+                } else {
+                    ready.moveCamera(CameraUpdateFactory.newLatLngBounds(bounds, padding))
+                }
+            }
         }
     }
 }
