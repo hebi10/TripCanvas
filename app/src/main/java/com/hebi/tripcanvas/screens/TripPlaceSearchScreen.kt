@@ -52,7 +52,11 @@ fun TripPlaceSearchScreen(
     TripPageFrame(title = "외부 장소 검색", onBack = onBack) {
         TripSectionHeading(
             title = "장소명·주소 검색",
-            supportingText = "검색 버튼을 누를 때만 검색어를 Photon 서버에 전송합니다."
+            supportingText = if (searchService.available) {
+                "검색 버튼을 누를 때만 개발용 Photon 서버에 검색어를 전송합니다."
+            } else {
+                "운영 장소 검색 공급자가 아직 연결되지 않았습니다."
+            }
         )
         TripTextField(
             value = query,
@@ -68,9 +72,9 @@ fun TripPlaceSearchScreen(
         TripPrimaryButton(
             label = if (searching) "검색 중" else "장소 검색",
             modifier = Modifier.fillMaxWidth(),
-            enabled = !searching && savingId == null && query.trim().length in 2..80,
+            enabled = searchService.available && !searching && savingId == null && query.trim().length in 2..80,
             onClick = {
-                if (!searching) {
+                if (searchService.available && !searching) {
                     val submitted = query.trim()
                     searching = true
                     searched = false
@@ -99,8 +103,11 @@ fun TripPlaceSearchScreen(
             }
         )
         Text(
-            "검색 출처: OpenStreetMap · Photon(komoot). 공개 서버는 소규모 테스트용이며 " +
-                "조회 실패 또는 요청 제한 시 직접 장소 등록을 이용할 수 있습니다.",
+            if (searchService.available) {
+                "검색 출처: OpenStreetMap · Photon(komoot). 공개 서버는 개발용이며 조회 실패 또는 요청 제한 시 직접 장소 등록을 이용할 수 있습니다."
+            } else {
+                "배포용 앱에서는 공개 데모 서버를 사용하지 않습니다. 이전 화면에서 저장 장소를 확인하거나 직접 등록해 주세요."
+            },
             style = MaterialTheme.typography.bodySmall,
             color = palette.textSecondary
         )
