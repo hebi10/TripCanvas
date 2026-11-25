@@ -5,7 +5,7 @@ suite="${1:?Design QA suite required}"
 resolution="${2:?Screen resolution required}"
 density="${3:?Screen density required}"
 case "$suite" in
-  .github/scripts/run-2c-screen-qa.sh|.github/scripts/run-3a-map-qa.sh|.github/scripts/run-3b-screen-qa.sh|.github/scripts/run-design-start-qa.sh|.github/scripts/run-design-places-qa.sh) ;;
+  .github/scripts/run-2c-screen-qa.sh|.github/scripts/run-3a-map-qa.sh|.github/scripts/run-3b-screen-qa.sh|.github/scripts/run-design-start-qa.sh|.github/scripts/run-design-places-qa.sh|.github/scripts/run-design-expense-qa.sh) ;;
   *) echo "Unsupported design QA suite: $suite" >&2; exit 2 ;;
 esac
 mkdir -p qa-output
