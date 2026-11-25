@@ -9,8 +9,28 @@ import subprocess
 import sys
 
 REPO = 'hebi10/TripCanvas'
-WORKFLOW = '.github/workflows/android-ci.yml'
-REQUIRED_JOBS = {'android-build', 'room-migration-instrumentation'}
+ANDROID_CI = 'android-ci.yml'
+FINAL_QA = 'final-device-qa.yml'
+WORKFLOW_REQUIREMENTS = {
+    ANDROID_CI: (('push', 'workflow_dispatch'), {'android-build'}),
+    FINAL_QA: (('workflow_dispatch',), {
+        'Fresh install and first trip evidence',
+        'Verify exact frozen main SHA',
+        'backup-integrity / a06-backup-content-uri-api35',
+        'compatibility-apis / api-29-room-and-launch',
+        'compatibility-apis / api-36-room-and-launch',
+        'compatibility-apis / public-policy-http-and-content',
+        'finance-phone-tablet / 3b-screen-qa-phone',
+        'finance-phone-tablet / 3b-screen-qa-tablet',
+        'map-phone-tablet / map-qa-phone',
+        'map-phone-tablet / map-qa-tablet',
+        'room-migration / android-build',
+        'room-migration / room-migration-instrumentation',
+        'room-migration / validate-source',
+        'screens-phone-tablet / screen-qa-phone',
+        'screens-phone-tablet / screen-qa-tablet',
+    }),
+}
 
 
 class SourceError(RuntimeError):
@@ -48,12 +68,17 @@ def release_mode(env, event, commit_subject):
     return mode
 
 def verify_ci(sha, run, jobs):
-    if (run.get('head_sha') != sha or run.get('head_branch') != 'main' or run.get('conclusion') != 'success'
-            or run.get('event') not in ('push', 'workflow_dispatch') or run.get('path') != WORKFLOW):
-        raise SourceError('Required main verification has not succeeded for this exact source SHA')
+    workflow = run.get('path', '').removeprefix('.github/workflows/')
+    if workflow not in WORKFLOW_REQUIREMENTS or run.get('path') != f'.github/workflows/{workflow}':
+        raise SourceError('Unexpected release verification workflow')
+    events, required_jobs = WORKFLOW_REQUIREMENTS[workflow]
+    if (run.get('head_sha') != sha or run.get('head_branch') != 'main' or run.get('status') != 'completed'
+            or run.get('conclusion') != 'success' or run.get('event') not in events):
+        raise SourceError(f'{workflow} has not succeeded for this exact main SHA')
     successful = {job.get('name') for job in jobs if job.get('conclusion') == 'success'}
-    if not REQUIRED_JOBS.issubset(successful):
-        raise SourceError('All required Android build and instrumentation jobs must succeed')
+    missing = required_jobs - successful
+    if missing:
+        raise SourceError(f'{workflow} is missing successful jobs: ' + ', '.join(sorted(missing)))
 
 
 LISTING_ONLY_FILES = {
@@ -95,6 +120,18 @@ def gh(path):
         raise SourceError('Invalid GitHub verification metadata') from None
 
 
+def verify_main_workflow(sha, workflow):
+    events, _ = WORKFLOW_REQUIREMENTS[workflow]
+    runs = gh(f'repos/{REPO}/actions/workflows/{workflow}/runs?head_sha={sha}&branch=main&per_page=100')['workflow_runs']
+    candidates = [run for run in runs if run.get('head_sha') == sha and run.get('head_branch') == 'main'
+                  and run.get('event') in events]
+    if not candidates:
+        raise SourceError(f'Required {workflow} run is missing for the exact main source SHA')
+    run = max(candidates, key=lambda value: value['id'])
+    verify_ci(sha, run, gh(f'repos/{REPO}/actions/runs/{run["id"]}/jobs?per_page=100')['jobs'])
+    return run['id']
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--assert-current', metavar='SHA')
@@ -112,13 +149,8 @@ def main():
         ancestry = subprocess.run(['git', 'merge-base', '--is-ancestor', sha, 'origin/main'], capture_output=True, check=False)
         if ancestry.returncode:
             raise SourceError('Release source is not an ancestor of the trusted main branch')
-        runs = gh(f'repos/{REPO}/actions/workflows/android-ci.yml/runs?head_sha={sha}&branch=main&per_page=100')['workflow_runs']
-        candidates = [run for run in runs if run.get('conclusion') == 'success' and run.get('event') in ('push', 'workflow_dispatch')]
-        if not candidates:
-            raise SourceError('Required TripCanvas Android CI run is missing for the exact main source SHA')
-        run = max(candidates, key=lambda value: value['id'])
-        jobs = gh(f'repos/{REPO}/actions/runs/{run["id"]}/jobs?per_page=100')['jobs']
-        verify_ci(sha, run, jobs)
+        build_run_id = verify_main_workflow(sha, ANDROID_CI)
+        qa_run_id = verify_main_workflow(sha, FINAL_QA)
         subject = subprocess.run(['git', 'show', '-s', '--format=%s', sha], capture_output=True, check=False, text=True)
         if subject.returncode:
             raise SourceError('Could not inspect the trusted release commit subject')
@@ -127,8 +159,8 @@ def main():
             if is_store_listing_only(changed_main_paths(sha)):
                 mode = 'skip'
         with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
-            output.write(f'sha={sha}\nverify_run_id={run["id"]}\nrelease_mode={mode}\n')
-        print(f'Trusted main source {sha}; required CI run {run["id"]} passed')
+            output.write(f'sha={sha}\nverify_run_id={build_run_id}\nrelease_mode={mode}\n')
+        print(f'Trusted main source {sha}; Android CI {build_run_id} and final QA {qa_run_id} passed')
         return 0
     except (SourceError, KeyError, OSError, ValueError) as error:
         message = str(error) if isinstance(error, SourceError) else 'Source metadata is missing or invalid'
