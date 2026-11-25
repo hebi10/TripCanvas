@@ -805,6 +805,82 @@ class TripCanvas2CScreenshotTest {
         }
     }
 
+    @Test
+    fun captureSettingsAndBackupSafety() {
+        val before = runBlocking { database.backupDao().snapshot() }
+        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+            fun hideKeyboard() {
+                var visible = false
+                scenario.onActivity { activity ->
+                    visible = androidx.core.view.ViewCompat.getRootWindowInsets(activity.window.decorView)
+                        ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) == true
+                }
+                if (visible) device.pressBack()
+            }
+            awaitText("내 여행")
+            click("설정")
+            awaitText("화면 모드")
+            capture("s01-settings-light")
+            awaitText("암호화 백업(.tcb)")
+            awaitText("첨부 포함 암호화 백업(.tcm)")
+            awaitText("평문 JSON")
+            capture("s02-settings-backup-formats")
+            awaitText("광고 제거")
+            capture("s03-settings-subscription")
+            awaitText("TripCanvas · " + com.hebi.tripcanvas.BuildConfig.VERSION_NAME +
+                " (" + com.hebi.tripcanvas.BuildConfig.VERSION_CODE + ")")
+            capture("s04-settings-version")
+            navigator.clickVisible(By.text("로컬 백업·복원"), "로컬 백업·복원", "로컬 데이터 백업")
+            awaitText("암호화 백업 내보내기")
+            capture("s05-backup-overview")
+            click("암호화 백업 내보내기")
+            awaitText("암호화 백업 비밀번호 설정")
+            capture("s06-backup-password-empty")
+            val fields = device.findObjects(By.clazz("android.widget.EditText"))
+            assertEquals(2, fields.size)
+            fields[0].setText("qa".repeat(3))
+            hideKeyboard()
+            awaitText("12자 이상 입력해 주세요.")
+            capture("s07-backup-password-short")
+            val passwordFields = device.findObjects(By.clazz("android.widget.EditText"))
+            assertEquals(2, passwordFields.size)
+            passwordFields[0].setText("qa".repeat(8))
+            passwordFields[1].setText("qb".repeat(8))
+            hideKeyboard()
+            awaitText("비밀번호가 일치하지 않습니다.")
+            capture("s08-backup-password-mismatch")
+            click("취소")
+            awaitText("첨부 포함 암호화 백업 내보내기")
+            capture("s09-backup-media-format")
+            awaitText("평문 JSON 내보내기")
+            capture("s10-backup-plain-format")
+            awaitText("첨부 포함 백업 선택 및 검증")
+            capture("s11-backup-restore-options")
+            awaitText("복원 전 안전 백업")
+            capture("s12-backup-checkpoint")
+            navigator.clickVisible(By.text("사용하지 않는 복원 파일 정리"), "사용하지 않는 복원 파일 정리", "복원 파일 정리")
+            awaitText("복원 파일 정리")
+            capture("s13-backup-cleanup-confirm")
+            click("취소")
+            assertEquals(before, runBlocking { database.backupDao().snapshot() })
+            device.pressBack()
+            awaitText("설정")
+            runBlocking { tripPreferencesRepository(context).saveThemeMode(TripThemeMode.Dark) }
+            device.executeShellCommand("settings put system font_scale 1.6")
+            Thread.sleep(1200)
+            scenario.recreate()
+            awaitText("화면 모드")
+            capture("s14-settings-dark-font160")
+            navigator.clickVisible(By.text("로컬 백업·복원"), "로컬 백업·복원", "로컬 데이터 백업")
+            awaitText("암호화 백업 내보내기")
+            capture("s15-backup-dark-font160")
+            awaitText("복원 전 안전 백업")
+            awaitText("사용하지 않는 복원 파일 정리")
+            capture("s16-checkpoint-dark-font160")
+            assertEquals(before, runBlocking { database.backupDao().snapshot() })
+        }
+    }
+
     private fun assertStatusBarBackground(dark: Boolean) {
         val screenshot = File(context.cacheDir, "qa-status-bar.png")
         assertTrue("Status bar screenshot failed", device.takeScreenshot(screenshot))
