@@ -3,9 +3,11 @@ package com.hebi.tripcanvas.data.backup
 import android.content.Context
 import android.net.Uri
 import androidx.room.withTransaction
+import com.hebi.tripcanvas.data.local.BookingAttachmentEntity
 import com.hebi.tripcanvas.data.local.TripBackupSnapshot
 import com.hebi.tripcanvas.data.local.TripDatabase
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.charset.CodingErrorAction
@@ -132,6 +134,78 @@ class TripBackupService(
             database.withTransaction {
                 saveCurrentCheckpoint()
                 database.backupDao().replaceAll(snapshot)
+            }
+        }
+    }
+
+    internal suspend fun cleanupUnusedRestoredMedia(): Int = withContext(Dispatchers.IO) {
+        restoreMutex.withLock {
+            database.withTransaction {
+                val dao = database.backupDao()
+                val current = dao.snapshot()
+                val checkpoint = if (checkpointStore.exists()) {
+                    requireNotNull(checkpointStore.load()).also(RestoreCheckpointCodec::validate)
+                } else null
+                val references = current.moments.mapNotNull { it.photoUri } +
+                    dao.allBookingAttachments().map { it.uriString } +
+                    checkpoint?.snapshot?.moments.orEmpty().mapNotNull { it.photoUri } +
+                    checkpoint?.attachments.orEmpty().map { it.uriString }
+                val authority = context.packageName + ".restoredmedia"
+                val batchName = Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+                val mediaName = Regex("[0-9]{3}\\.(jpg|png|webp|gif|heic|heif|avif|pdf)")
+                val protected = references.mapNotNull { value ->
+                    val uri = Uri.parse(value)
+                    if (uri.authority != authority) null else {
+                        val segments = uri.pathSegments
+                        require(uri.scheme == "content" && segments.size == 4 &&
+                            segments[0] == "restored_media" && segments[1].matches(batchName) &&
+                            segments[2] == "media" && segments[3].matches(mediaName)) {
+                            "복원 파일 참조를 확인하지 못해 정리를 중단했습니다."
+                        }
+                        segments[1]
+                    }
+                }.toSet()
+                val root = File(context.filesDir, "restored_media")
+                var deleted = 0
+                if (root.exists()) {
+                    require(root.canonicalFile.parentFile == context.filesDir.canonicalFile)
+                    requireNotNull(root.listFiles()).forEach { batch ->
+                        if (batch.name in protected || !batch.name.matches(batchName) ||
+                            !batch.isDirectory || batch.canonicalFile.parentFile != root.canonicalFile
+                        ) return@forEach
+                        val media = File(batch, "media")
+                        if (!media.isDirectory || media.canonicalFile.parentFile != batch.canonicalFile ||
+                            batch.listFiles()?.map { it.name } != listOf("media")
+                        ) return@forEach
+                        val files = media.listFiles() ?: return@forEach
+                        if (files.any { !it.isFile || !it.name.matches(mediaName) ||
+                                it.canonicalFile.parentFile != media.canonicalFile
+                            }) return@forEach
+                        files.forEach { file ->
+                            if (file.delete()) deleted++
+                        }
+                        if (media.listFiles()?.isEmpty() == true) media.delete()
+                        if (batch.listFiles()?.isEmpty() == true) batch.delete()
+                    }
+                }
+                deleted
+            }
+        }
+    }
+
+    internal suspend fun restorePortable(
+        snapshot: TripBackupSnapshot,
+        attachments: List<BookingAttachmentEntity>
+    ) = withContext(Dispatchers.IO) {
+        RestoreCheckpointCodec.validate(
+            RestoreCheckpoint("portable", System.currentTimeMillis(), snapshot, attachments)
+        )
+        restoreMutex.withLock {
+            database.withTransaction {
+                saveCurrentCheckpoint()
+                val dao = database.backupDao()
+                dao.replaceAll(snapshot)
+                dao.insertBookingAttachments(attachments)
             }
         }
     }
