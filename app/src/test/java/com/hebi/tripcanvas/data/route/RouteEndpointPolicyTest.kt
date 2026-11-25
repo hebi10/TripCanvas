@@ -38,6 +38,11 @@ class RouteEndpointPolicyTest {
         assertFalse(isFreshRouteEstimate(valid.copy(distanceMeters = -1L), now))
     }
 
+    @Test fun configuredUrlAloneCannotEnableProductionRouteRequests() {
+        assertTrue(ConfiguredTripRouteProvider.create("https://routes.tripcanvas.example.com/v1/routes", null) == null)
+        assertTrue(ConfiguredTripRouteProvider.fromBuildConfig() == null)
+    }
+
     @Test fun checksCoordinatesWithoutApproximation() {
         assertTrue(ConfiguredTripRouteProvider.validCoordinates(-90.0, 180.0))
         assertFalse(ConfiguredTripRouteProvider.validCoordinates(91.0, 0.0))
