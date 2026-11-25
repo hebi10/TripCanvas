@@ -2,6 +2,7 @@ package com.hebi.tripcanvas.data.backup
 
 import android.content.ContentValues
 import android.content.Context
+import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Environment
 import android.provider.MediaStore
@@ -21,15 +22,21 @@ import com.hebi.tripcanvas.data.local.TripDatabase
 import com.hebi.tripcanvas.data.local.TripEntity
 import com.hebi.tripcanvas.data.local.TripParticipantEntity
 import com.hebi.tripcanvas.data.local.TripSettlementEntity
+import com.hebi.tripcanvas.data.local.TravelMomentEntity
 import com.hebi.tripcanvas.domain.calculateSettlement
 import java.io.File
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.nio.charset.StandardCharsets
 import java.security.KeyStore
 import java.util.UUID
+import java.util.zip.ZipInputStream
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -261,10 +268,113 @@ class TripCanvasA06BackupIoTest {
         override fun delete() { saved = null }
     }
 
-    private fun createTestDocument(): Uri {
+    @Test
+    fun portableAttachmentExportPreservesOriginalBytesAndRedactsSourceUris() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(context, TripDatabase::class.java).build()
+        val photo = createTestDocument("image/png", "png")
+        val pdf = createTestDocument("application/pdf", "pdf")
+        val output = createTestDocument("application/octet-stream", "tcm")
+        val password = "fixture-media-passphrase".toCharArray()
+        try {
+            val png = ByteArrayOutputStream().also { out ->
+                val bitmap = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888)
+                try { assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)) }
+                finally { bitmap.recycle() }
+            }.toByteArray()
+            val pdfBytes = "%PDF-1.4\nQA portable document fixture\n%%EOF\n".toByteArray(Charsets.UTF_8)
+            context.contentResolver.openOutputStream(photo, "wt")!!.use { it.write(png) }
+            context.contentResolver.openOutputStream(pdf, "wt")!!.use { it.write(pdfBytes) }
+            val source = completeSnapshot().copy(moments = listOf(
+                TravelMomentEntity("a06-photo", "a06-trip", null, photo.toString(), "QA photo", 1000L)
+            ))
+            db.backupDao().replaceAll(source)
+            val booking = BookingRepository(db.bookingDao(), db.tripDao())
+            booking.attachDocument("a06-trip", "a06-booking", pdf.toString(), "QA-original.pdf", "application/pdf")
+            val links = db.backupDao().allBookingAttachments()
+            val service = PortableAttachmentBackupService(context, db)
+            val exported = service.export(output, password)
+            assertEquals(2, exported.files)
+            assertEquals(png.size + pdfBytes.size, exported.originalBytes)
+            assertEquals(source, db.backupDao().snapshot())
+            assertEquals(links, db.backupDao().allBookingAttachments())
+            assertArrayEquals(png, context.contentResolver.openInputStream(photo)!!.use { it.readBytes() })
+            assertArrayEquals(pdfBytes, context.contentResolver.openInputStream(pdf)!!.use { it.readBytes() })
+
+            val encrypted = context.contentResolver.openInputStream(output)!!.use { it.readBytes() }
+            assertFalse(String(encrypted, Charsets.ISO_8859_1).contains("QA-original.pdf"))
+            val plaintext = PortableMediaArchive.decryptVerified(encrypted, password)
+            try {
+                val entries = linkedMapOf<String, ByteArray>()
+                ZipInputStream(ByteArrayInputStream(plaintext)).use { zip ->
+                    while (true) {
+                        val entry = zip.nextEntry ?: break
+                        assertFalse(entries.containsKey(entry.name))
+                        entries[entry.name] = zip.readBytes()
+                        zip.closeEntry()
+                    }
+                }
+                assertEquals(setOf("snapshot.json", "media/000.png", "media/001.pdf", "manifest.json"), entries.keys)
+                assertArrayEquals(png, entries.getValue("media/000.png"))
+                assertArrayEquals(pdfBytes, entries.getValue("media/001.pdf"))
+                val snapshotText = entries.getValue("snapshot.json").toString(Charsets.UTF_8)
+                val manifestText = entries.getValue("manifest.json").toString(Charsets.UTF_8)
+                assertFalse(snapshotText.contains(photo.toString()))
+                assertFalse(manifestText.contains(pdf.toString()))
+                assertEquals(PortableMediaArchive.photoPlaceholder(0),
+                    TripBackupCodec.decode(snapshotText).moments.single().photoUri)
+                val manifest = JSONObject(manifestText)
+                assertEquals(2, manifest.getJSONArray("media").length())
+                assertEquals(exported.originalBytes, manifest.getInt("originalBytes"))
+                val photoRow = manifest.getJSONArray("media").getJSONObject(0)
+                assertEquals("a06-photo", photoRow.getString("id"))
+                assertEquals(PortableMediaArchive.digest(ByteArrayInputStream(png)).second, photoRow.getString("sha256"))
+                val pdfRow = manifest.getJSONArray("media").getJSONObject(1)
+                assertEquals("a06-booking", pdfRow.getString("bookingId"))
+                assertEquals(links.single().id, pdfRow.getString("id"))
+                assertEquals("QA-original.pdf", pdfRow.getString("displayName"))
+                assertEquals(PortableMediaArchive.digest(ByteArrayInputStream(pdfBytes)).second, pdfRow.getString("sha256"))
+            } finally {
+                plaintext.fill(0)
+            }
+            assertTrue(runCatching { service.export(photo, password) }.isFailure)
+            assertTrue(runCatching { service.export(output, password) }.isFailure)
+            assertArrayEquals(png, context.contentResolver.openInputStream(photo)!!.use { it.readBytes() })
+            assertArrayEquals(encrypted, context.contentResolver.openInputStream(output)!!.use { it.readBytes() })
+            assertEquals(source, db.backupDao().snapshot())
+        } finally {
+            password.fill('\u0000')
+            listOf(photo, pdf, output).forEach { context.contentResolver.delete(it, null, null) }
+            db.close()
+        }
+    }
+
+    @Test
+    fun missingAttachmentSourceLeavesDestinationEmptyAndDatabaseUnchanged() = runBlocking {
+        val db = Room.inMemoryDatabaseBuilder(context, TripDatabase::class.java).build()
+        val output = createTestDocument("application/octet-stream", "tcm")
+        val password = "fixture-media-passphrase".toCharArray()
+        try {
+            val source = completeSnapshot()
+            db.backupDao().replaceAll(source)
+            val booking = BookingRepository(db.bookingDao(), db.tripDao())
+            booking.attachDocument("a06-trip", "a06-booking",
+                "content://qa-a06.invalid/documents/missing.pdf", "missing.pdf", "application/pdf")
+            val links = db.backupDao().allBookingAttachments()
+            assertTrue(runCatching { PortableAttachmentBackupService(context, db).export(output, password) }.isFailure)
+            assertEquals(-1, context.contentResolver.openInputStream(output)!!.use { it.read() })
+            assertEquals(source, db.backupDao().snapshot())
+            assertEquals(links, db.backupDao().allBookingAttachments())
+        } finally {
+            password.fill('\u0000')
+            context.contentResolver.delete(output, null, null)
+            db.close()
+        }
+    }
+
+    private fun createTestDocument(mime: String = "application/json", suffix: String = "json"): Uri {
         val values = ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, "tripcanvas-qa-a06-${System.nanoTime()}.json")
-            put(MediaStore.MediaColumns.MIME_TYPE, "application/json")
+            put(MediaStore.MediaColumns.DISPLAY_NAME, "tripcanvas-qa-a06-${System.nanoTime()}.$suffix")
+            put(MediaStore.MediaColumns.MIME_TYPE, mime)
             put(
                 MediaStore.MediaColumns.RELATIVE_PATH,
                 Environment.DIRECTORY_DOWNLOADS + "/TripCanvasQA"
