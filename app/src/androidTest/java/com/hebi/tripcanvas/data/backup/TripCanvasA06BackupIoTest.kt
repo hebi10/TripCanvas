@@ -32,6 +32,8 @@ import java.nio.charset.StandardCharsets
 import java.security.KeyStore
 import java.util.UUID
 import java.util.zip.ZipInputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
@@ -275,6 +277,10 @@ class TripCanvasA06BackupIoTest {
         val pdf = createTestDocument("application/pdf", "pdf")
         val output = createTestDocument("application/octet-stream", "tcm")
         val password = "fixture-media-passphrase".toCharArray()
+        val wrong = "fixture-wrong-passphrase".toCharArray()
+        val managed = File(context.filesDir, "restored_media")
+        val initialDirectories = managed.listFiles()?.map { it.name }?.toSet().orEmpty()
+        fun newDirectories(): List<File> = managed.listFiles()?.filter { it.name !in initialDirectories }.orEmpty()
         try {
             val png = ByteArrayOutputStream().also { out ->
                 val bitmap = Bitmap.createBitmap(2, 2, Bitmap.Config.ARGB_8888)
@@ -341,8 +347,61 @@ class TripCanvasA06BackupIoTest {
             assertArrayEquals(png, context.contentResolver.openInputStream(photo)!!.use { it.readBytes() })
             assertArrayEquals(encrypted, context.contentResolver.openInputStream(output)!!.use { it.readBytes() })
             assertEquals(source, db.backupDao().snapshot())
+
+            val preview = service.preview(output, password)
+            assertEquals(2, preview.media.size)
+            assertEquals(exported.originalBytes, preview.originalBytes)
+            assertEquals(source, db.backupDao().snapshot())
+            assertTrue(newDirectories().isEmpty())
+            assertTrue(runCatching { service.preview(output, wrong) }.isFailure)
+            val checkpoint = TestCheckpointStore()
+            val restore = TripBackupService(context, db, checkpoint)
+            val beforeRestore = source.copy(trips = source.trips.map { it.copy(title = "QA 이전 여행") })
+            db.backupDao().replaceAll(beforeRestore)
+            db.backupDao().insertBookingAttachments(links)
+            checkpoint.failSave = true
+            assertTrue(runCatching { service.restore(output, password, preview, restore) }.exceptionOrNull() is RestoreSafetyBackupFailed)
+            assertEquals(beforeRestore, db.backupDao().snapshot())
+            assertEquals(links, db.backupDao().allBookingAttachments())
+            assertTrue(newDirectories().isEmpty())
+            checkpoint.failSave = false
+
+            val changed = encrypted.copyOf().also { it[it.lastIndex] = (it.last().toInt() xor 1).toByte() }
+            context.contentResolver.openOutputStream(output, "wt")!!.use { it.write(changed) }
+            assertTrue(runCatching { service.restore(output, password, preview, restore) }.isFailure)
+            assertEquals(beforeRestore, db.backupDao().snapshot())
+            assertTrue(newDirectories().isEmpty())
+            context.contentResolver.openOutputStream(output, "wt")!!.use { it.write(encrypted) }
+
+            service.restore(output, password, preview, restore)
+            val current = db.backupDao().snapshot()
+            val currentPhoto = Uri.parse(current.moments.single().photoUri)
+            val currentLinks = db.backupDao().allBookingAttachments()
+            val currentPdf = Uri.parse(currentLinks.single().uriString)
+            assertEquals(context.packageName + ".restoredmedia", currentPhoto.authority)
+            assertEquals(context.packageName + ".restoredmedia", currentPdf.authority)
+            assertEquals(source, current.copy(moments = current.moments.map { it.copy(photoUri = photo.toString()) }))
+            assertEquals(links, currentLinks.map { it.copy(uriString = pdf.toString()) })
+            assertEquals("image/png", context.contentResolver.getType(currentPhoto))
+            assertEquals("application/pdf", context.contentResolver.getType(currentPdf))
+            assertArrayEquals(png, context.contentResolver.openInputStream(currentPhoto)!!.use { it.readBytes() })
+            assertArrayEquals(pdfBytes, context.contentResolver.openInputStream(currentPdf)!!.use { it.readBytes() })
+            assertTrue(runCatching { context.contentResolver.openOutputStream(currentPdf, "wt")?.close() }.isFailure)
+            assertArrayEquals(png, context.contentResolver.openInputStream(photo)!!.use { it.readBytes() })
+            assertArrayEquals(pdfBytes, context.contentResolver.openInputStream(pdf)!!.use { it.readBytes() })
+            val previous = restore.previewRestoreCheckpoint()
+            assertEquals(beforeRestore, previous.snapshot)
+            assertEquals(links, previous.attachments)
+            restore.restoreCheckpoint(previous)
+            assertEquals(beforeRestore, db.backupDao().snapshot())
+            assertEquals(links, db.backupDao().allBookingAttachments())
+            // The newly saved checkpoint still references the restored copies.
+            assertArrayEquals(png, context.contentResolver.openInputStream(currentPhoto)!!.use { it.readBytes() })
+            assertArrayEquals(pdfBytes, context.contentResolver.openInputStream(currentPdf)!!.use { it.readBytes() })
         } finally {
             password.fill('\u0000')
+            wrong.fill('\u0000')
+            newDirectories().forEach { it.deleteRecursively() }
             listOf(photo, pdf, output).forEach { context.contentResolver.delete(it, null, null) }
             db.close()
         }
@@ -369,6 +428,39 @@ class TripCanvasA06BackupIoTest {
             context.contentResolver.delete(output, null, null)
             db.close()
         }
+    }
+
+    @Test
+    fun archiveReaderRejectsTraversalMissingLinksAndWrongDigest() = runBlocking {
+        val snapshot = completeSnapshot().copy(moments = listOf(
+            TravelMomentEntity("a06-photo", "a06-trip", null,
+                PortableMediaArchive.photoPlaceholder(0), "QA photo", 1000L)
+        ))
+        val bytes = byteArrayOf(1, 2, 3)
+        val sha = PortableMediaArchive.digest(ByteArrayInputStream(bytes)).second
+        fun archive(path: String, row: JSONObject): ByteArray =
+            ByteArrayOutputStream().also { out ->
+                ZipOutputStream(out).use { zip ->
+                    fun entry(name: String, data: ByteArray) {
+                        zip.putNextEntry(ZipEntry(name)); zip.write(data); zip.closeEntry()
+                    }
+                    entry("snapshot.json", TripBackupCodec.encode(snapshot).toByteArray(Charsets.UTF_8))
+                    entry(path, bytes)
+                    entry("manifest.json", JSONObject().put("format", "tripcanvas-portable-media")
+                        .put("version", 1).put("originalBytes", bytes.size)
+                        .put("media", org.json.JSONArray().put(row)).toString().toByteArray(Charsets.UTF_8))
+                }
+            }.toByteArray()
+        fun row() = JSONObject().put("kind", "photo").put("id", "a06-photo")
+            .put("path", "media/000.png").put("mimeType", "image/png")
+            .put("bytes", bytes.size).put("sha256", sha)
+        val fingerprint = "a".repeat(64)
+        val valid = PortableMediaReader.inspect(archive("media/000.png", row()), fingerprint)
+        assertEquals(1, valid.media.size)
+        assertTrue(runCatching { PortableMediaReader.inspect(archive("../outside.png", row()), fingerprint) }.isFailure)
+        assertTrue(runCatching { PortableMediaReader.inspect(archive("media/000.png", row().put("id", "missing")), fingerprint) }.isFailure)
+        assertTrue(runCatching { PortableMediaReader.inspect(archive("media/000.png", row().put("sha256", "0".repeat(64))), fingerprint) }.isFailure)
+        assertTrue(runCatching { PortableMediaReader.inspect(archive("media/000.png", row().put("mimeType", "application/pdf")), fingerprint) }.isFailure)
     }
 
     private fun createTestDocument(mime: String = "application/json", suffix: String = "json"): Uri {
