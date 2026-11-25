@@ -18,6 +18,8 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -164,65 +166,70 @@ class PortableAttachmentBackupService(
         approved: PortableAttachmentPreview,
         backupService: TripBackupService = TripBackupService(context, database)
     ) = withContext(Dispatchers.IO) {
-        require(source.scheme == "content" && source.authority != null)
-        val coroutine = currentCoroutineContext()
-        val root = File(context.filesDir, "restored_media")
-        val directory = File(root, UUID.randomUUID().toString())
-        val media = File(directory, "media")
-        val authority = context.packageName + ".restoredmedia"
-        var committed = false
-        try {
-            // Limit copies retained for current data and previous recovery points.
-            require(ownedBytes(root) + approved.originalBytes <= MAX_MANAGED_BYTES) {
-                "복원한 첨부 저장 공간이 부족합니다. 사용하지 않는 복원 파일을 정리해 주세요."
-            }
-            check(media.mkdirs()) { "첨부 복원 저장 공간을 만들 수 없습니다." }
-            val verified = readVerified(source, password, approved.archiveSha256) { path ->
-                coroutine.ensureActive()
-                // The reader accepts only canonical sequential media/NNN.ext paths.
-                val file = File(media, path.substringAfter('/'))
-                require(file.canonicalFile.parentFile == media.canonicalFile && !file.exists())
-                object : FileOutputStream(file) {
-                    override fun close() {
-                        try { fd.sync() } finally { super.close() }
+        mediaMutex.withLock {
+            require(source.scheme == "content" && source.authority != null)
+            val coroutine = currentCoroutineContext()
+            val root = File(context.filesDir, "restored_media")
+            val directory = File(root, UUID.randomUUID().toString())
+            val media = File(directory, "media")
+            val authority = context.packageName + ".restoredmedia"
+            var committed = false
+            try {
+                // Limit copies retained for current data and previous recovery points.
+                require(ownedBytes(root) + approved.originalBytes <= MAX_MANAGED_BYTES) {
+                    "복원한 첨부 저장 공간이 부족합니다. 사용하지 않는 복원 파일을 정리해 주세요."
+                }
+                check(media.mkdirs()) { "첨부 복원 저장 공간을 만들 수 없습니다." }
+                val verified = readVerified(source, password, approved.archiveSha256) { path ->
+                    coroutine.ensureActive()
+                    // The reader accepts only canonical sequential media/NNN.ext paths.
+                    val file = File(media, path.substringAfter('/'))
+                    require(file.canonicalFile.parentFile == media.canonicalFile && !file.exists())
+                    object : FileOutputStream(file) {
+                        override fun close() {
+                            try { fd.sync() } finally { super.close() }
+                        }
                     }
                 }
-            }
-            require(verified == approved) { "미리보기 이후 첨부 백업이 변경되었습니다." }
-            val photoLinks = mutableMapOf<String, String>()
-            val attachments = mutableListOf<BookingAttachmentEntity>()
-            verified.media.forEach { record ->
-                coroutine.ensureActive()
-                val file = File(media, record.path.substringAfter('/'))
-                val uri = FileProvider.getUriForFile(context, authority, file)
-                val actual = context.contentResolver.openInputStream(uri)?.use {
-                    PortableMediaArchive.digest(it, PortableMediaArchive.MAX_FILE_BYTES.toLong())
-                } ?: throw IOException("복원 파일을 다시 열 수 없습니다.")
-                require(actual == (record.bytes.toLong() to record.sha256))
-                if (record.kind == "photo") {
-                    photoLinks[record.id] = uri.toString()
-                } else {
-                    attachments.add(BookingAttachmentEntity(
-                        record.id, requireNotNull(record.bookingId), uri.toString(),
-                        requireNotNull(record.displayName), record.mimeType, requireNotNull(record.addedAtMillis)
-                    ))
+                require(verified == approved) { "미리보기 이후 첨부 백업이 변경되었습니다." }
+                val photoLinks = mutableMapOf<String, String>()
+                val attachments = mutableListOf<BookingAttachmentEntity>()
+                verified.media.forEach { record ->
+                    coroutine.ensureActive()
+                    val file = File(media, record.path.substringAfter('/'))
+                    val uri = FileProvider.getUriForFile(context, authority, file)
+                    val actual = context.contentResolver.openInputStream(uri)?.use {
+                        PortableMediaArchive.digest(it, PortableMediaArchive.MAX_FILE_BYTES.toLong())
+                    } ?: throw IOException("복원 파일을 다시 열 수 없습니다.")
+                    require(actual == (record.bytes.toLong() to record.sha256))
+                    if (record.kind == "photo") {
+                        photoLinks[record.id] = uri.toString()
+                    } else {
+                        attachments.add(BookingAttachmentEntity(
+                            record.id, requireNotNull(record.bookingId), uri.toString(),
+                            requireNotNull(record.displayName), record.mimeType, requireNotNull(record.addedAtMillis)
+                        ))
+                    }
                 }
+                val restored = verified.snapshot.copy(moments = verified.snapshot.moments.map { moment ->
+                    if (moment.photoUri == null) moment
+                    else moment.copy(photoUri = requireNotNull(photoLinks[moment.id]))
+                })
+                coroutine.ensureActive()
+                // The DB transaction saves a verified checkpoint first. Once it commits,
+                // cancellation must not remove the files now referenced by Room.
+                withContext(NonCancellable) {
+                    backupService.restorePortable(restored, attachments)
+                    committed = true
+                }
+            } finally {
+                if (!committed) directory.deleteRecursively()
             }
-            val restored = verified.snapshot.copy(moments = verified.snapshot.moments.map { moment ->
-                if (moment.photoUri == null) moment
-                else moment.copy(photoUri = requireNotNull(photoLinks[moment.id]))
-            })
-            coroutine.ensureActive()
-            // The DB transaction saves a verified checkpoint first. Once it commits,
-            // cancellation must not remove the files now referenced by Room.
-            withContext(NonCancellable) {
-                backupService.restorePortable(restored, attachments)
-                committed = true
-            }
-        } finally {
-            if (!committed) directory.deleteRecursively()
         }
     }
+
+    suspend fun cleanupUnused(backupService: TripBackupService = TripBackupService(context, database)): Int =
+        withContext(Dispatchers.IO) { mediaMutex.withLock { backupService.cleanupUnusedRestoredMedia() } }
 
     private fun readVerified(
         source: Uri,
@@ -254,6 +261,7 @@ class PortableAttachmentBackupService(
         if (!root.exists()) 0L else root.walkTopDown().filter { it.isFile }.sumOf { it.length() }
 
     private companion object {
+        val mediaMutex = Mutex()
         const val MAX_MANAGED_BYTES = 200L * 1024 * 1024
     }
 
