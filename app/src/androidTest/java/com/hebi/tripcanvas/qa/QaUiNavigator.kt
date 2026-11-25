@@ -1,6 +1,8 @@
 package com.hebi.tripcanvas.qa
 
+import android.os.Build
 import android.os.SystemClock
+import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.BySelector
 import androidx.test.uiautomator.Direction
@@ -62,22 +64,17 @@ internal class QaUiNavigator(private val device: UiDevice) {
                     scroll(down = true)
                     return@repeat
                 }
-                // UIAutomator clicks the center of the visible bounds.
-                // A button whose edge extends into the margin remains tappable
-                // when its center is inside the system-bar-safe viewport.
-                val tapY = bounds.centerY()
-                if (tapY > safeBottom) {
-                    lastObservation = "클릭 중심이 하단 안전영역 밖: bounds=$bounds, tapY=$tapY, safeBottom=$safeBottom"
-                    scroll(down = true)
-                    return@repeat
-                }
-                if (tapY < safeTop) {
-                    lastObservation = "클릭 중심이 상단 안전영역 밖: bounds=$bounds, tapY=$tapY, safeTop=$safeTop"
-                    scroll(down = false)
+                // A low button can still expose a usable strip above system navigation.
+                val visibleTop = maxOf(bounds.top, safeTop)
+                val visibleBottom = minOf(bounds.bottom, safeBottom)
+                if (visibleBottom - visibleTop < maxOf(1, bounds.height() / 4)) {
+                    lastObservation = "클릭 가능한 안전영역 부족: bounds=$bounds, safe=$safeTop..$safeBottom"
+                    scroll(down = bounds.centerY() >= safeTop)
                     return@repeat
                 }
 
-                val injected = device.click(bounds.centerX(), bounds.centerY())
+                val tapY = (visibleTop + visibleBottom) / 2
+                val injected = device.click(bounds.centerX(), tapY)
                 if (!injected) {
                     lastObservation = "터치 이벤트 전송 실패: bounds=$bounds"
                     SystemClock.sleep(200)
@@ -85,6 +82,10 @@ internal class QaUiNavigator(private val device: UiDevice) {
                 }
                 deliveredTaps++
                 device.waitForIdle()
+                if (expectedAfter != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    // Compose can render a toggled control before UiAutomator refreshes its cached label.
+                    InstrumentationRegistry.getInstrumentation().uiAutomation.clearCache()
+                }
                 if (expectedAfter == null ||
                     device.wait(Until.hasObject(By.text(expectedAfter)), 4000)
                 ) return
