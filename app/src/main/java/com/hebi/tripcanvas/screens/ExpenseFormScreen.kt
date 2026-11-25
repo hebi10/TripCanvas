@@ -11,6 +11,11 @@ import com.hebi.tripcanvas.domain.ocr.ReceiptSuggestion
 import com.hebi.tripcanvas.domain.ocr.ReceiptSuggestionParser
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.KeyboardOptions
@@ -28,6 +33,9 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.input.KeyboardType
 import com.hebi.tripcanvas.data.ExpenseRepository
 import com.hebi.tripcanvas.data.PlaceRepository
@@ -173,7 +181,8 @@ fun ExpenseFormScreen(
 
     TripPageFrame(
         title = if (itemId == null) "지출 추가" else "지출 편집",
-        onBack = requestBack
+        onBack = requestBack,
+        contentSpacing = TripSpacing.md
     ) {
         when {
             trip == null || state == ExpenseFormState.Loading ->
@@ -206,31 +215,50 @@ fun ExpenseFormScreen(
                     Text(it, style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.error)
                 }
-                TripTextField(
-                    value = input.amount,
-                    onValueChange = {
-                        input = input.copy(amount = it)
-                        errors = errors - ExpenseField.Amount; failed = false
-                    },
-                    label = "금액 *",
-                    placeholder = "예: 12000 또는 12.50",
-                    supportingText = errors[ExpenseField.Amount]
-                        ?: "0보다 큰 금액 · 쉼표 없이 입력",
-                    isError = errors.containsKey(ExpenseField.Amount),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
-                )
-                TripTextField(
-                    value = input.currencyCode,
-                    onValueChange = {
-                        input = input.copy(currencyCode = it)
-                        errors = errors - ExpenseField.Currency; failed = false
-                    },
-                    label = "통화 *",
-                    supportingText = errors[ExpenseField.Currency]
-                        ?: "ISO 4217 코드 · 기본 통화 " + trip!!.currencyCode,
-                    isError = errors.containsKey(ExpenseField.Currency),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii)
-                )
+                val amountField: @Composable (Modifier) -> Unit = { modifier ->
+                    TripTextField(
+                        modifier = modifier,
+                        value = input.amount,
+                        onValueChange = {
+                            input = input.copy(amount = it)
+                            errors = errors - ExpenseField.Amount; failed = false
+                        },
+                        label = "금액 *",
+                        placeholder = "예: 12000 또는 12.50",
+                        supportingText = errors[ExpenseField.Amount]
+                            ?: "0보다 큰 금액 · 쉼표 없이 입력",
+                        isError = errors.containsKey(ExpenseField.Amount),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                    )
+                }
+                val currencyField: @Composable (Modifier) -> Unit = { modifier ->
+                    TripTextField(
+                        modifier = modifier,
+                        value = input.currencyCode,
+                        onValueChange = {
+                            input = input.copy(currencyCode = it)
+                            errors = errors - ExpenseField.Currency; failed = false
+                        },
+                        label = "통화 *",
+                        supportingText = errors[ExpenseField.Currency]
+                            ?: "ISO 4217 코드 · 기본 통화 " + trip!!.currencyCode,
+                        isError = errors.containsKey(ExpenseField.Currency),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii)
+                    )
+                }
+                BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    if (maxWidth >= 360.dp && LocalDensity.current.fontScale < 1.3f) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
+                            amountField(Modifier.weight(1.25f))
+                            currencyField(Modifier.weight(1f))
+                        }
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)) {
+                            amountField(Modifier.fillMaxWidth())
+                            currencyField(Modifier.fillMaxWidth())
+                        }
+                    }
+                }
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs),
                     verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
@@ -358,14 +386,36 @@ fun ExpenseFormScreen(
         AlertDialog(
             onDismissRequest = { receiptSuggestion = null },
             title = { Text("영수증 인식 후보 확인") },
+            shape = RectangleShape,
+            containerColor = p.surface,
             text = {
-                Text(
-                    "금액: " + (suggestion.amount ?: "인식 불확실") +
-                        "\n통화: " + (suggestion.currencyCode ?: "현재 입력 유지") +
-                        "\n날짜: " + (suggestion.date ?: "현재 입력 유지") +
-                        "\n상호 후보: " + (suggestion.merchant ?: "없음") +
-                        "\n\n반영 후에도 직접 수정할 수 있습니다. 저장은 별도로 진행합니다."
-                )
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(TripSpacing.md)
+                ) {
+                    val candidates = listOf(
+                        "금액" to (suggestion.amount ?: "인식 불확실"),
+                        "통화" to (suggestion.currencyCode ?: "현재 입력 유지"),
+                        "날짜" to (suggestion.date ?: "현재 입력 유지"),
+                        "상호 후보 (참고)" to (suggestion.merchant ?: "없음")
+                    )
+                    candidates.forEachIndexed { index, (label, value) ->
+                        Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.xxs)) {
+                            Text(label, style = MaterialTheme.typography.labelMedium, color = p.textSecondary)
+                            Text(
+                                value,
+                                style = if (index == 0) MaterialTheme.typography.titleLarge
+                                    else MaterialTheme.typography.bodyLarge,
+                                color = p.textPrimary
+                            )
+                        }
+                    }
+                    Text(
+                        "반영 후에도 직접 수정할 수 있습니다. 저장은 별도로 진행합니다.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = p.textSecondary
+                    )
+                }
             },
             confirmButton = {
                 TextButton(onClick = {
