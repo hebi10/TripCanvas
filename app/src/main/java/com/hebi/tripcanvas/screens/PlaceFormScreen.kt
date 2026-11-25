@@ -2,9 +2,10 @@ package com.hebi.tripcanvas.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -17,6 +18,8 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
 import com.hebi.tripcanvas.data.PlaceRepository
 import com.hebi.tripcanvas.data.local.PlaceEntity
 import com.hebi.tripcanvas.designsystem.components.TripConfirmDialog
@@ -91,7 +94,8 @@ fun PlaceFormScreen(
 
     TripPageFrame(
         title = if (placeId == null) "새 장소" else "장소 편집",
-        onBack = requestBack
+        onBack = requestBack,
+        contentSpacing = TripSpacing.md
     ) {
         when {
             state == PlaceFormState.Loading || (placeId != null && loaded != null && !hydrated) ->
@@ -132,9 +136,10 @@ fun PlaceFormScreen(
                     isError = errors.containsKey(PlaceField.Note),
                     singleLine = false
                 )
-                Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
-                    Text("좌표 · 선택 사항")
+                TripSectionHeading(title = "좌표 · 선택 사항")
+                val latitudeField: @Composable (Modifier) -> Unit = { modifier ->
                     TripTextField(
+                        modifier = modifier,
                         value = input.latitude,
                         onValueChange = { input = input.copy(latitude = it); errors = emptyMap() },
                         label = "위도",
@@ -142,7 +147,10 @@ fun PlaceFormScreen(
                         supportingText = errors[PlaceField.Latitude],
                         isError = errors.containsKey(PlaceField.Latitude)
                     )
+                }
+                val longitudeField: @Composable (Modifier) -> Unit = { modifier ->
                     TripTextField(
+                        modifier = modifier,
                         value = input.longitude,
                         onValueChange = { input = input.copy(longitude = it); errors = emptyMap() },
                         label = "경도",
@@ -150,6 +158,19 @@ fun PlaceFormScreen(
                         supportingText = errors[PlaceField.Longitude],
                         isError = errors.containsKey(PlaceField.Longitude)
                     )
+                }
+                BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    if (maxWidth >= 360.dp && LocalDensity.current.fontScale < 1.3f) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
+                            latitudeField(Modifier.weight(1f))
+                            longitudeField(Modifier.weight(1f))
+                        }
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)) {
+                            latitudeField(Modifier.fillMaxWidth())
+                            longitudeField(Modifier.fillMaxWidth())
+                        }
+                    }
                 }
                 if (saveFailed) {
                     TripErrorState(
