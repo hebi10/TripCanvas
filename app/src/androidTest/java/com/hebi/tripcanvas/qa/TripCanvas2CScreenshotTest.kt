@@ -570,20 +570,30 @@ class TripCanvas2CScreenshotTest {
             awaitText("장소 검색")
             enterFirstField(placeName)
             awaitText(placeName)
-            listOf("선택", "상세", "편집", "삭제").forEach { action ->
-                val description = "$action: $placeName"
-                awaitText(description, By.desc(description))
-                val node = device.findObject(By.desc(description))
-                    ?: throw AssertionError("큰 글꼴에서 장소 버튼이 누락되었습니다: $description")
-                assertTrue("장소 버튼은 클릭 가능해야 합니다: $description", node.isClickable)
-                val bounds = node.visibleBounds
-                assertTrue("장소 버튼이 가로로 잘렸습니다: $description ($bounds)",
-                    bounds.width() > 0 && bounds.left >= 0 && bounds.right <= device.displayWidth)
+            try {
+                awaitText("선택: $placeName", By.desc("선택: $placeName"))
+                capture("p08-place-select-dark-font160")
+                listOf("선택", "상세", "편집", "삭제").forEach { action ->
+                    val target = resolvePlaceAction(action, placeName)
+                    val bounds = target.visibleBounds
+                    assertTrue("장소 버튼은 활성 상태여야 합니다: $action", target.isEnabled)
+                    assertTrue("장소 버튼의 화면 내 터치 영역이 필요합니다: $action ($bounds)",
+                        bounds.width() > 0 && bounds.height() > 0 &&
+                            bounds.left >= 0 && bounds.right <= device.displayWidth)
+                }
+                val select = resolvePlaceAction("선택", placeName)
+                val bounds = select.visibleBounds
+                assertTrue("장소 선택 터치 전송 실패", device.click(bounds.centerX(), bounds.centerY()))
+                awaitText("장소 연결 해제")
+            } catch (failure: AssertionError) {
+                val dir = File(context.getExternalFilesDir(null), "qa")
+                dir.mkdirs()
+                runCatching {
+                    capture("99-place-selection-font160-failure")
+                    device.dumpWindowHierarchy(File(dir, "99-place-selection-font160-hierarchy.xml"))
+                }
+                throw failure
             }
-            awaitText("선택: $placeName", By.desc("선택: $placeName"))
-            capture("p08-place-select-dark-font160")
-            navigator.clickVisible(By.desc("선택: $placeName"), "일정 장소 선택")
-            awaitText("장소 연결 해제")
             awaitText(placeName)
             capture("p09-schedule-place-linked-dark-font160")
             awaitText("일정 저장")
@@ -594,6 +604,41 @@ class TripCanvas2CScreenshotTest {
             })
             capture("p10-schedule-saved-dark-font160")
         }
+    }
+
+    private fun resolvePlaceAction(action: String, placeName: String): UiObject2 {
+        val description = "$action: $placeName"
+        awaitText(description, By.desc(description))
+        repeat(4) {
+            try {
+                val node = device.wait(Until.findObject(By.desc(description)), 3000)
+                    ?: throw AssertionError("장소 버튼 설명이 없습니다: $description")
+                if (node.isClickable) return node
+
+                // A Compose semantics modifier can expose a description on a
+                // wrapper rather than on the native clickable Button node.
+                val inner = node.findObjects(By.clickable(true)).filter { child ->
+                    child.text == action || child.findObject(By.text(action)) != null
+                }
+                if (inner.size == 1) return inner.single()
+
+                var parent = node.parent
+                repeat(8) {
+                    val candidate = parent ?: return@repeat
+                    if (candidate.isClickable &&
+                        (candidate.contentDescription == description ||
+                            candidate.text == action ||
+                            candidate.findObject(By.text(action)) != null)) {
+                        return candidate
+                    }
+                    parent = candidate.parent
+                }
+                throw AssertionError("설명에 대응하는 실제 클릭 가능한 버튼을 찾지 못했습니다: $description")
+            } catch (_: StaleObjectException) {
+                Thread.sleep(200)
+            }
+        }
+        throw AssertionError("화면 갱신 후 장소 버튼을 다시 찾지 못했습니다: $description")
     }
 
     @Test
