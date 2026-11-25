@@ -1,6 +1,7 @@
 package com.hebi.tripcanvas.data.search
 
 import android.os.SystemClock
+import com.hebi.tripcanvas.BuildConfig
 import com.hebi.tripcanvas.data.network.ExpiringQueryCache
 import com.hebi.tripcanvas.data.network.QueryThrottle
 import com.hebi.tripcanvas.data.network.QueryRateLimitedException
@@ -23,13 +24,16 @@ import org.json.JSONObject
  * No autocomplete or background requests. Replace service for production use.
  */
 class PhotonPlaceSearch(
-    private val endpoint: String = "https://photon.komoot.io/api/"
+    private val endpoint: String = PlaceSearchAccessPolicy.PHOTON_DEMO_ENDPOINT
 ) {
+    val available: Boolean = PlaceSearchAccessPolicy.photonDemoAllowed(BuildConfig.DEBUG, endpoint)
+
     private val mutex = Mutex()
     private val cached = ExpiringQueryCache<String, List<RemotePlace>>(64, 600_000L)
     private val throttle = QueryThrottle(1_500L)
 
     suspend fun search(query: String): List<RemotePlace> = mutex.withLock {
+        check(available) { "운영 장소 검색 공급자가 연결되지 않았습니다." }
         val term = query.trim()
         require(term.length in 2..80) { "검색어는 2~80자로 입력해 주세요." }
         val cacheKey = term.lowercase(Locale.ROOT)
@@ -45,7 +49,7 @@ class PhotonPlaceSearch(
     }
 
     private fun request(term: String): List<RemotePlace> {
-        require(endpoint.startsWith("https://"))
+        check(available) { "운영 장소 검색 공급자가 연결되지 않았습니다." }
         val url = URL(endpoint + "?q=" + URLEncoder.encode(term, "UTF-8") + "&limit=8&lang=ko")
         val connection = url.openConnection() as HttpURLConnection
         connection.connectTimeout = 7_000
