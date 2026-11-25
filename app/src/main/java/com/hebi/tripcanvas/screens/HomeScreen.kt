@@ -29,6 +29,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
@@ -123,11 +124,11 @@ fun HomeScreen(
                     contentDescription = if (searchVisible) "검색 닫기" else "여행 검색",
                     tint = p.textPrimary)
             }
-            IconButton(
+            TextButton(
                 onClick = onOpenSettings,
-                modifier = Modifier.size(TripSizes.minimumTouchTarget)
+                modifier = Modifier.heightIn(min = TripSizes.minimumTouchTarget)
             ) {
-                Icon(TripIcons.Settings, contentDescription = "설정", tint = p.textPrimary)
+                Text("설정", color = p.textPrimary)
             }
         }
     ) {
@@ -364,18 +365,15 @@ private fun HomeTripMetrics(summary: HomeTripSummary, currency: String) {
     val budget = summary.budget?.takeIf { it.currencyCode == currency }
     val usage = budget?.let { budgetUsageProgress(summary.spent, BigDecimal(it.amountDecimal)) }
     Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TripSpacing.sm)) {
-            Column(Modifier.weight(1f)) {
-                Text("일정", style = MaterialTheme.typography.labelMedium, color = p.textSecondary)
-                Text(summary.schedules.toString() + "개", style = MaterialTheme.typography.titleMedium)
-            }
-            Column(Modifier.weight(1.65f)) {
-                Text("경비", style = MaterialTheme.typography.labelMedium, color = p.textSecondary)
-                Text(displayMoney(summary.spent.toPlainString(), currency), style = MaterialTheme.typography.titleMedium)
-            }
-            Column(Modifier.weight(1f)) {
-                Text("준비물", style = MaterialTheme.typography.labelMedium, color = p.textSecondary)
-                Text(summary.completed.toString() + " / " + summary.total, style = MaterialTheme.typography.titleMedium)
+        if (LocalDensity.current.fontScale >= 1.4f) {
+            HomeMetric("일정", summary.schedules.toString() + "개")
+            HomeMetric("경비", displayMoney(summary.spent.toPlainString(), currency))
+            HomeMetric("준비물", summary.completed.toString() + " / " + summary.total)
+        } else {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TripSpacing.sm)) {
+                HomeMetric("일정", summary.schedules.toString() + "개", Modifier.weight(1f))
+                HomeMetric("경비", displayMoney(summary.spent.toPlainString(), currency), Modifier.weight(1.65f))
+                HomeMetric("준비물", summary.completed.toString() + " / " + summary.total, Modifier.weight(1f))
             }
         }
         usage?.let {
@@ -388,5 +386,13 @@ private fun HomeTripMetrics(summary: HomeTripSummary, currency: String) {
             checklistCompletionFraction(summary.completed, summary.total),
             "준비 완료 " + summary.completed + " / " + summary.total
         )
+    }
+}
+
+@Composable
+private fun HomeMetric(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(TripSpacing.xxs)) {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = TripDesign.palette.textSecondary)
+        Text(value, style = MaterialTheme.typography.titleMedium, color = TripDesign.palette.textPrimary)
     }
 }

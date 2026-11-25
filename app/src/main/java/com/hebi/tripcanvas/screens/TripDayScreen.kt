@@ -140,14 +140,14 @@ fun TripDayScreen(
     TripPageFrame(
         title = "여행 일정",
         onBack = onBack,
-        bottomAction = if (trip != null) ({
-            TripPrimaryButton(
+        bottomAction = {
+            if (trip != null) TripPrimaryButton(
                 label = "일정 추가",
                 onClick = { onAdd(selectedDate) },
                 enabled = selectedDate.isNotBlank() && !busy,
                 modifier = Modifier.fillMaxWidth()
             )
-        }) else null
+        }
     ) {
         if (tripState == DayTripState.Loading) {
             TripLoadingState("여행 정보를 불러오는 중")

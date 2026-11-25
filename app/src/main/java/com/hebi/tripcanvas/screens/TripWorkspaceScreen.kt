@@ -7,6 +7,18 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.DateRange
+import androidx.compose.material.icons.outlined.ShoppingCart
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Place
+import androidx.compose.material.icons.outlined.List
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -402,8 +414,8 @@ private fun WorkspaceOverview(
         )
         TripSurfacePanel(modifier = Modifier.fillMaxWidth()) {
             Column(
-                modifier = Modifier.padding(TripSpacing.md),
-                verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)
+                modifier = Modifier.padding(TripSpacing.sm),
+                verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
             ) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TripSpacing.md)) {
                     WorkspaceMetric("여행 일정", if (isPreview) "데이터 없음" else schedules.size.toString() + "개", "등록된 일정", Modifier.weight(1f))
@@ -464,7 +476,7 @@ private fun WorkspaceMetric(
                 overflow = TextOverflow.Ellipsis
             )
         }
-        Text(
+        if (supportingText.isNotBlank()) Text(
             supportingText,
             style = MaterialTheme.typography.bodySmall,
             color = p.textSecondary
@@ -618,25 +630,29 @@ private fun WorkspaceToolCard(
         tonalElevation = 0.dp,
         shadowElevation = 0.dp
     ) {
-        Column(
-            modifier = Modifier.padding(
-                horizontal = TripSpacing.md,
-                vertical = TripSpacing.sm
-            ),
-            verticalArrangement = Arrangement.spacedBy(TripSpacing.xxs)
+        Row(
+            modifier = Modifier.padding(TripSpacing.sm),
+            horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                tool.title,
-                style = MaterialTheme.typography.titleMedium,
-                color = p.textPrimary
-            )
-            Text(
-                tool.description,
-                style = MaterialTheme.typography.bodySmall,
-                color = p.textSecondary,
-                maxLines = if (compactPrimary) 2 else Int.MAX_VALUE,
-                overflow = TextOverflow.Ellipsis
-            )
+            val icon = when (tool.actionLabel) {
+                "일정 열기" -> Icons.Outlined.DateRange
+                "경비 열기" -> Icons.Outlined.ShoppingCart
+                "준비물 열기" -> Icons.Outlined.CheckCircle
+                "지도 열기", "저장 장소 관리" -> Icons.Outlined.Place
+                "오늘의 여행 열기" -> Icons.Outlined.DateRange
+                "여행 기록 열기" -> Icons.Outlined.FavoriteBorder
+                "예약 열기" -> Icons.Outlined.Email
+                "동행자 열기" -> Icons.Outlined.Person
+                "정산 열기", "리포트 열기" -> Icons.Outlined.List
+                else -> Icons.Outlined.Info
+            }
+            Icon(icon, contentDescription = null, tint = p.textPrimary, modifier = Modifier.size(22.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(TripSpacing.xxs)) {
+                Text(tool.title, style = MaterialTheme.typography.titleMedium, color = p.textPrimary)
+                Text(tool.description, style = MaterialTheme.typography.bodySmall, color = p.textSecondary,
+                    maxLines = if (compactPrimary) 2 else Int.MAX_VALUE, overflow = TextOverflow.Ellipsis)
+            }
         }
     }
 }

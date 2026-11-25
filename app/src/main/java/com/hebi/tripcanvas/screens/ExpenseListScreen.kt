@@ -165,7 +165,7 @@ fun ExpenseListScreen(
                             modifier = Modifier.padding(TripSpacing.md),
                             verticalArrangement = Arrangement.spacedBy(TripSpacing.sm)
                         ) {
-                            Text("총 사용 금액", style = MaterialTheme.typography.labelLarge, color = p.textSecondary)
+                            Text("지출 합계", style = MaterialTheme.typography.labelLarge, color = p.textSecondary)
                             Text(spentValue, style = MaterialTheme.typography.headlineMedium, color = p.textPrimary)
                             FlowRow(
                                 modifier = Modifier.fillMaxWidth(),
