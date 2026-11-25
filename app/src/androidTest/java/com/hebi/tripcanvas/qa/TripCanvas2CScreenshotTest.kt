@@ -566,9 +566,9 @@ class TripCanvas2CScreenshotTest {
     }
 
     private fun selectChecklistFilter(label: String, visible: List<String>, hidden: List<String>) {
-        // FilterChip uses a selectable state; the actual tap and rendered list must agree.
+        // Compose FilterChip exposes checked state on the clickable parent, not selected on its text.
         val selector = By.text(label)
-        val selected = By.text(label).selected(true)
+        val selected = By.checkable(true).checked(true).clickable(true).hasChild(By.text(label))
         try {
             awaitText(label, selector)
             navigator.clickVisible(selector, "준비물 $label 필터")
