@@ -14,6 +14,7 @@ interface TripCollaborationGateway {
     suspend fun requestInvite(tripId: String, inviteeAccountId: String, role: TripMemberRole): String
     suspend fun revokeInvite(tripId: String, inviteId: String)
     suspend fun acceptInvite(inviteId: String)
+    suspend fun declineInvite(inviteId: String)
     suspend fun leaveTrip(tripId: String)
     suspend fun changeMemberRole(tripId: String, memberAccountId: String, role: TripMemberRole)
     suspend fun revokeMember(tripId: String, memberAccountId: String)
@@ -31,6 +32,8 @@ class DisabledTripCollaborationGateway : TripCollaborationGateway {
     override suspend fun revokeInvite(tripId: String, inviteId: String): Unit =
         throw TripCollaborationUnavailable()
     override suspend fun acceptInvite(inviteId: String): Unit =
+        throw TripCollaborationUnavailable()
+    override suspend fun declineInvite(inviteId: String): Unit =
         throw TripCollaborationUnavailable()
     override suspend fun leaveTrip(tripId: String): Unit =
         throw TripCollaborationUnavailable()
