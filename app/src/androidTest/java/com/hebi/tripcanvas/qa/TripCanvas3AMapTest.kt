@@ -183,6 +183,31 @@ class TripCanvas3AMapTest {
                 awaitText("지도 선택 · 제주도청")
                 assertMapCentered(scenario, 33.4888, 126.4975)
                 capture("06b-map-second-place-camera-focused")
+                val previousMap = AtomicReference<MapView?>(null)
+                scenario.onActivity { activity ->
+                    previousMap.set(findMapView(activity.window.decorView))
+                }
+                assertTrue("지도 다시 불러오기 전 지도 인스턴스가 필요합니다.", previousMap.get() != null)
+                click("지도 다시 불러오기")
+                for (attempt in 0 until 25) {
+                    val changed = AtomicReference(false)
+                    scenario.onActivity { activity ->
+                        val view = findMapView(activity.window.decorView)
+                        changed.set(view != null && view !== previousMap.get())
+                    }
+                    if (changed.get()) break
+                    SystemClock.sleep(200)
+                }
+                scenario.onActivity { activity ->
+                    val view = findMapView(activity.window.decorView)
+                    assertTrue("지도 재조회 시 새 지도 인스턴스가 생성되어야 합니다.",
+                        view != null && view !== previousMap.get())
+                }
+                awaitRenderedMapPins(scenario)
+                awaitText("선택 날짜 전체 · 장소 3개 · 지도 핀 2개")
+                assertMapCentered(scenario, 33.4888, 126.4975)
+                awaitText("지도 선택 · 제주도청")
+                capture("06c-map-reload-keeps-selected-place")
                 click("외부 장소 검색")
                 awaitText("검색어")
                 capture("07-external-search-input")
@@ -230,7 +255,7 @@ class TripCanvas3AMapTest {
         }
         File(evidenceDir(), "03-initial-map-render-status.txt").writeText(
             "state=$state\n" +
-                "ready refers to the renderer callback; visual tile content must be checked in the PNG.\n"
+                "ready requires a non-pin tile parse and a fully rendered configured viewport; visual tile content must be checked in the PNG.\n"
         )
         if (state == "still-loading") {
             capture("99-map-initial-render-timeout")
