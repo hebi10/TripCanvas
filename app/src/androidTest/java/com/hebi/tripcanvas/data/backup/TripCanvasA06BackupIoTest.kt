@@ -398,6 +398,14 @@ class TripCanvasA06BackupIoTest {
             // The newly saved checkpoint still references the restored copies.
             assertArrayEquals(png, context.contentResolver.openInputStream(currentPhoto)!!.use { it.readBytes() })
             assertArrayEquals(pdfBytes, context.contentResolver.openInputStream(currentPdf)!!.use { it.readBytes() })
+            service.cleanupUnused(restore)
+            assertArrayEquals(png, context.contentResolver.openInputStream(currentPhoto)!!.use { it.readBytes() })
+            assertArrayEquals(pdfBytes, context.contentResolver.openInputStream(currentPdf)!!.use { it.readBytes() })
+            restore.deleteRestoreCheckpoint()
+            assertTrue(service.cleanupUnused(restore) >= 2)
+            assertTrue(newDirectories().isEmpty())
+            assertArrayEquals(png, context.contentResolver.openInputStream(photo)!!.use { it.readBytes() })
+            assertArrayEquals(pdfBytes, context.contentResolver.openInputStream(pdf)!!.use { it.readBytes() })
         } finally {
             password.fill('\u0000')
             wrong.fill('\u0000')
