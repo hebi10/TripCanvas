@@ -129,7 +129,8 @@ fun BookingFormScreen(
 
     TripPageFrame(
         title = if (bookingId == null) "예약 추가" else "예약 편집",
-        onBack = requestBack
+        onBack = requestBack,
+        contentSpacing = TripSpacing.md
     ) {
         if (!hydrated) {
             TripLoadingState("예약 정보를 불러오는 중")
@@ -138,7 +139,17 @@ fun BookingFormScreen(
                 title = "예약 정보",
                 supportingText = "예약·결제를 대행하지 않고 기기에만 저장합니다."
             )
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
+            TripTextField(
+                value = input.title,
+                onValueChange = { input = input.copy(title = it); error = null },
+                label = "예약명 *",
+                supportingText = "1~100자"
+            )
+            Text("예약 유형", style = MaterialTheme.typography.titleSmall, color = palette.textPrimary)
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs),
+                verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
+            ) {
                 BookingType.entries.forEach { type ->
                     TripChoiceChip(
                         label = type.label,
@@ -147,12 +158,7 @@ fun BookingFormScreen(
                     )
                 }
             }
-            TripTextField(
-                value = input.title,
-                onValueChange = { input = input.copy(title = it); error = null },
-                label = "예약명 *",
-                supportingText = "1~100자"
-            )
+            TripSectionHeading(title = "예약 일정")
             TripTextField(
                 value = input.startAtLocal,
                 onValueChange = { input = input.copy(startAtLocal = it); error = null },
@@ -167,6 +173,7 @@ fun BookingFormScreen(
                     color = palette.textSecondary
                 )
             }
+            TripSectionHeading(title = "확인번호·메모")
             TripTextField(
                 value = input.referenceNumber,
                 onValueChange = { input = input.copy(referenceNumber = it); error = null },
@@ -180,6 +187,7 @@ fun BookingFormScreen(
             )
             TripSecondaryButton(
                 label = if (showReference) "확인번호 숨기기" else "확인번호 보기",
+                modifier = Modifier.fillMaxWidth(),
                 onClick = { showReference = !showReference }
             )
             Text(
@@ -236,33 +244,39 @@ fun BookingFormScreen(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = palette.textSecondary
                             )
-                            TripSecondaryButton(
-                                label = "파일 열기",
-                                onClick = {
-                                    error = null
-                                    try {
-                                        val intent = Intent(Intent.ACTION_VIEW).apply {
-                                            setDataAndType(
-                                                Uri.parse(document.uriString),
-                                                document.mimeType
-                                            )
-                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs),
+                                verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
+                            ) {
+                                TripSecondaryButton(
+                                    label = "파일 열기",
+                                    onClick = {
+                                        error = null
+                                        try {
+                                            val intent = Intent(Intent.ACTION_VIEW).apply {
+                                                setDataAndType(
+                                                    Uri.parse(document.uriString),
+                                                    document.mimeType
+                                                )
+                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                            }
+                                            context.startActivity(intent)
+                                        } catch (failed: ActivityNotFoundException) {
+                                            error = "파일을 열 수 있는 앱이 없습니다. PDF 또는 이미지 뷰어를 확인해 주세요."
+                                        } catch (failed: SecurityException) {
+                                            error = "파일 접근 권한이 만료됐습니다. 연결을 제거하고 다시 첨부해 주세요."
+                                        } catch (failed: Exception) {
+                                            error = "원본 파일이 이동·삭제됐거나 사용할 수 없습니다. 다시 첨부해 주세요."
                                         }
-                                        context.startActivity(intent)
-                                    } catch (failed: ActivityNotFoundException) {
-                                        error = "파일을 열 수 있는 앱이 없습니다. PDF 또는 이미지 뷰어를 확인해 주세요."
-                                    } catch (failed: SecurityException) {
-                                        error = "파일 접근 권한이 만료됐습니다. 연결을 제거하고 다시 첨부해 주세요."
-                                    } catch (failed: Exception) {
-                                        error = "원본 파일이 이동·삭제됐거나 사용할 수 없습니다. 다시 첨부해 주세요."
                                     }
-                                }
-                            )
-                            TripSecondaryButton(
-                                label = "파일 연결 제거",
-                                enabled = !saving,
-                                onClick = { removingId = document.id }
-                            )
+                                )
+                                TripSecondaryButton(
+                                    label = "파일 연결 제거",
+                                    enabled = !saving,
+                                    onClick = { removingId = document.id }
+                                )
+                            }
                         }
                     }
                 }
