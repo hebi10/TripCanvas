@@ -45,6 +45,10 @@ on:
         description: 'For publish only, enter PUBLISH_VERIFIED_INTERNAL_AAB'
         type: string
         required: false
+      validation_diagnostic_recipient:
+        description: 'Optional: one-use public RSA certificate in base64 DER for encrypted Play validation errors. Never enter the private key.'
+        type: string
+        required: false
 permissions:
   contents: read
   actions: read
@@ -170,11 +174,12 @@ jobs:
           PLAY_CONSOLE_INITIALIZED: ${{ steps.ready.outputs.initialized }}
           PLAY_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
           VERIFIED_AAB: ${{ steps.verified.outputs.aab }}
+          PLAY_VALIDATION_DIAGNOSTIC_CERT_DER_B64: ${{ inputs.validation_diagnostic_recipient }}
         run: |
           test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" = "$EXPECTED_MAIN_SHA"
           test "$FINAL_RELEASE_APPROVED" = true
           test "$APPROVAL_PHRASE" = PUBLISH_VERIFIED_INTERNAL_AAB
-          python3 scripts/play/publisher.py --report ops04-verified/play-release.json deploy --bundle "$VERIFIED_AAB" --version-code "$VERSION_CODE" --status completed
+          python3 scripts/play/publisher.py --report ops04-verified/play-release.json deploy --bundle "$VERIFIED_AAB" --version-code "$VERSION_CODE" --status completed --validation-diagnostic-output ops04-verified/validation-error.der
           echo 'Play API accepted and track readback completed; Console review and tester installation remain separate.' >> "$GITHUB_STEP_SUMMARY"
       - name: Preserve sanitized publisher receipt
         if: always()
@@ -184,3 +189,11 @@ jobs:
           path: ops04-verified/*.json
           retention-days: 30
           if-no-files-found: warn
+      - name: Preserve opt-in encrypted Play validation message
+        if: failure() && inputs.validation_diagnostic_recipient != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ops04-tripcanvas-validation-diagnostic-${{ github.run_id }}
+          path: ops04-verified/validation-error.der
+          retention-days: 1
+          if-no-files-found: ignore

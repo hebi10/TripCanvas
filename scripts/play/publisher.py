@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Restricted Google Play test-track publisher. Uses only Python's standard library."""
+"""Restricted Google Play test-track publisher."""
 import argparse
 import contextlib
+from functools import partial
 import hashlib
 import json
 import os
@@ -12,6 +13,8 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+
+import validation_diagnostics
 
 PACKAGE = 'com.hebi.tripcanvas'
 API = 'https://androidpublisher.googleapis.com'
@@ -32,10 +35,11 @@ class ReleaseError(RuntimeError):
 
 
 class PlayApiError(ReleaseError):
-    def __init__(self, method, status, api_status=None, safe_reason=None):
+    def __init__(self, method, status, api_status=None, safe_reason=None, validation_summary=None):
         self.http_status = status
         self.api_status = api_status if api_status in API_STATUSES else None
         self.safe_reason = safe_reason if safe_reason in SAFE_API_REASONS else None
+        self.validation_summary = validation_summary
         super().__init__(f'Play API {method} failed with HTTP {status}; inspect Console registration, permissions and validation')
 
 
@@ -66,11 +70,12 @@ def version_code(value):
 
 
 class HttpTransport:
-    def __init__(self, token, opener=urllib.request.urlopen):
+    def __init__(self, token, opener=urllib.request.urlopen, validation_message=None):
         if not token or not token.strip():
             raise ReleaseError('PLAY_ACCESS_TOKEN is required; deployment was not attempted')
         self.token = token
         self.opener = opener
+        self.validation_message = validation_message
 
     def __call__(self, method, path, body=None, content_type=None):
         if not path.startswith('/edits') or '\n' in path:
@@ -90,12 +95,18 @@ class HttpTransport:
             # Response bodies can contain supplied credentials or private listing data.
             api_status = None
             safe_reason = None
+            validation_summary = None
             try:
                 raw = error.read(65537)
                 if len(raw) <= 65536:
                     payload = json.loads(raw)
                     if isinstance(payload, dict) and isinstance(payload.get('error'), dict):
                         detail = payload['error']
+                        if error.code == 400 and method == 'POST' and re.fullmatch(r'/edits/[A-Za-z0-9]+:validate', path):
+                            validation_summary = validation_diagnostics.summary(detail)
+                            if self.validation_message:
+                                saved = self.validation_message(detail.get('message'))
+                                validation_summary['encryptedMessage'] = 'saved' if saved else 'unavailable'
                         candidate = detail.get('status')
                         if isinstance(candidate, str) and candidate in API_STATUSES:
                             api_status = candidate
@@ -110,11 +121,11 @@ class HttpTransport:
                                         and item.get('reason') == REVIEW_IN_PROGRESS_REASON):
                                     safe_reason = REVIEW_IN_PROGRESS_REASON
                                     break
-            except (OSError, ValueError):
+            except (OSError, ValueError, RecursionError):
                 pass
             finally:
                 error.close()
-            raise PlayApiError(method, error.code, api_status, safe_reason) from None
+            raise PlayApiError(method, error.code, api_status, safe_reason, validation_summary) from None
         except (urllib.error.URLError, TimeoutError, ValueError):
             raise ReleaseError('Play API request or response failed; no successful deployment can be claimed') from None
 
@@ -236,7 +247,7 @@ class Publisher:
     def commit(self, edit, changes_not_sent_for_review=False, fail_if_in_review=False):
         if fail_if_in_review:
             with self.operation_stage('validate'):
-                self.request('POST', edit + ':validate', {})
+                self.request('POST', edit + ':validate')
             with self.operation_stage('commit'):
                 try:
                     self.request('POST', edit + ':commit?changesNotSentForReview=true&changesInReviewBehavior=ERROR_IF_IN_REVIEW', {})
@@ -251,7 +262,7 @@ class Publisher:
                     return {'reviewHoldParameterOmitted': True, 'reason': REVIEW_HOLD_FORBIDDEN_REASON}
             return
         with self.operation_stage('validate'):
-            self.request('POST', edit + ':validate', {})
+            self.request('POST', edit + ':validate')
         # Never cancel an in-progress Play review on an automatic internal upload or manual alpha promotion.
         query = '?changesInReviewBehavior=ERROR_IF_IN_REVIEW'
         if changes_not_sent_for_review:
@@ -344,6 +355,7 @@ def main():
     deploy.add_argument('--version-code', required=True, type=version_code)
     deploy.add_argument('--status', choices=['completed', 'draft'], default='completed')
     deploy.add_argument('--changes-not-sent-for-review', action='store_true')
+    deploy.add_argument('--validation-diagnostic-output', type=Path)
     promote = sub.add_parser('promote')
     promote.add_argument('--version-code', required=True, type=version_code)
     promote.add_argument('--track', choices=['alpha'], default='alpha')
@@ -355,7 +367,18 @@ def main():
             require_initialization_request(os.environ)
         elif args.command != 'inspect':
             require_initialized(os.environ)
-        client = Publisher(HttpTransport(os.environ.get('PLAY_ACCESS_TOKEN', '')))
+        transport_options = {}
+        certificate = os.environ.get('PLAY_VALIDATION_DIAGNOSTIC_CERT_DER_B64', '')
+        if args.command == 'deploy' and args.validation_diagnostic_output and certificate:
+            try:
+                recipient = validation_diagnostics.recipient_certificate(certificate)
+            except ValueError as error:
+                failure = ReleaseError(str(error))
+                failure.stage = 'diagnostic_setup'
+                raise failure from None
+            transport_options['validation_message'] = partial(
+                validation_diagnostics.save_encrypted_message, recipient, args.validation_diagnostic_output)
+        client = Publisher(HttpTransport(os.environ.get('PLAY_ACCESS_TOKEN', ''), **transport_options))
         if args.command == 'inspect':
             result = client.inspect(require_binary=args.require_binary)
             if args.require_binary and os.environ.get('GITHUB_OUTPUT'):
@@ -401,6 +424,8 @@ def main():
                     result['retry'] = 'inspect_console_before_retry'
                 if reason in SAFE_API_REASONS:
                     result['reason'] = reason
+                if stage == 'validate' and getattr(error, 'validation_summary', None) is not None:
+                    result['validationDiagnostics'] = error.validation_summary
                 message = f'Play deployment failed at {stage}; see the sanitized receipt'
             elif args.command != 'inspect':
                 result.update(status='initialization_committed_readback_failed' if getattr(error, 'committed', False) else 'initialization_blocked',
