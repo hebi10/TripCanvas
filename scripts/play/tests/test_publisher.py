@@ -123,6 +123,53 @@ class PublisherTests(unittest.TestCase):
                 self.assertEqual(publisher.main(), 1)
                 transport.assert_not_called()
 
+    def test_deploy_failure_receipt_identifies_stage_and_commit_outcome(self):
+        cases = (
+            ('edit_create', 'POST', '/edits', 'not_attempted', False, None),
+            ('inventory', 'GET', '/bundles', 'not_attempted', False, None),
+            ('upload', 'POST', '/bundles?uploadType=media', 'not_attempted', False, None),
+            ('track_update', 'PUT', '/tracks/internal', 'not_attempted', False, None),
+            ('validate', 'POST', ':validate', 'not_attempted', False, None),
+            ('commit', 'POST', ':commit', 'unconfirmed', False, 'private-unrecognized-reason'),
+            ('commit', 'POST', ':commit', 'rejected', False, publisher.REVIEW_IN_PROGRESS_REASON),
+            ('readback', 'GET', '/tracks/internal', 'confirmed', True, None),
+        )
+        for stage, failed_method, failed_path, outcome, committed, reason in cases:
+            with self.subTest(stage=stage, outcome=outcome), tempfile.TemporaryDirectory() as directory:
+                report = pathlib.Path(directory) / 'receipt.json'
+                bundle = pathlib.Path(directory) / 'test.aab'
+                bundle.write_bytes(b'test-only-bundle')
+                server = PlayServer()
+
+                def request(method, path, body=None, content_type=None):
+                    endpoint = path.split('?', 1)[0] if failed_path == ':commit' else path
+                    if method == failed_method and endpoint.endswith(failed_path):
+                        raise publisher.PlayApiError(method, 400, 'FAILED_PRECONDITION', reason)
+                    return server(method, path, body, content_type)
+
+                args = ['publisher.py', '--report', str(report), 'deploy', '--bundle', str(bundle), '--version-code', '35']
+                env = {'PLAY_ACCESS_TOKEN': 'private-token', 'PLAY_CONSOLE_INITIALIZED': 'true'}
+                output, errors = io.StringIO(), io.StringIO()
+                with mock.patch.dict(os.environ, env), mock.patch.object(publisher, 'HttpTransport', return_value=request), mock.patch('sys.argv', args), contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
+                    self.assertEqual(publisher.main(), 1)
+
+                result = json.loads(report.read_text())
+                self.assertEqual(result['stage'], stage)
+                self.assertEqual(result['commitOutcome'], outcome)
+                self.assertEqual(result['httpStatus'], 400)
+                self.assertEqual(result['apiStatus'], 'FAILED_PRECONDITION')
+                self.assertEqual(result['track'], 'internal')
+                self.assertEqual(server.committed, committed)
+                if stage in ('commit', 'readback'):
+                    self.assertEqual(result['retry'], 'inspect_console_before_retry')
+                if reason == publisher.REVIEW_IN_PROGRESS_REASON:
+                    self.assertEqual(result['reason'], publisher.REVIEW_IN_PROGRESS_REASON)
+                else:
+                    self.assertNotIn('reason', result)
+                combined = output.getvalue() + errors.getvalue() + report.read_text()
+                for private in ('private-token', 'private-unrecognized-reason', str(bundle), '/edits'):
+                    self.assertNotIn(private, combined)
+
     def test_uploaded_hash_missing_invalid_or_mismatched_blocks_track_and_commit(self):
         for returned in (None, '', 'x' * 64, 'a' * 64):
             server = PlayServer()

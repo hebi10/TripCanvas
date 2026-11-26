@@ -23,6 +23,8 @@ API_STATUSES = {'CANCELLED', 'UNKNOWN', 'INVALID_ARGUMENT', 'DEADLINE_EXCEEDED',
                 'ABORTED', 'OUT_OF_RANGE', 'UNIMPLEMENTED', 'INTERNAL', 'UNAVAILABLE', 'DATA_LOSS', 'UNAUTHENTICATED'}
 REVIEW_HOLD_FORBIDDEN_MESSAGE = 'Changes are sent for review automatically. The query parameter changesNotSentForReview must not be set.'
 REVIEW_HOLD_FORBIDDEN_REASON = 'CHANGES_NOT_SENT_FOR_REVIEW_FORBIDDEN'
+REVIEW_IN_PROGRESS_REASON = 'CHANGES_ALREADY_IN_REVIEW'
+SAFE_API_REASONS = {REVIEW_HOLD_FORBIDDEN_REASON, REVIEW_IN_PROGRESS_REASON}
 
 
 class ReleaseError(RuntimeError):
@@ -33,7 +35,7 @@ class PlayApiError(ReleaseError):
     def __init__(self, method, status, api_status=None, safe_reason=None):
         self.http_status = status
         self.api_status = api_status if api_status in API_STATUSES else None
-        self.safe_reason = safe_reason if safe_reason == REVIEW_HOLD_FORBIDDEN_REASON else None
+        self.safe_reason = safe_reason if safe_reason in SAFE_API_REASONS else None
         super().__init__(f'Play API {method} failed with HTTP {status}; inspect Console registration, permissions and validation')
 
 
@@ -93,11 +95,21 @@ class HttpTransport:
                 if len(raw) <= 65536:
                     payload = json.loads(raw)
                     if isinstance(payload, dict) and isinstance(payload.get('error'), dict):
-                        candidate = payload['error'].get('status')
+                        detail = payload['error']
+                        candidate = detail.get('status')
                         if isinstance(candidate, str) and candidate in API_STATUSES:
                             api_status = candidate
-                        if error.code == 400 and payload['error'].get('message') == REVIEW_HOLD_FORBIDDEN_MESSAGE:
+                        if error.code == 400 and detail.get('message') == REVIEW_HOLD_FORBIDDEN_MESSAGE:
                             safe_reason = REVIEW_HOLD_FORBIDDEN_REASON
+                        if (error.code == 400 and api_status == 'FAILED_PRECONDITION'
+                                and method == 'POST' and path.split('?', 1)[0].endswith(':commit')
+                                and isinstance(detail.get('details'), list)):
+                            for item in detail['details']:
+                                if (isinstance(item, dict) and item.get('@type') == 'type.googleapis.com/google.rpc.ErrorInfo'
+                                        and item.get('domain') == 'googleapis.com'
+                                        and item.get('reason') == REVIEW_IN_PROGRESS_REASON):
+                                    safe_reason = REVIEW_IN_PROGRESS_REASON
+                                    break
             except (OSError, ValueError):
                 pass
             finally:
@@ -158,12 +170,12 @@ class Publisher:
                 'deployment': 'not_attempted'}
 
     @contextlib.contextmanager
-    def initial_stage(self, stage):
+    def operation_stage(self, stage):
         try:
             yield
         except (ReleaseError, KeyError, OSError, TypeError) as error:
             if not isinstance(error, ReleaseError):
-                error = ReleaseError('Initial upload input or API response is invalid')
+                error = ReleaseError('Release input or API response is invalid')
             if not getattr(error, 'stage', None):
                 error.stage = stage
             raise error from None
@@ -174,15 +186,15 @@ class Publisher:
             raise ReleaseError('First upload requires empty bundle, APK and track version inventories')
 
     def allocate_first(self):
-        with self.initial_stage('inventory'), self.edit(ignore_delete_error=False) as edit:
+        with self.operation_stage('inventory'), self.edit(ignore_delete_error=False) as edit:
             self.require_empty(edit)
         return MIN_VERSION
 
     def initialize(self, bundle):
-        with self.initial_stage('edit_create'), self.edit() as edit:
-            with self.initial_stage('inventory'):
+        with self.operation_stage('edit_create'), self.edit() as edit:
+            with self.operation_stage('inventory'):
                 self.require_empty(edit)
-            with self.initial_stage('upload'):
+            with self.operation_stage('upload'):
                 bundle_bytes = Path(bundle).read_bytes()
                 bundle_hash = hashlib.sha256(bundle_bytes).hexdigest()
                 uploaded = self.request('POST', edit + '/bundles?uploadType=media', bundle_bytes, 'application/octet-stream')
@@ -191,12 +203,12 @@ class Publisher:
                 uploaded_hash = uploaded.get('sha256')
                 if not isinstance(uploaded_hash, str) or not re.fullmatch(r'[a-fA-F0-9]{64}', uploaded_hash) or uploaded_hash.lower() != bundle_hash:
                     raise ReleaseError('Initial bundle SHA-256 does not match the verified local AAB')
-            with self.initial_stage('track_update'):
+            with self.operation_stage('track_update'):
                 self.request('PUT', edit + '/tracks/internal', {'track': 'internal', 'releases': [
                     {'name': '0.1.0 (1)', 'versionCodes': ['1'], 'status': 'draft'}]})
             commit_result = self.commit(edit, changes_not_sent_for_review=True, fail_if_in_review=True)
         try:
-            with self.initial_stage('readback'), self.edit(ignore_delete_error=False) as edit:
+            with self.operation_stage('readback'), self.edit(ignore_delete_error=False) as edit:
                 bundles = self.request('GET', edit + '/bundles').get('bundles', [])
                 matches = [item for item in bundles if str(item.get('versionCode')) == str(MIN_VERSION)]
                 if len(matches) != 1 or not isinstance(matches[0].get('sha256'), str) or matches[0]['sha256'].lower() != bundle_hash:
@@ -223,9 +235,9 @@ class Publisher:
 
     def commit(self, edit, changes_not_sent_for_review=False, fail_if_in_review=False):
         if fail_if_in_review:
-            with self.initial_stage('validate'):
+            with self.operation_stage('validate'):
                 self.request('POST', edit + ':validate', {})
-            with self.initial_stage('commit'):
+            with self.operation_stage('commit'):
                 try:
                     self.request('POST', edit + ':commit?changesNotSentForReview=true&changesInReviewBehavior=ERROR_IF_IN_REVIEW', {})
                 except PlayApiError as error:
@@ -238,12 +250,14 @@ class Publisher:
                         raise
                     return {'reviewHoldParameterOmitted': True, 'reason': REVIEW_HOLD_FORBIDDEN_REASON}
             return
-        self.request('POST', edit + ':validate', {})
+        with self.operation_stage('validate'):
+            self.request('POST', edit + ':validate', {})
         # Never cancel an in-progress Play review on an automatic internal upload or manual alpha promotion.
         query = '?changesInReviewBehavior=ERROR_IF_IN_REVIEW'
         if changes_not_sent_for_review:
             query += '&changesNotSentForReview=true'
-        self.request('POST', edit + ':commit' + query, {})
+        with self.operation_stage('commit'):
+            self.request('POST', edit + ':commit' + query, {})
 
     def verify_track(self, track, code, status):
         try:
@@ -252,8 +266,15 @@ class Publisher:
                 if not any(release.get('status') == status and str(code) in [str(value) for value in release.get('versionCodes', [])]
                            for release in result.get('releases', [])):
                     raise ReleaseError('release absent')
-        except ReleaseError:
-            raise ReleaseError('Play edit committed but fresh readback failed; inspect Console before retrying') from None
+        except (ReleaseError, KeyError, OSError, TypeError) as error:
+            failure = ReleaseError('Play edit committed but fresh readback failed; inspect Console before retrying')
+            failure.committed = True
+            failure.stage = 'readback'
+            if isinstance(error, PlayApiError):
+                failure.http_status = error.http_status
+                failure.api_status = error.api_status
+                failure.safe_reason = error.safe_reason
+            raise failure from None
         return {'package': PACKAGE, 'track': track, 'versionCode': code,
                 'releaseStatus': status, 'status': 'api_committed_and_verified',
                 'availability': 'requires_console_check'}
@@ -264,22 +285,25 @@ class Publisher:
         if release_status not in ('draft', 'completed'):
             raise ReleaseError('Only draft or completed test releases are supported')
         code = version_code(code)
-        with self.edit() as edit:
-            used = self.used_versions(edit)
-            if code in used:
-                raise ReleaseError(f'versionCode {code} is already used; allocate a fresh version before building')
-            if code <= max(used | {MIN_VERSION - 1}):
-                raise ReleaseError('Version allocation is stale; allocate above every current Play artifact and rebuild before uploading')
-            bundle_bytes = Path(bundle).read_bytes()
-            bundle_hash = hashlib.sha256(bundle_bytes).hexdigest()
-            uploaded = self.request('POST', edit + '/bundles?uploadType=media', bundle_bytes, 'application/octet-stream')
-            if version_code(uploaded['versionCode']) != code:
-                raise ReleaseError('Uploaded bundle versionCode does not match the allocated version')
-            uploaded_hash = uploaded.get('sha256')
-            if not isinstance(uploaded_hash, str) or not re.fullmatch(r'[a-fA-F0-9]{64}', uploaded_hash) or uploaded_hash.lower() != bundle_hash:
-                raise ReleaseError('Uploaded bundle SHA-256 is missing, invalid or does not match the local AAB; release was not committed')
-            self.request('PUT', edit + '/tracks/internal', {'track': 'internal', 'releases': [
-                {'name': f'0.1.0 ({code})', 'versionCodes': [str(code)], 'status': release_status}]})
+        with self.operation_stage('edit_create'), self.edit() as edit:
+            with self.operation_stage('inventory'):
+                used = self.used_versions(edit)
+                if code in used:
+                    raise ReleaseError(f'versionCode {code} is already used; allocate a fresh version before building')
+                if code <= max(used | {MIN_VERSION - 1}):
+                    raise ReleaseError('Version allocation is stale; allocate above every current Play artifact and rebuild before uploading')
+            with self.operation_stage('upload'):
+                bundle_bytes = Path(bundle).read_bytes()
+                bundle_hash = hashlib.sha256(bundle_bytes).hexdigest()
+                uploaded = self.request('POST', edit + '/bundles?uploadType=media', bundle_bytes, 'application/octet-stream')
+                if version_code(uploaded['versionCode']) != code:
+                    raise ReleaseError('Uploaded bundle versionCode does not match the allocated version')
+                uploaded_hash = uploaded.get('sha256')
+                if not isinstance(uploaded_hash, str) or not re.fullmatch(r'[a-fA-F0-9]{64}', uploaded_hash) or uploaded_hash.lower() != bundle_hash:
+                    raise ReleaseError('Uploaded bundle SHA-256 is missing, invalid or does not match the local AAB; release was not committed')
+            with self.operation_stage('track_update'):
+                self.request('PUT', edit + '/tracks/internal', {'track': 'internal', 'releases': [
+                    {'name': f'0.1.0 ({code})', 'versionCodes': [str(code)], 'status': release_status}]})
             self.commit(edit, changes_not_sent_for_review)
         result = self.verify_track(track, code, release_status)
         result['uploadedBundleSHA256'] = bundle_hash
@@ -357,9 +381,28 @@ def main():
         return 0
     except (ReleaseError, KeyError, OSError, RuntimeError) as error:
         message = str(error) if isinstance(error, RuntimeError) else 'Release input or API response is invalid'
-        if args.command in ('inspect', 'allocate-first', 'initialize'):
+        if args.command in ('inspect', 'allocate-first', 'initialize', 'deploy'):
             result = {'package': PACKAGE, 'status': 'api_preflight_blocked', 'deployment': 'not_attempted'}
-            if args.command != 'inspect':
+            if args.command == 'deploy':
+                stage = getattr(error, 'stage', 'request_guard')
+                committed = getattr(error, 'committed', False)
+                reason = getattr(error, 'safe_reason', None)
+                result.update(status='deployment_committed_readback_failed' if committed else 'deployment_blocked',
+                              stage=stage, track='internal')
+                if committed:
+                    result.update(deployment='committed_readback_unverified', commitOutcome='confirmed')
+                elif stage == 'commit' and reason in SAFE_API_REASONS:
+                    result.update(deployment='not_published', commitOutcome='rejected')
+                elif stage == 'commit':
+                    result.update(deployment='unconfirmed', commitOutcome='unconfirmed')
+                else:
+                    result.update(deployment='not_published', commitOutcome='not_attempted')
+                if stage in ('commit', 'readback'):
+                    result['retry'] = 'inspect_console_before_retry'
+                if reason in SAFE_API_REASONS:
+                    result['reason'] = reason
+                message = f'Play deployment failed at {stage}; see the sanitized receipt'
+            elif args.command != 'inspect':
                 result.update(status='initialization_committed_readback_failed' if getattr(error, 'committed', False) else 'initialization_blocked',
                               stage=getattr(error, 'stage', 'request_guard'))
                 if args.command == 'initialize':
