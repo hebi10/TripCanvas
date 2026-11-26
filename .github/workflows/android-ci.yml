@@ -71,6 +71,11 @@ jobs:
           TRIPCANVAS_ADMOB_BANNER_ID: ca-app-pub-3940256099942544/6300978111
         run: ./gradlew :app:verifyDebugAdsManifest --stacktrace
 
+      - name: Verify the release bundle requires the manifest check
+        run: |
+          ./gradlew :app:bundleRelease --dry-run --console=plain > "$RUNNER_TEMP/tripcanvas-bundle-tasks.txt"
+          grep -Fx ':app:verifyReleaseAdsManifest SKIPPED' "$RUNNER_TEMP/tripcanvas-bundle-tasks.txt"
+
       - name: Compile app, instrumentation tests and run JVM tests
         run: ./gradlew :app:verifyDebugAdsManifest :app:assembleDebug :app:assembleDebugAndroidTest :app:testDebugUnitTest --stacktrace
 

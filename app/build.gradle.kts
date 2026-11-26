@@ -123,6 +123,7 @@ val verifyReleaseSigning by tasks.registering(Exec::class) {
 }
 tasks.configureEach {
     if (name == "preReleaseBuild") dependsOn(verifyReleaseSigning)
+    if (name == "bundleRelease") dependsOn("verifyReleaseAdsManifest")
 }
 
 ksp {
