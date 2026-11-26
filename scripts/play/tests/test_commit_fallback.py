@@ -14,8 +14,8 @@ from test_initialize import FirstUploadServer
 MESSAGE = 'Changes are sent for review automatically. The query parameter changesNotSentForReview must not be set.'
 
 
-def api_error(status=400, message=MESSAGE):
-    raw = io.BytesIO(json.dumps({'error': {'status': 'INVALID_ARGUMENT', 'message': message}}).encode())
+def api_error(status=400, message=MESSAGE, api_status='INVALID_ARGUMENT', details=None):
+    raw = io.BytesIO(json.dumps({'error': {'status': api_status, 'message': message, 'details': details}}).encode())
     def fail(request, **kwargs):
         raise urllib.error.HTTPError(request.full_url, status, 'private status text', {}, raw)
     try:
@@ -36,6 +36,17 @@ class CommitFallbackTests(unittest.TestCase):
         for status, message in ((400, 'unknown error'), (400, 'prefix ' + MESSAGE), (400, MESSAGE + ' private suffix'), (400, MESSAGE[:-1]), (503, MESSAGE)):
             with self.subTest(status=status, message=message):
                 self.assertIsNone(api_error(status, message).safe_reason)
+
+    def test_known_commit_review_conflict_uses_fixed_reason_and_hides_details(self):
+        detail = {'@type': 'type.googleapis.com/google.rpc.ErrorInfo', 'domain': 'googleapis.com',
+                  'reason': publisher.REVIEW_IN_PROGRESS_REASON,
+                  'metadata': {'editId': 'private-edit-id', 'private': 'private-value'}}
+        error = api_error(400, 'private API message', 'FAILED_PRECONDITION', [detail])
+        self.assertEqual(error.safe_reason, publisher.REVIEW_IN_PROGRESS_REASON)
+        self.assertNotIn('private', str(error))
+        wrong_domain = dict(detail, domain='unknown.example')
+        for details in ([wrong_domain], [None], detail):
+            self.assertIsNone(api_error(400, 'private API message', 'FAILED_PRECONDITION', details).safe_reason)
 
     def test_initialize_retries_only_known_commit_once_in_same_edit_without_reupload_or_revalidate(self):
         server = FirstUploadServer()
