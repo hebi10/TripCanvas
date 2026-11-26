@@ -65,8 +65,19 @@ jobs:
       - name: Set up Gradle Wrapper caching
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Verify ads-enabled merged manifest with public test IDs
+        env:
+          TRIPCANVAS_ADMOB_APP_ID: ca-app-pub-3940256099942544~3347511713
+          TRIPCANVAS_ADMOB_BANNER_ID: ca-app-pub-3940256099942544/6300978111
+        run: ./gradlew :app:verifyDebugAdsManifest --stacktrace
+
+      - name: Verify the release bundle requires the manifest check
+        run: |
+          ./gradlew :app:bundleRelease --dry-run --console=plain > "$RUNNER_TEMP/tripcanvas-bundle-tasks.txt"
+          grep -Fx ':app:verifyReleaseAdsManifest SKIPPED' "$RUNNER_TEMP/tripcanvas-bundle-tasks.txt"
+
       - name: Compile app, instrumentation tests and run JVM tests
-        run: ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest :app:testDebugUnitTest --stacktrace
+        run: ./gradlew :app:verifyDebugAdsManifest :app:assembleDebug :app:assembleDebugAndroidTest :app:testDebugUnitTest --stacktrace
 
       - name: Archive debug APK
         if: success()

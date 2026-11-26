@@ -1,3 +1,6 @@
+import com.android.build.api.artifact.SingleArtifact
+import org.gradle.process.CommandLineArgumentProvider
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.compose.compiler)
@@ -68,6 +71,13 @@ android {
         }
     }
 
+    if (!isAdConfigured) {
+        sourceSets {
+            named("debug") { manifest.srcFile("src/ads-disabled/AndroidManifest.xml") }
+            named("release") { manifest.srcFile("src/ads-disabled/AndroidManifest.xml") }
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -76,6 +86,26 @@ android {
     buildFeatures {
         buildConfig = true
         compose = true
+    }
+}
+
+androidComponents {
+    onVariants { variant ->
+        val manifest = variant.artifacts.get(SingleArtifact.MERGED_MANIFEST)
+        val verifyScript = rootProject.file("scripts/verify_ads_manifest.py")
+        val variantName = variant.name.replaceFirstChar(Char::uppercaseChar)
+        tasks.register<Exec>("verify${variantName}AdsManifest") {
+            inputs.file(manifest)
+            inputs.file(verifyScript)
+            inputs.property("adsConfigured", isAdConfigured)
+            executable("python3")
+            argumentProviders.add(CommandLineArgumentProvider {
+                listOf(
+                    verifyScript.absolutePath, manifest.get().asFile.absolutePath,
+                    if (isAdConfigured) "enabled" else "disabled",
+                )
+            })
+        }
     }
 }
 
@@ -93,6 +123,7 @@ val verifyReleaseSigning by tasks.registering(Exec::class) {
 }
 tasks.configureEach {
     if (name == "preReleaseBuild") dependsOn(verifyReleaseSigning)
+    if (name == "bundleRelease") dependsOn("verifyReleaseAdsManifest")
 }
 
 ksp {

@@ -95,7 +95,9 @@ fun TripApp(onThemeResolved: (Boolean) -> Unit) {
     }.filterIsInstance<Activity>().firstOrNull()
     val context = host.applicationContext
     val billingManager = remember(context) { TripBillingManager(context) }
-    val adConsent = remember(activity) { activity?.let(::TripAdConsent) }
+    val adConsent = remember(activity) {
+        if (BuildConfig.ADS_CONFIGURED) activity?.let(::TripAdConsent) else null
+    }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(billingManager, lifecycleOwner) {
         billingManager.connect()

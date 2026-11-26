@@ -16,7 +16,7 @@
 
 ## AdMob/UMP
 - 빌드 환경 변수: `TRIPCANVAS_ADMOB_APP_ID`, `TRIPCANVAS_ADMOB_BANNER_ID`.
-- 운영 ID가 없으면 광고 요청이 아예 발생하지 않는다. Gradle은 SDK manifest provider 무결성을 위해 Google 공식 예제 앱 ID를 사용하나, **공식 샘플을 운영 광고 ID로 사용하지 않는다**.
+- 두 ID 중 하나라도 없거나 형식이 맞지 않으면 UMP를 초기화하지 않는다. 최종 Android manifest에서 광고 ID·광고 서비스 권한, AdMob 앱 ID와 자동 초기화 구성요소를 제거한다. Play Billing 권한과 구독 흐름은 유지한다.
 - ID가 올바른 형식인 경우에만 `ADS_CONFIGURED=true`. 테스트 기기에서 Google 공식 테스트 광고 단위로 확인하고 운영 출시 전 계정의 광고 단위 ID로 전환한다.
 - UMP 광고 동의 요청: 앱 시작 시 업데이트. 지역에 따라 동의 양식을 표시하고 필요한 경우 설정에서 개인정보 선택 변경 제공.
 - UMP 오류/동의 거부/Play 구매 상태 미확인 시 광고 요청 금지.
