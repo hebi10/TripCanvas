@@ -1,0 +1,70 @@
+name: DEX-04 TripCanvas release QA
+
+on:
+  push:
+    branches:
+      - qa/tripcanvas-dex-04-device
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  release-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify frozen main and exact binary build workflow provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_SHA: 532b50df842b97b9954d5d06eca76217e5ca4b1d
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse refs/remotes/origin/main)" = "$CANDIDATE_SHA"
+          test "$(git show -s --format=%P "$GITHUB_SHA")" = "$CANDIDATE_SHA"
+          git diff --exit-code "$CANDIDATE_SHA" -- . ':(exclude).github/workflows/dex04-tripcanvas.yml' ':(exclude).github/scripts/dex04-tripcanvas-smoke.py'
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/45968699755" --jq .head_sha)" = 7f04621e9dcc842be6358918a08741cd6e3208de
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/45968699755/artifacts" --jq '.artifacts[] | select(.id == 15184571196 and .name == "tripcanvas-dex-04-disposable-apks" and .expired == false) | .id' | grep -Fxq 15184571196
+      - uses: actions/download-artifact@v4
+        with:
+          name: tripcanvas-dex-04-disposable-apks
+          path: dex-qa-output
+          run-id: 45968699755
+          github-token: ${{ github.token }}
+      - name: Check both artifacts were retrieved
+        run: |
+          test -s dex-qa-output/baseline.apk
+          test -s dex-qa-output/candidate.apk
+          sha256sum dex-qa-output/*.apk
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - name: Enable KVM on the Actions runner
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-dex-qa-kvm.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Exercise baseline-to-optimized update on an emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: default
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          script: python3 .github/scripts/dex04-tripcanvas-smoke.py dex-qa-output
+      - name: Save optimized-build and device evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tripcanvas-dex-04-release-qa
+          path: |
+            dex-qa-output/*.png
+            dex-qa-output/*.xml
+            dex-qa-output/logcat.txt
+          if-no-files-found: warn
+          retention-days: 7
