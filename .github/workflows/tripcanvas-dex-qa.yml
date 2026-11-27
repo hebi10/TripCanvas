@@ -1,0 +1,108 @@
+name: DEX-02 TripCanvas release QA
+
+on:
+  push:
+    branches:
+      - qa/tripcanvas-dex-02
+
+permissions:
+  contents: read
+
+jobs:
+  release-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - run: sdkmanager --install 'platforms;android-37.1' 'build-tools;36.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Compare release builds signed with a disposable QA key
+        env:
+          BASE_SHA: f6081958f0208280c51dbc97c3faa771c32970ff
+          TRIPCANVAS_ADMOB_APP_ID: ca-app-pub-3940256099942544~3347511713
+          TRIPCANVAS_ADMOB_BANNER_ID: ca-app-pub-3940256099942544/6300978111
+        run: |
+          set -euo pipefail
+          evidence="$GITHUB_WORKSPACE/dex-qa-output"
+          mkdir -p "$evidence"
+          base="$RUNNER_TEMP/dex02-base"
+          git worktree add --detach "$base" "$BASE_SHA"
+          export ANDROID_RELEASE_KEYSTORE_PATH="$RUNNER_TEMP/dex02-qa.jks"
+          export ANDROID_RELEASE_STORE_PASSWORD="$(openssl rand -hex 24)"
+          export ANDROID_RELEASE_KEY_PASSWORD="$ANDROID_RELEASE_STORE_PASSWORD"
+          export ANDROID_RELEASE_KEY_ALIAS=dex02-qa
+          keytool -genkeypair -keystore "$ANDROID_RELEASE_KEYSTORE_PATH" -storetype PKCS12 \
+            -alias "$ANDROID_RELEASE_KEY_ALIAS" -storepass:env ANDROID_RELEASE_STORE_PASSWORD \
+            -keyalg RSA -keysize 2048 -validity 7 -dname 'CN=TripCanvas DEX-02 disposable QA'
+          ANDROID_RELEASE_CERT_SHA256="$(keytool -exportcert -keystore "$ANDROID_RELEASE_KEYSTORE_PATH" \
+            -alias "$ANDROID_RELEASE_KEY_ALIAS" -storepass:env ANDROID_RELEASE_STORE_PASSWORD | sha256sum | cut -d ' ' -f 1)"
+          export ANDROID_RELEASE_CERT_SHA256
+          build_pair() {
+            local root="$1" name="$2" code="$3"
+            (cd "$root" && ./gradlew --no-daemon :app:assembleRelease :app:bundleRelease -PversionCode="$code")
+            cp "$root/app/build/outputs/apk/release/app-release.apk" "$evidence/$name.apk"
+            cp "$root/app/build/outputs/bundle/release/app-release.aab" "$evidence/$name.aab"
+          }
+          build_pair "$base" baseline 16
+          build_pair "$GITHUB_WORKSPACE" candidate 17
+          cp app/build/outputs/mapping/release/mapping.txt "$evidence/mapping.txt"
+          test -s "$evidence/mapping.txt"
+          python3 - "$evidence" "$BASE_SHA" "$GITHUB_SHA" <<'PY'
+          import json
+          import re
+          import sys
+          from pathlib import Path
+          from zipfile import ZipFile
+
+          folder = Path(sys.argv[1])
+          def dex_size(path):
+              with ZipFile(path) as bundle:
+                  return sum(item.file_size for item in bundle.infolist()
+                             if re.search(r'/dex/classes(?:\d+)?\.dex$', item.filename))
+
+          before = dex_size(folder / 'baseline.aab')
+          after = dex_size(folder / 'candidate.aab')
+          assert before > 0 and after > 0
+          report = {'baseline_sha': sys.argv[2], 'candidate_workflow_sha': sys.argv[3],
+                    'baseline_dex_bytes': before, 'candidate_dex_bytes': after,
+                    'reduction_pct': round((before - after) / before * 100, 2)}
+          print(json.dumps(report, indent=2))
+          (folder / 'dex.json').write_text(json.dumps(report, indent=2) + '\n')
+          assert after < before, 'Optimized release did not reduce DEX bytes'
+          PY
+      - name: Enable KVM on the Actions runner
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-dex-qa-kvm.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Exercise baseline-to-optimized update on an emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          script: python3 .github/scripts/tripcanvas-dex-qa.py dex-qa-output
+      - name: Save optimized-build and device evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tripcanvas-dex-02-release-qa
+          path: |
+            dex-qa-output/dex.json
+            dex-qa-output/mapping.txt
+            dex-qa-output/*.png
+            dex-qa-output/*.xml
+            dex-qa-output/logcat.txt
+          if-no-files-found: warn
+          retention-days: 7
