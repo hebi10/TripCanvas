@@ -7,7 +7,6 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
-import androidx.test.uiautomator.StaleObjectException
 import androidx.test.uiautomator.Until
 import com.hebi.tripcanvas.MainActivity
 import com.hebi.tripcanvas.data.local.BookingEntity
@@ -312,41 +311,14 @@ class TripCanvas3BScreenTest {
         if (text.endsWith(" 열기") || text == "저장 장소 관리") By.desc(text) else By.text(text)
 
     private fun clickWorkspaceCard(label: String, expectedScreenTitle: String? = null) {
-        val destination = expectedScreenTitle ?: if (label == "예약 열기") "예약 1건" else null
-        repeat(12) {
-            dismissSystemAnr()
-            try {
-                val card = device.wait(Until.findObject(By.desc(label)), 1400)
-                if (card != null) {
-                    val bounds = card.visibleBounds
-                    val height = device.displayHeight
-                    val completelyInside = bounds.width() > 0 &&
-                        bounds.top >= height / 6 &&
-                        bounds.bottom <= height * 5 / 6
-                    if (completelyInside) {
-                        if (label == "예약 열기") capture("07a-bookings-card-before-click")
-                        card.click()
-                        device.waitForIdle()
-                        if (destination != null &&
-                            !device.wait(Until.hasObject(By.text(destination)), 4000)
-                        ) {
-                            SystemClock.sleep(250)
-                            return@repeat
-                        }
-                        if (label == "예약 열기") capture("07b-bookings-card-after-click")
-                        return
-                    }
-                    if (bounds.centerY() > height / 2) swipeUp() else swipeDown()
-                } else {
-                    swipeUp()
-                }
-            } catch (_: StaleObjectException) {
-                SystemClock.sleep(250)
-            }
+        val isBooking = label == "예약 열기"
+        val destination = expectedScreenTitle ?: if (isBooking) "예약 1건" else null
+        if (isBooking) {
+            awaitText(label)
+            capture("07a-bookings-card-before-click")
         }
-        capture("07c-workspace-card-not-centered")
-        throw AssertionError("작업 공간 카드를 열지 못했습니다: $label" +
-            (destination?.let { " · 예상 화면: $it" } ?: ""))
+        click(label, expectedAfter = destination)
+        if (isBooking) capture("07b-bookings-card-after-click")
     }
 
     private fun click(text: String, expectedAfter: String? = null) {
