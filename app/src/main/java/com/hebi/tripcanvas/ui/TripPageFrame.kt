@@ -43,6 +43,7 @@ fun TripPageFrame(
     trailingActions: @Composable RowScope.() -> Unit = {},
     bottomAction: (@Composable ColumnScope.() -> Unit)? = null,
     contentSpacing: Dp = TripSpacing.lg,
+    compactHeader: Boolean = false,
     content: @Composable ColumnScope.() -> Unit
 ) {
     val palette = TripDesign.palette
@@ -59,7 +60,7 @@ fun TripPageFrame(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(min = 56.dp)
+                        .heightIn(min = if (compactHeader) TripSizes.minimumTouchTarget else 56.dp)
                         .padding(horizontal = horizontalGutter),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs)

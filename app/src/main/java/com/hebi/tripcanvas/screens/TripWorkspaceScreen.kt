@@ -2,8 +2,12 @@ package com.hebi.tripcanvas.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -23,6 +27,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -55,6 +60,7 @@ import com.hebi.tripcanvas.designsystem.components.TripStatusTag
 import com.hebi.tripcanvas.designsystem.components.TripSurfacePanel
 import com.hebi.tripcanvas.designsystem.components.TripProgressIndicator
 import com.hebi.tripcanvas.designsystem.components.TripDivider
+import com.hebi.tripcanvas.designsystem.icons.TripIcons
 import com.hebi.tripcanvas.domain.budgetUsageProgress
 import com.hebi.tripcanvas.domain.checklistCompletionFraction
 import androidx.compose.ui.platform.LocalDensity
@@ -157,7 +163,8 @@ fun TripWorkspaceScreen(
 
     TripPageFrame(
         title = "여행 작업 공간",
-        contentSpacing = TripSpacing.sm,
+        contentSpacing = TripSpacing.xs,
+        compactHeader = true,
         onBack = onBack,
         trailingActions = {
             if (loaded != null) {
@@ -261,7 +268,7 @@ private fun WorkspaceHeader(trip: TripEntity?, isPreview: Boolean) {
     var showTravelDetails by rememberSaveable(trip?.id) { mutableStateOf(false) }
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)
+        verticalArrangement = Arrangement.spacedBy(TripSpacing.xxs)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -274,7 +281,7 @@ private fun WorkspaceHeader(trip: TripEntity?, isPreview: Boolean) {
             ) {
                 Text(
                     text = trip?.title ?: "여행의 모든 정보를 한곳에",
-                    style = MaterialTheme.typography.headlineSmall,
+                    style = MaterialTheme.typography.titleMedium,
                     color = p.textPrimary,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
@@ -437,15 +444,23 @@ private fun WorkspaceOverview(
                         }
                     }
                 }
-                if (LocalDensity.current.fontScale < 1.4f) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(TripSpacing.sm)) {
-                        moneyBlock(Modifier.weight(1.4f))
-                        packingBlock(Modifier.weight(1f))
+                BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    if (maxWidth / LocalDensity.current.fontScale >= 300.dp) {
+                        Row(
+                            Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                            horizontalArrangement = Arrangement.spacedBy(TripSpacing.sm)
+                        ) {
+                            moneyBlock(Modifier.weight(1.4f))
+                            VerticalDivider(Modifier.fillMaxHeight(), color = p.outline)
+                            packingBlock(Modifier.weight(1f))
+                        }
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.xs)) {
+                            moneyBlock(Modifier.fillMaxWidth())
+                            TripDivider()
+                            packingBlock(Modifier.fillMaxWidth())
+                        }
                     }
-                } else {
-                    moneyBlock(Modifier.fillMaxWidth())
-                    TripDivider()
-                    packingBlock(Modifier.fillMaxWidth())
                 }
                 TripDivider()
                 WorkspaceMetric("다음 일정", nextTitle, nextDetail, compact = LocalDensity.current.fontScale < 1.4f)
@@ -649,7 +664,7 @@ private fun WorkspaceToolCard(
         shadowElevation = 0.dp
     ) {
         Row(
-            modifier = Modifier.padding(TripSpacing.sm),
+            modifier = Modifier.padding(horizontal = TripSpacing.sm, vertical = TripSpacing.xxs),
             horizontalArrangement = Arrangement.spacedBy(TripSpacing.xs),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -670,6 +685,9 @@ private fun WorkspaceToolCard(
                 Text(tool.title, style = MaterialTheme.typography.titleMedium, color = p.textPrimary)
                 Text(tool.description, style = MaterialTheme.typography.bodySmall, color = p.textSecondary,
                     maxLines = if (compactPrimary) 2 else Int.MAX_VALUE, overflow = TextOverflow.Ellipsis)
+            }
+            if (!compactPrimary && tool.onOpen != null) {
+                Icon(TripIcons.ChevronRight, contentDescription = null, tint = p.textPrimary)
             }
         }
     }
