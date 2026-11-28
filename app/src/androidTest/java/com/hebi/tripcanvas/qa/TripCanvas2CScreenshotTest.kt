@@ -342,7 +342,7 @@ class TripCanvas2CScreenshotTest {
             device.pressBack()
             awaitText("TripCanvas")
 
-            click("설정")
+            click("설정", By.desc("설정"))
             awaitText("로컬 백업·복원")
             capture("11-settings-light")
             click("로컬 백업·복원")
@@ -419,7 +419,7 @@ class TripCanvas2CScreenshotTest {
             awaitText("경비 열기")
             device.pressBack()
             awaitText("TripCanvas")
-            click("설정")
+            click("설정", By.desc("설정"))
             awaitText("로컬 백업·복원")
             capture("18a-settings-dark")
             click("로컬 백업·복원")
@@ -437,7 +437,7 @@ class TripCanvas2CScreenshotTest {
             Thread.sleep(1200)
             capture("20-home-dark-font160")
             assertStatusBarBackground(dark = true)
-            click("설정")
+            click("설정", By.desc("설정"))
             awaitText("화면 모드")
             awaitText("개인정보·앱 정보")
             capture("20a-settings-dark-font160")
@@ -818,7 +818,7 @@ class TripCanvas2CScreenshotTest {
                 if (visible) device.pressBack()
             }
             awaitText("내 여행")
-            click("설정")
+            click("설정", By.desc("설정"))
             awaitText("화면 모드")
             capture("s01-settings-light")
             awaitText("암호화 백업(.tcb)")
@@ -945,7 +945,7 @@ class TripCanvas2CScreenshotTest {
             instrumentation.addMonitor(pickerMonitor)
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
                 awaitText("내 여행")
-                click("설정")
+                click("설정", By.desc("설정"))
                 navigator.clickVisible(By.text("로컬 백업·복원"), "로컬 백업·복원", "로컬 데이터 백업")
                 awaitText("첨부 포함 백업 선택 및 검증")
                 click("첨부 포함 백업 선택 및 검증")
@@ -1292,12 +1292,12 @@ class TripCanvas2CScreenshotTest {
     private fun uiSelector(text: String) =
         if (text.endsWith(" 열기") || text == "저장 장소 관리") By.desc(text) else By.text(text)
 
-    private fun click(text: String) {
-        awaitText(text)
+    private fun click(text: String, selector: BySelector = uiSelector(text)) {
+        awaitText(text, selector)
         repeat(4) { attempt ->
             try {
                 val node: UiObject2 = device.wait(
-                    Until.findObject(uiSelector(text)), 3000
+                    Until.findObject(selector), 3000
                 ) ?: throw AssertionError("클릭 대상 없음: $text")
                 var clickable = node
                 while (!clickable.isClickable) {
