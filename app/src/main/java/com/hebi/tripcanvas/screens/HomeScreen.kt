@@ -19,7 +19,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -59,7 +58,6 @@ import com.hebi.tripcanvas.designsystem.components.TripEmptyState
 import com.hebi.tripcanvas.designsystem.components.TripErrorState
 import com.hebi.tripcanvas.designsystem.components.TripLoadingState
 import com.hebi.tripcanvas.designsystem.components.TripPrimaryButton
-import com.hebi.tripcanvas.designsystem.components.TripSectionHeading
 import com.hebi.tripcanvas.designsystem.components.TripStatusTag
 import com.hebi.tripcanvas.designsystem.icons.TripIcons
 import com.hebi.tripcanvas.designsystem.theme.TripDesign
@@ -116,7 +114,8 @@ fun HomeScreen(
 
     TripPageFrame(
         title = "TripCanvas",
-        contentSpacing = TripSpacing.sm,
+        contentSpacing = TripSpacing.xs,
+        compactHeader = true,
         trailingActions = {
             IconButton(
                 onClick = { searchVisible = !searchVisible; if (!searchVisible) search = "" },
@@ -126,15 +125,22 @@ fun HomeScreen(
                     contentDescription = if (searchVisible) "검색 닫기" else "여행 검색",
                     tint = p.textPrimary)
             }
-            TextButton(
+            IconButton(
                 onClick = onOpenSettings,
-                modifier = Modifier.heightIn(min = TripSizes.minimumTouchTarget)
+                modifier = Modifier.size(TripSizes.minimumTouchTarget)
             ) {
-                Text("설정", color = p.textPrimary)
+                Icon(TripIcons.Settings, contentDescription = "설정", tint = p.textPrimary)
             }
         }
     ) {
-        TripSectionHeading(title = "내 여행")
+        Column(verticalArrangement = Arrangement.spacedBy(TripSpacing.xxxs)) {
+            Text("내 여행", style = MaterialTheme.typography.titleMedium, color = p.textPrimary)
+            Text(
+                "여행을 만들고 일정과 경비를 한곳에서 관리하세요.",
+                style = MaterialTheme.typography.labelMedium,
+                color = p.textSecondary
+            )
+        }
         if (searchVisible) {
             TripTextField(
                 value = search,
@@ -190,7 +196,7 @@ fun HomeScreen(
                 } else {
                     Text(
                         "여행 " + filtered.size + "개",
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodySmall,
                         color = p.textSecondary
                     )
                     filtered.forEach { trip ->
